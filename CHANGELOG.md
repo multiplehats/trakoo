@@ -1,5 +1,11 @@
 # @stacksee/analytics
 
+## 0.14.5
+
+### Patch Changes
+
+- Add `default` export condition to all subpath exports so CJS resolvers (e.g. tsx, esbuild) can find them ([`f69b4ec`](https://github.com/stackseehq/analytics/commit/f69b4ec79fc4c6211fbb8d8d522bbe68a45905f8))
+
 ## 0.14.4
 
 ### Patch Changes

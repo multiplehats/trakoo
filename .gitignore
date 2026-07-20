@@ -3,4 +3,5 @@ dist
 coverage
 .next
 .turbo
+.worktrees/
 *.log

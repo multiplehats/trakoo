@@ -21,8 +21,8 @@ export interface ClientAnalyticsConfig {
  *
  * @example
  * ```typescript
- * import { createClientAnalytics } from 'trackle/client';
- * import { PostHogClientProvider } from 'trackle/providers/posthog';
+ * import { createClientAnalytics } from 'trakoo/client';
+ * import { PostHogClientProvider } from 'trakoo/providers/posthog';
  * import { AppEvents } from './events';
  *
  * const analytics = createClientAnalytics<typeof AppEvents>({

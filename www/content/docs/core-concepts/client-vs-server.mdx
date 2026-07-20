@@ -3,7 +3,7 @@ title: Client vs Server
 description: Understanding when and how to track analytics on client and server
 ---
 
-trackle provides separate APIs for client-side and server-side tracking. Understanding when to use each is crucial for effective analytics implementation.
+trakoo provides separate APIs for client-side and server-side tracking. Understanding when to use each is crucial for effective analytics implementation.
 
 ## Quick Comparison
 
@@ -29,8 +29,8 @@ Use client-side tracking for:
 ### Setup
 
 ```typescript
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 import type { AppEvents } from './events';
 
 export const analytics = createClientAnalytics<AppEvents>({
@@ -117,8 +117,8 @@ Use server-side tracking for:
 ### Setup
 
 ```typescript
-import { createServerAnalytics } from 'trackle/server';
-import { PostHogServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { PostHogServerProvider } from 'trakoo/providers/server';
 import type { AppEvents } from './events';
 
 export const serverAnalytics = createServerAnalytics<AppEvents>({
@@ -304,12 +304,12 @@ Always use environment-specific imports:
 
 ```typescript
 // ✅ Correct - only browser-compatible code
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 
 // ❌ Wrong - may bundle Node.js dependencies
-import { createClientAnalytics } from 'trackle';
-import { PostHogClientProvider } from 'trackle/providers';
+import { createClientAnalytics } from 'trakoo';
+import { PostHogClientProvider } from 'trakoo/providers';
 ```
 
 </Tab>
@@ -317,12 +317,12 @@ import { PostHogClientProvider } from 'trackle/providers';
 
 ```typescript
 // ✅ Correct - only Node.js code
-import { createServerAnalytics } from 'trackle/server';
-import { PostHogServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { PostHogServerProvider } from 'trakoo/providers/server';
 
 // ❌ Wrong - may bundle browser code
-import { createServerAnalytics } from 'trackle';
-import { PostHogServerProvider } from 'trackle/providers';
+import { createServerAnalytics } from 'trakoo';
+import { PostHogServerProvider } from 'trakoo/providers';
 ```
 
 </Tab>

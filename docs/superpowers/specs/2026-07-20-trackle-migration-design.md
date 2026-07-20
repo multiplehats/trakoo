@@ -1,13 +1,13 @@
-# Trackle Package Migration and Trusted Publishing Design
+# Trakoo Package Migration and Trusted Publishing Design
 
 ## Goal
 
 Move the working analytics library from the npm package `@stacksee/analytics`
-to the unscoped personal package `trackle`, move its GitHub repository from
-`stackseehq/analytics` to `multiplehats/trackle`, and publish future releases
+to the unscoped personal package `trakoo`, move its GitHub repository from
+`stackseehq/analytics` to `multiplehats/trakoo`, and publish future releases
 through npm Trusted Publishing with GitHub Actions OIDC.
 
-The first `trackle` release will be the functional library at version `0.0.0`.
+The first `trakoo` release will be the functional library at version `0.0.0`.
 Publishing that bootstrap release promptly is important because the unscoped
 name is currently available and npm package names are allocated globally.
 
@@ -24,6 +24,10 @@ name is currently available and npm package names are allocated globally.
 The local `0.14.5` version change will be intentionally superseded by the new
 package's bootstrap version, `0.0.0`.
 
+The initial replacement candidate was the name `track` + `le`, but npm rejected
+it as too similar to `tsickle`. No package was published, and the user selected
+`trakoo` as the replacement identity.
+
 ## Chosen Migration Strategy
 
 Use a local authenticated publish for the bootstrap release, then configure
@@ -31,7 +35,7 @@ Trusted Publishing for every later release.
 
 This order is required because npm Trusted Publisher settings belong to an
 existing npm package. It also minimizes the time during which another npm user
-could publish the currently available `trackle` name. No temporary npm token
+could publish the currently available `trakoo` name. No temporary npm token
 will be added to the new GitHub Actions configuration.
 
 The rejected alternatives are:
@@ -45,9 +49,9 @@ The rejected alternatives are:
 
 The root package metadata will change to:
 
-- name: `trackle`
+- name: `trakoo`
 - version: `0.0.0`
-- repository: `multiplehats/trackle`
+- repository: `multiplehats/trakoo`
 - public npm access through the existing Changesets `access: public` setting
 
 The bootstrap tarball will contain the current working library, including the
@@ -55,12 +59,12 @@ CJS default-export compatibility fix. It will not be an empty placeholder.
 
 Active documentation, README installation instructions, source-code examples,
 test descriptions, end-to-end fixtures, and workspace dependency references
-will use `trackle`. Clearly historical changelog entries may continue to refer
+will use `trakoo`. Clearly historical changelog entries may continue to refer
 to `@stacksee/analytics`, while the active changelog heading and future entries
-will use `trackle`.
+will use `trakoo`.
 
 The docs workspace dependency will change from `@stacksee/analytics` to
-`trackle`, and `pnpm-lock.yaml` will be regenerated from the workspace rather
+`trakoo`, and `pnpm-lock.yaml` will be regenerated from the workspace rather
 than edited manually.
 
 The pending CJS changeset will be consumed by the bootstrap release and
@@ -70,9 +74,9 @@ for code already included in `0.0.0`.
 ## Repository Migration
 
 The GitHub repository will be transferred from the `stackseehq` organization
-to the `multiplehats` user and renamed from `analytics` to `trackle`. Package
+to the `multiplehats` user and renamed from `analytics` to `trakoo`. Package
 metadata, Changesets changelog configuration, issue links, homepage links, and
-the local Git remote will point to `multiplehats/trackle`.
+the local Git remote will point to `multiplehats/trakoo`.
 
 The package metadata may briefly point to the future repository URL between
 the npm bootstrap publish and GitHub transfer. That short interval is accepted
@@ -99,26 +103,26 @@ The release workflow will mirror the proven `multiplehats/wc-now` setup:
 
 The npm Trusted Publisher will be configured as:
 
-- package: `trackle`
+- package: `trakoo`
 - provider: GitHub Actions
 - organization or user: `multiplehats`
-- repository: `trackle`
+- repository: `trakoo`
 - workflow filename: `release.yml`
 - allowed action: `npm publish`
 - environment: none
 
 ## Publish Flow
 
-1. Recheck that `npm view trackle` returns `E404` immediately before the
+1. Recheck that `npm view trakoo` returns `E404` immediately before the
    bootstrap publish.
 2. Authenticate the local npm CLI interactively, display the result of
    `npm whoami`, and obtain explicit confirmation that it is the intended
    personal owner before changing registry state.
 3. Apply the package rename and bootstrap version, build the project, and
    inspect the exact npm tarball contents.
-4. Publish `trackle@0.0.0` locally with the authenticated personal npm account.
-5. Verify the immutable registry result with `npm view trackle@0.0.0`.
-6. Transfer and rename the GitHub repository to `multiplehats/trackle` and
+4. Publish `trakoo@0.0.0` locally with the authenticated personal npm account.
+5. Verify the immutable registry result with `npm view trakoo@0.0.0`.
+6. Transfer and rename the GitHub repository to `multiplehats/trakoo` and
    update the local Git remote.
 7. Configure npm Trusted Publishing with the exact identity above.
 8. Push the OIDC-compatible release workflow.
@@ -129,7 +133,7 @@ The npm Trusted Publisher will be configured as:
 ## Error Handling and Safety
 
 - Name availability will be checked again immediately before publishing. If
-  `trackle` has become occupied, publishing stops without choosing a different
+  `trakoo` has become occupied, publishing stops without choosing a different
   name automatically.
 - The local CLI is currently unauthenticated. `npm whoami` must identify an
   account that the owner explicitly confirms before publication. An unexpected
@@ -158,9 +162,9 @@ Before publishing `0.0.0`:
 
 After publication and repository migration:
 
-- verify `trackle@0.0.0` through the npm registry;
+- verify `trakoo@0.0.0` through the npm registry;
 - verify the Git remote and all active repository metadata point to
-  `multiplehats/trackle`; and
+  `multiplehats/trakoo`; and
 - confirm the first post-bootstrap release log reports npm OIDC Trusted
   Publishing and npm displays provenance linked to `release.yml`.
 

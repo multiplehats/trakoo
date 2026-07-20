@@ -12,8 +12,8 @@ No npm package required. `VisitorsClientProvider` loads the tracking script dire
 ## Client-Side Usage
 
 ```typescript
-import { createClientAnalytics } from 'trackle/client';
-import { VisitorsClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { VisitorsClientProvider } from 'trakoo/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
@@ -153,8 +153,8 @@ export async function POST(req: Request) {
 
 ```typescript
 // lib/analytics.ts
-import { createClientAnalytics } from 'trackle/client';
-import { VisitorsClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { VisitorsClientProvider } from 'trakoo/providers/client';
 
 export const visitorsProvider = new VisitorsClientProvider({
   token: process.env.NEXT_PUBLIC_VISITORS_TOKEN!,

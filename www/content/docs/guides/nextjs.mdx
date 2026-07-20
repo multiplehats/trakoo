@@ -5,7 +5,7 @@ description: Complete integration guide for Next.js 13+ with App Router
 
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 
-This guide shows you how to integrate trackle into a Next.js application using the App Router (Next.js 13+).
+This guide shows you how to integrate trakoo into a Next.js application using the App Router (Next.js 13+).
 
 ## Installation
 
@@ -15,7 +15,7 @@ This guide shows you how to integrate trackle into a Next.js application using t
 ### Install Dependencies
 
 ```bash
-npm install trackle
+npm install trakoo
 ```
 
 Install your provider SDKs (we'll use PostHog as an example):
@@ -49,7 +49,7 @@ POSTHOG_API_KEY=your-posthog-api-key
 Create a shared event definitions file:
 
 ```typescript title="lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from 'trackle';
+import type { CreateEventDefinition, EventCollection } from 'trakoo';
 
 export const appEvents = {
   pageViewed: {
@@ -86,8 +86,8 @@ export type AppEvents = typeof appEvents;
 ### 2. Create Analytics Instance
 
 ```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 import type { AppEvents } from './events';
 
 export const analytics = createClientAnalytics<AppEvents>({
@@ -185,8 +185,8 @@ export function SignupButton() {
 ### 1. Create Server Analytics Instance
 
 ```typescript title="lib/server-analytics.ts"
-import { createServerAnalytics } from 'trackle/server';
-import { PostHogServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { PostHogServerProvider } from 'trakoo/providers/server';
 import type { AppEvents } from './events';
 
 export const serverAnalytics = createServerAnalytics<AppEvents>({
@@ -627,11 +627,11 @@ Ensure you're importing from the correct paths:
 
 ```typescript
 // ✅ Correct
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 
 // ❌ Wrong
-import { createClientAnalytics } from 'trackle';
+import { createClientAnalytics } from 'trakoo';
 ```
 
 ## Next Steps

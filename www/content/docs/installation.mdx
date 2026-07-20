@@ -1,11 +1,11 @@
 ---
 title: Installation
-description: Install trackle and your analytics providers
+description: Install trakoo and your analytics providers
 ---
 
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 
-Get trackle installed and ready to track events in under 2 minutes.
+Get trakoo installed and ready to track events in under 2 minutes.
 
 ## Quick Install
 
@@ -15,7 +15,7 @@ Get trackle installed and ready to track events in under 2 minutes.
 ### Install the Core Library
 
 ```bash
-npm install trackle
+npm install trakoo
 ```
 
 The core library is zero-dependency and handles all the analytics logic.
@@ -82,28 +82,28 @@ Choose your preferred package manager:
 <Tab value="npm">
 
 ```bash
-npm install trackle
+npm install trakoo
 ```
 
 </Tab>
 <Tab value="pnpm">
 
 ```bash
-pnpm install trackle
+pnpm install trakoo
 ```
 
 </Tab>
 <Tab value="yarn">
 
 ```bash
-yarn add trackle
+yarn add trakoo
 ```
 
 </Tab>
 <Tab value="bun">
 
 ```bash
-bun add trackle
+bun add trakoo
 ```
 
 </Tab>
@@ -111,7 +111,7 @@ bun add trackle
 
 ## What Gets Installed
 
-### Core Library (`trackle`)
+### Core Library (`trakoo`)
 
 - **Size**: ~10KB gzipped
 - **Dependencies**: Zero
@@ -133,25 +133,25 @@ Provider SDKs are separate packages maintained by each analytics service:
 Check that everything is installed correctly:
 
 ```bash
-npm list trackle
+npm list trakoo
 ```
 
 You should see:
 
 ```
 your-project@1.0.0
-└── trackle@x.x.x
+└── trakoo@x.x.x
 ```
 
 ## TypeScript Support
 
-trackle is written in TypeScript and includes full type definitions.
+trakoo is written in TypeScript and includes full type definitions.
 
 **No additional setup required!**
 
 ```typescript
 // Types work automatically
-import { createClientAnalytics } from 'trackle/client';
+import { createClientAnalytics } from 'trakoo/client';
 //       ↑ Full autocomplete and type checking
 ```
 
@@ -283,18 +283,18 @@ const serverAnalytics = createServerAnalytics({
 
 ### Module Not Found
 
-If you see `Cannot find module 'trackle/client'`:
+If you see `Cannot find module 'trakoo/client'`:
 
-1. **Check your package.json**: Ensure `trackle` is installed
+1. **Check your package.json**: Ensure `trakoo` is installed
 2. **Clear node_modules**: Run `rm -rf node_modules && npm install`
 3. **Check import path**: Use `/client` or `/server`, not the root package
 
 ```typescript
 // ✅ Correct
-import { createClientAnalytics } from 'trackle/client';
+import { createClientAnalytics } from 'trakoo/client';
 
 // ❌ Wrong
-import { createClientAnalytics } from 'trackle';
+import { createClientAnalytics } from 'trakoo';
 ```
 
 ### TypeScript Errors
@@ -335,18 +335,18 @@ npm install @bentonow/bento-node-sdk
 To upgrade to the latest version:
 
 ```bash
-npm install trackle@latest
+npm install trakoo@latest
 ```
 
 Check the [changelog](https://github.com/stacksee/stacksee-analytics/releases) for breaking changes.
 
 ## Uninstalling
 
-To completely remove trackle:
+To completely remove trakoo:
 
 ```bash
 # Remove core library
-npm uninstall trackle
+npm uninstall trakoo
 
 # Remove provider SDKs
 npm uninstall posthog-js posthog-node @bentonow/bento-node-sdk pirsch-sdk

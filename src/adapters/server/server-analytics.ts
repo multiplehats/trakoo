@@ -44,8 +44,8 @@ export class ServerAnalytics<
 	 *
 	 * @example
 	 * ```typescript
-	 * import { ServerAnalytics } from 'trackle/server';
-	 * import { PostHogServerProvider } from 'trackle/providers/posthog';
+	 * import { ServerAnalytics } from 'trakoo/server';
+	 * import { PostHogServerProvider } from 'trakoo/providers/posthog';
 	 *
 	 * const analytics = new ServerAnalytics({
 	 *   providers: [

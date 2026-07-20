@@ -3,7 +3,7 @@ title: Type Safety
 description: Leverage TypeScript for bulletproof analytics tracking
 ---
 
-One of the biggest advantages of trackle is full TypeScript support. Define your events once and get autocomplete, type checking, and compile-time validation everywhere.
+One of the biggest advantages of trakoo is full TypeScript support. Define your events once and get autocomplete, type checking, and compile-time validation everywhere.
 
 ## Why Type Safety Matters
 
@@ -40,7 +40,7 @@ analytics.track('user_signed_up', {
 The foundation of type safety is the event definition:
 
 ```typescript
-import type { CreateEventDefinition, EventCollection } from 'trackle';
+import type { CreateEventDefinition, EventCollection } from 'trakoo';
 
 export const appEvents = {
   userSignedUp: {
@@ -217,7 +217,7 @@ analytics.identify('user-123', {
 Use predefined or custom categories with type safety:
 
 ```typescript
-import type { EventCategory } from 'trackle';
+import type { EventCategory } from 'trakoo';
 
 // Predefined categories (fully typed)
 const category: EventCategory = 'user';
@@ -382,7 +382,7 @@ trackEvent('user_signed_up', {
 Providers can also be type-safe:
 
 ```typescript
-import type { PostHogConfig } from 'trackle/providers/client';
+import type { PostHogConfig } from 'trakoo/providers/client';
 
 const config: PostHogConfig = {
   token: 'xxx',

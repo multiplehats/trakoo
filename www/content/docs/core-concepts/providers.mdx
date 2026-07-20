@@ -10,8 +10,8 @@ Providers are plugins that send your events to analytics services. The library u
 A provider is a small adapter that translates your events into the format expected by an analytics service:
 
 ```typescript
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
@@ -455,11 +455,11 @@ Always import providers from the correct path to avoid bundling issues:
 
 ```typescript
 // ✅ Correct - only browser code
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 
 // ❌ Wrong - may bundle Node.js code
-import { PostHogClientProvider } from 'trackle/providers';
+import { PostHogClientProvider } from 'trakoo/providers';
 ```
 
 </Tab>
@@ -467,11 +467,11 @@ import { PostHogClientProvider } from 'trackle/providers';
 
 ```typescript
 // ✅ Correct - only Node.js code
-import { createServerAnalytics } from 'trackle/server';
-import { PostHogServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { PostHogServerProvider } from 'trakoo/providers/server';
 
 // ❌ Wrong - may bundle browser code
-import { PostHogServerProvider } from 'trackle/providers';
+import { PostHogServerProvider } from 'trakoo/providers';
 ```
 
 </Tab>

@@ -1,4 +1,4 @@
-# trackle
+# trakoo
 
 A highly typed, zero-dependency, provider-agnostic analytics library for TypeScript applications. Works seamlessly on both client and server sides with full type safety for your custom events.
 
@@ -53,7 +53,7 @@ You can easily create providers for:
 ## Installation
 
 ```bash
-pnpm install trackle
+pnpm install trakoo
 
 # For PostHog support
 pnpm install posthog-js posthog-node
@@ -74,7 +74,7 @@ pnpm install pirsch-sdk
 Create strongly typed events specific to your application:
 
 ```typescript
-import { CreateEventDefinition, EventCollection } from 'trackle';
+import { CreateEventDefinition, EventCollection } from 'trakoo';
 
 export const appEvents = {
   userSignedUp: {
@@ -110,8 +110,8 @@ Tip: If you have a lot of events, you can also divide your events into multiple 
 ### 2. Client-Side Usage
 
 ```typescript
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 import type { AppEvents } from './events';
 
 // Initialize analytics with providers as plugins
@@ -158,8 +158,8 @@ analytics.track('feature_used', {
 ### 3. Server-Side Usage
 
 ```typescript
-import { createServerAnalytics } from 'trackle/server';
-import { PostHogServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { PostHogServerProvider } from 'trakoo/providers/server';
 import type { AppEvents } from './events';
 
 // Create analytics instance with providers as plugins
@@ -465,8 +465,8 @@ Here's a complete example using Svelte 5 that demonstrates both client and serve
 
 ```typescript
 // src/lib/config/analytics.ts
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 import { PUBLIC_POSTHOG_API_KEY, PUBLIC_POSTHOG_HOST } from '$env/static/public';
 
 // Define your events for the waitlist
@@ -503,8 +503,8 @@ export const clientAnalytics = createClientAnalytics<AppEvents>({
 
 ```typescript
 // src/lib/server/analytics.ts
-import { createServerAnalytics } from 'trackle/server';
-import { PostHogServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { PostHogServerProvider } from 'trakoo/providers/server';
 import { AppEvents } from '$lib/config/analytics'; // Import AppEvents
 import { PUBLIC_POSTHOG_API_KEY, PUBLIC_POSTHOG_HOST } from '$env/static/public';
 
@@ -650,7 +650,7 @@ If you're using SvelteKit and want to track page views and page leaves automatic
 ```typescript
 // src/app.html or src/routes/+layout.svelte
 <script>
-  import { pageView, pageLeave } from 'trackle/client';
+  import { pageView, pageLeave } from 'trakoo/client';
   import { beforeNavigate, afterNavigate } from '$app/navigation';
   import { browser } from '$app/environment';
 
@@ -726,7 +726,7 @@ Want to integrate with a different analytics service? See our comprehensive guid
 Quick example:
 
 ```typescript
-import { BaseAnalyticsProvider, BaseEvent, EventContext } from 'trackle';
+import { BaseAnalyticsProvider, BaseEvent, EventContext } from 'trakoo';
 
 export class GoogleAnalyticsProvider extends BaseAnalyticsProvider {
   name = 'GoogleAnalytics';
@@ -753,9 +753,9 @@ const analytics = createClientAnalytics<typeof AppEvents>({
 
 **Important**: To avoid bundling Node.js dependencies in your client code, always use the environment-specific provider imports:
 
-- **Client-side**: `trackle/providers/client` - Only includes browser-compatible providers
-- **Server-side**: `trackle/providers/server` - Only includes Node.js providers
-- **Both**: `trackle/providers` - Includes all providers (may cause bundling issues in browsers)
+- **Client-side**: `trakoo/providers/client` - Only includes browser-compatible providers
+- **Server-side**: `trakoo/providers/server` - Only includes Node.js providers
+- **Both**: `trakoo/providers` - Includes all providers (may cause bundling issues in browsers)
 
 Some analytics libraries are designed to work only in specific environments. For example:
 - **Client-only**: Google Analytics (gtag.js), Hotjar, FullStory
@@ -766,7 +766,7 @@ The library handles this by having separate provider implementations for client 
 
 ```typescript
 // Client-side provider for a client-only analytics service
-import { BaseAnalyticsProvider, BaseEvent, EventContext } from 'trackle';
+import { BaseAnalyticsProvider, BaseEvent, EventContext } from 'trakoo';
 
 export class MixpanelClientProvider extends BaseAnalyticsProvider {
   name = 'Mixpanel-Client';
@@ -796,7 +796,7 @@ Then use the appropriate provider based on your environment:
 
 ```typescript
 // Client-side usage
-import { createClientAnalytics } from 'trackle/client';
+import { createClientAnalytics } from 'trakoo/client';
 import { MixpanelClientProvider } from './providers/mixpanel-client';
 
 const clientAnalytics = createClientAnalytics<typeof AppEvents>({
@@ -806,7 +806,7 @@ const clientAnalytics = createClientAnalytics<typeof AppEvents>({
 });
 
 // Server-side usage
-import { createServerAnalytics } from 'trackle/server';
+import { createServerAnalytics } from 'trakoo/server';
 import { MixpanelServerProvider } from './providers/mixpanel-server';
 
 const serverAnalytics = createServerAnalytics<typeof AppEvents>({
@@ -830,8 +830,8 @@ const serverAnalytics = createServerAnalytics<typeof AppEvents>({
 The plugin architecture makes it easy to send events to multiple analytics services simultaneously:
 
 ```typescript
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 // Import your custom providers
 import { GoogleAnalyticsProvider } from './providers/google-analytics';
 import { MixpanelProvider } from './providers/mixpanel';

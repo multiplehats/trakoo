@@ -21,8 +21,8 @@ pnpm install @emitkit/js
 ### Basic Configuration
 
 ```typescript
-import { createServerAnalytics } from 'trackle/server';
-import { EmitKitServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { EmitKitServerProvider } from 'trakoo/providers/server';
 
 const serverAnalytics = createServerAnalytics({
   providers: [
@@ -86,8 +86,8 @@ Since EmitKit is server-only, use the proxy pattern for client-side events:
 ### Client Setup
 
 ```typescript
-import { createClientAnalytics } from 'trackle/client';
-import { ProxyProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { ProxyProvider } from 'trakoo/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
@@ -107,9 +107,9 @@ analytics.track('button_clicked', { buttonId: 'signup' });
 
 ```typescript
 // app/api/analytics/route.ts (Next.js example)
-import { createServerAnalytics } from 'trackle/server';
-import { EmitKitServerProvider } from 'trackle/providers/server';
-import { ingestProxyEvents } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { EmitKitServerProvider } from 'trakoo/providers/server';
+import { ingestProxyEvents } from 'trakoo/providers/server';
 
 const serverAnalytics = createServerAnalytics({
   providers: [
@@ -345,9 +345,9 @@ EmitKit works best for:
 Recommended setup with multiple providers:
 
 ```typescript
-import { createServerAnalytics } from 'trackle/server';
-import { EmitKitServerProvider } from 'trackle/providers/server';
-import { PostHogServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { EmitKitServerProvider } from 'trakoo/providers/server';
+import { PostHogServerProvider } from 'trakoo/providers/server';
 
 const serverAnalytics = createServerAnalytics({
   providers: [

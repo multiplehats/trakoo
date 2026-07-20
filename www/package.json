@@ -21,7 +21,7 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@radix-ui/react-use-controllable-state": "^1.2.2",
-    "trackle": "workspace:*",
+    "trakoo": "workspace:*",
     "@xyflow/react": "^12.9.2",
     "ai": "^5.0.84",
     "class-variance-authority": "^0.7.1",

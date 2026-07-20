@@ -1,6 +1,6 @@
 ---
 title: Quick Start
-description: Get started with trackle in 5 minutes
+description: Get started with trakoo in 5 minutes
 ---
 
 import { Step, Steps } from 'fumadocs-ui/components/steps';
@@ -15,7 +15,7 @@ This guide will get you tracking analytics events in under 5 minutes.
 ### Install the Core Library
 
 ```bash
-pnpm install trackle
+pnpm install trakoo
 ```
 
 </Step>
@@ -60,7 +60,7 @@ pnpm install pirsch-sdk
 Create a file to define your application events with full type safety:
 
 ```typescript title="lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from 'trackle';
+import type { CreateEventDefinition, EventCollection } from 'trakoo';
 
 export const appEvents = {
   userSignedUp: {
@@ -106,8 +106,8 @@ Create your analytics instance with your chosen providers:
 <Tab value="PostHog">
 
 ```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 import type { AppEvents } from './events';
 
 export const analytics = createClientAnalytics<AppEvents>({
@@ -125,8 +125,8 @@ export const analytics = createClientAnalytics<AppEvents>({
 <Tab value="Bento">
 
 ```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from 'trackle/client';
-import { BentoClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { BentoClientProvider } from 'trakoo/providers/client';
 import type { AppEvents } from './events';
 
 export const analytics = createClientAnalytics<AppEvents>({
@@ -147,8 +147,8 @@ export const analytics = createClientAnalytics<AppEvents>({
 <Tab value="Pirsch">
 
 ```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from 'trackle/client';
-import { PirschClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PirschClientProvider } from 'trakoo/providers/client';
 import type { AppEvents } from './events';
 
 export const analytics = createClientAnalytics<AppEvents>({
@@ -212,8 +212,8 @@ analytics.track('feature_used', {
 <Tab value="PostHog">
 
 ```typescript title="lib/server-analytics.ts"
-import { createServerAnalytics } from 'trackle/server';
-import { PostHogServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { PostHogServerProvider } from 'trakoo/providers/server';
 import type { AppEvents } from './events';
 
 export const serverAnalytics = createServerAnalytics<AppEvents>({
@@ -231,8 +231,8 @@ export const serverAnalytics = createServerAnalytics<AppEvents>({
 <Tab value="Bento">
 
 ```typescript title="lib/server-analytics.ts"
-import { createServerAnalytics } from 'trackle/server';
-import { BentoServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { BentoServerProvider } from 'trakoo/providers/server';
 import type { AppEvents } from './events';
 
 export const serverAnalytics = createServerAnalytics<AppEvents>({
@@ -257,8 +257,8 @@ export const serverAnalytics = createServerAnalytics<AppEvents>({
 <Tab value="Pirsch">
 
 ```typescript title="lib/server-analytics.ts"
-import { createServerAnalytics } from 'trackle/server';
-import { PirschServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { PirschServerProvider } from 'trakoo/providers/server';
 import type { AppEvents } from './events';
 
 export const serverAnalytics = createServerAnalytics<AppEvents>({
@@ -310,8 +310,8 @@ export async function POST(req: Request) {
 You can use multiple analytics services simultaneously:
 
 ```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider, BentoClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider, BentoClientProvider } from 'trakoo/providers/client';
 
 export const analytics = createClientAnalytics<AppEvents>({
   providers: [

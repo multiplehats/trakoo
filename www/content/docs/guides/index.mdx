@@ -34,8 +34,8 @@ Each framework guide includes:
 
 ```typescript
 // lib/analytics.ts
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 
 export const analytics = createClientAnalytics({
   providers: [
@@ -52,8 +52,8 @@ export const analytics = createClientAnalytics({
 
 ```typescript
 // src/lib/analytics.ts
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 import { PUBLIC_POSTHOG_KEY } from '$env/static/public';
 
 export const analytics = createClientAnalytics({
@@ -69,7 +69,7 @@ export const analytics = createClientAnalytics({
 
 ## Framework-Agnostic Setup
 
-If your framework isn't listed, you can still use trackle! The core concepts remain the same:
+If your framework isn't listed, you can still use trakoo! The core concepts remain the same:
 
 1. Create a client analytics instance for browser code
 2. Create a server analytics instance for server code

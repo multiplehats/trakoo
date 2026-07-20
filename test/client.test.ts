@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import * as Analytics from "@/client/index";
 
-describe("trackle exports", () => {
+describe("trakoo exports", () => {
 	it("should export client analytics functions", () => {
 		expect(Analytics.createClientAnalytics).toBeDefined();
 		expect(Analytics.getAnalytics).toBeDefined();

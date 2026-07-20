@@ -14,8 +14,8 @@ pnpm install pirsch-sdk
 ## Client-Side Usage
 
 ```typescript
-import { createClientAnalytics } from 'trackle/client';
-import { PirschClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PirschClientProvider } from 'trakoo/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
@@ -36,8 +36,8 @@ await analytics.initialize();
 Access keys are simpler and more efficient as they don't require OAuth token refresh:
 
 ```typescript
-import { createServerAnalytics } from 'trackle/server';
-import { PirschServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { PirschServerProvider } from 'trakoo/providers/server';
 
 const serverAnalytics = createServerAnalytics({
   providers: [

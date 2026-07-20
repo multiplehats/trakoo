@@ -40,7 +40,7 @@ function buildTestPage(token) {
 </head>
 <body>
   <h1>Visitors E2E Test Page</h1>
-  <p>Testing trackle VisitorsClientProvider</p>
+  <p>Testing trakoo VisitorsClientProvider</p>
 
   <button id="track-btn">Track Custom Event</button>
   <button id="identify-btn">Identify User</button>

@@ -5,7 +5,7 @@ description: Complete integration guide for SvelteKit applications
 
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 
-This guide shows you how to integrate trackle into a SvelteKit application.
+This guide shows you how to integrate trakoo into a SvelteKit application.
 
 ## Installation
 
@@ -15,7 +15,7 @@ This guide shows you how to integrate trackle into a SvelteKit application.
 ### Install Dependencies
 
 ```bash
-npm install trackle
+npm install trakoo
 ```
 
 Install your provider SDKs (we'll use PostHog as an example):
@@ -49,7 +49,7 @@ POSTHOG_API_KEY=your-posthog-api-key
 Create a shared event definitions file:
 
 ```typescript title="src/lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from 'trackle';
+import type { CreateEventDefinition, EventCollection } from 'trakoo';
 
 export const appEvents = {
   pageViewed: {
@@ -86,8 +86,8 @@ export type AppEvents = typeof appEvents;
 ### 2. Create Analytics Instance
 
 ```typescript title="src/lib/analytics.ts"
-import { createClientAnalytics } from 'trackle/client';
-import { PostHogClientProvider } from 'trackle/providers/client';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
 import { PUBLIC_POSTHOG_KEY, PUBLIC_POSTHOG_HOST } from '$env/static/public';
 import type { AppEvents } from './events';
 
@@ -155,8 +155,8 @@ export const analytics = createClientAnalytics<AppEvents>({
 ### 1. Create Server Analytics Instance
 
 ```typescript title="src/lib/server-analytics.ts"
-import { createServerAnalytics } from 'trackle/server';
-import { PostHogServerProvider } from 'trackle/providers/server';
+import { createServerAnalytics } from 'trakoo/server';
+import { PostHogServerProvider } from 'trakoo/providers/server';
 import { POSTHOG_API_KEY, PUBLIC_POSTHOG_HOST } from '$env/static/private';
 import type { AppEvents } from './events';
 
@@ -652,11 +652,11 @@ Ensure you're importing from the correct paths:
 
 ```typescript
 // ✅ Correct
-import { createClientAnalytics } from 'trackle/client';
-import { createServerAnalytics } from 'trackle/server';
+import { createClientAnalytics } from 'trakoo/client';
+import { createServerAnalytics } from 'trakoo/server';
 
 // ❌ Wrong
-import { createClientAnalytics, createServerAnalytics } from 'trackle';
+import { createClientAnalytics, createServerAnalytics } from 'trakoo';
 ```
 
 ## Using with Svelte Runes

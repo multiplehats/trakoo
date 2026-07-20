@@ -16,7 +16,7 @@
 - Preserve Changesets and the `main` and `next` release branches.
 - The Trusted Publisher workflow filename is exactly `release.yml`, with allowed action `npm publish` and no GitHub environment.
 - The release workflow must not contain `NPM_TOKEN`, `NODE_AUTH_TOKEN`, or `registry-url`.
-- Keep the old GitHub `NPM_TOKEN` secret until a later OIDC release succeeds, but do not expose it to the workflow.
+- The org-to-personal GitHub transfer did not retain repository Actions secrets; a read-only check reported zero secrets. The user explicitly chose OIDC-only publishing, so do not create or re-add an `NPM_TOKEN` fallback.
 - Do not deprecate or unpublish `@stacksee/analytics` in this migration.
 - Stop before publishing if `trakoo` no longer returns `E404` or the authenticated npm owner is not explicitly confirmed.
 - Preserve unrelated user changes; the existing uncommitted `0.14.5` edit is intentionally replaced by `0.0.0`.
@@ -568,7 +568,7 @@ Expected output contains only:
 
 No synthetic release is created solely to exercise OIDC. On the first genuine post-bootstrap Changesets release, verify the Release workflow log reports that OIDC/Trusted Publishing is used, the npm publish succeeds, and npm displays provenance linked to `multiplehats/trakoo/.github/workflows/release.yml`.
 
-Only after that successful release may the dormant GitHub `NPM_TOKEN` secret be deleted and npm token publishing optionally be disallowed. Until then, the secret remains stored but is not referenced by the workflow.
+The org-to-personal GitHub transfer did not retain repository Actions secrets: a read-only check of `repos/multiplehats/trakoo/actions/secrets` reported `total_count: 0`. The user explicitly approved OIDC-only publishing, so do not create or re-add a fallback `NPM_TOKEN`. The first genuine release remains the end-to-end OIDC and provenance validation gate; if it fails, diagnose the Trusted Publishing configuration or workflow instead of silently falling back to token publishing.
 
 ---
 
@@ -579,6 +579,6 @@ Only after that successful release may the dormant GitHub `NPM_TOKEN` secret be 
 - [ ] Local `origin` points to `https://github.com/multiplehats/trakoo.git`.
 - [ ] Active source, tests, docs, and workspace metadata contain no `@stacksee/analytics` references.
 - [ ] Historical changelog entries remain intact.
-- [ ] `release.yml` uses Node 24 and `id-token: write` with no npm token or `registry-url`.
+- [ ] `release.yml` uses Node 24 and `id-token: write` with no npm token or `registry-url`; the repository has no fallback `NPM_TOKEN` secret.
 - [ ] npm shows the exact Trusted Publisher configuration for `multiplehats/trakoo` and `release.yml`.
 - [ ] The old npm package is neither deprecated nor unpublished.

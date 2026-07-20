@@ -5,7 +5,7 @@ description: Complete integration guide for SvelteKit applications
 
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 
-This guide shows you how to integrate @stacksee/analytics into a SvelteKit application.
+This guide shows you how to integrate trackle into a SvelteKit application.
 
 ## Installation
 
@@ -15,7 +15,7 @@ This guide shows you how to integrate @stacksee/analytics into a SvelteKit appli
 ### Install Dependencies
 
 ```bash
-npm install @stacksee/analytics
+npm install trackle
 ```
 
 Install your provider SDKs (we'll use PostHog as an example):
@@ -49,7 +49,7 @@ POSTHOG_API_KEY=your-posthog-api-key
 Create a shared event definitions file:
 
 ```typescript title="src/lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from '@stacksee/analytics';
+import type { CreateEventDefinition, EventCollection } from 'trackle';
 
 export const appEvents = {
   pageViewed: {
@@ -86,8 +86,8 @@ export type AppEvents = typeof appEvents;
 ### 2. Create Analytics Instance
 
 ```typescript title="src/lib/analytics.ts"
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 import { PUBLIC_POSTHOG_KEY, PUBLIC_POSTHOG_HOST } from '$env/static/public';
 import type { AppEvents } from './events';
 
@@ -155,8 +155,8 @@ export const analytics = createClientAnalytics<AppEvents>({
 ### 1. Create Server Analytics Instance
 
 ```typescript title="src/lib/server-analytics.ts"
-import { createServerAnalytics } from '@stacksee/analytics/server';
-import { PostHogServerProvider } from '@stacksee/analytics/providers/server';
+import { createServerAnalytics } from 'trackle/server';
+import { PostHogServerProvider } from 'trackle/providers/server';
 import { POSTHOG_API_KEY, PUBLIC_POSTHOG_HOST } from '$env/static/private';
 import type { AppEvents } from './events';
 
@@ -652,11 +652,11 @@ Ensure you're importing from the correct paths:
 
 ```typescript
 // ✅ Correct
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { createServerAnalytics } from '@stacksee/analytics/server';
+import { createClientAnalytics } from 'trackle/client';
+import { createServerAnalytics } from 'trackle/server';
 
 // ❌ Wrong
-import { createClientAnalytics, createServerAnalytics } from '@stacksee/analytics';
+import { createClientAnalytics, createServerAnalytics } from 'trackle';
 ```
 
 ## Using with Svelte Runes

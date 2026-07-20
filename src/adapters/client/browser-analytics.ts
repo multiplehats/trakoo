@@ -47,8 +47,8 @@ export class BrowserAnalytics<
 	 *
 	 * @example
 	 * ```typescript
-	 * import { BrowserAnalytics } from '@stacksee/analytics/client';
-	 * import { PostHogClientProvider } from '@stacksee/analytics/providers/posthog';
+	 * import { BrowserAnalytics } from 'trackle/client';
+	 * import { PostHogClientProvider } from 'trackle/providers/posthog';
 	 *
 	 * const analytics = new BrowserAnalytics({
 	 *   providers: [

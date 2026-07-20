@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import * as ClientProviders from "@/providers/client";
 import * as ServerProviders from "@/providers/server";
 
-describe("@stacksee/analytics/providers exports", () => {
+describe("trackle/providers exports", () => {
 	it("should export only client-safe providers from client entry", () => {
 		expect(ClientProviders.BaseAnalyticsProvider).toBeDefined();
 		expect(ClientProviders.PostHogClientProvider).toBeDefined();

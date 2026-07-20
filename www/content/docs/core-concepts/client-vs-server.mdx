@@ -3,7 +3,7 @@ title: Client vs Server
 description: Understanding when and how to track analytics on client and server
 ---
 
-@stacksee/analytics provides separate APIs for client-side and server-side tracking. Understanding when to use each is crucial for effective analytics implementation.
+trackle provides separate APIs for client-side and server-side tracking. Understanding when to use each is crucial for effective analytics implementation.
 
 ## Quick Comparison
 
@@ -29,8 +29,8 @@ Use client-side tracking for:
 ### Setup
 
 ```typescript
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 import type { AppEvents } from './events';
 
 export const analytics = createClientAnalytics<AppEvents>({
@@ -117,8 +117,8 @@ Use server-side tracking for:
 ### Setup
 
 ```typescript
-import { createServerAnalytics } from '@stacksee/analytics/server';
-import { PostHogServerProvider } from '@stacksee/analytics/providers/server';
+import { createServerAnalytics } from 'trackle/server';
+import { PostHogServerProvider } from 'trackle/providers/server';
 import type { AppEvents } from './events';
 
 export const serverAnalytics = createServerAnalytics<AppEvents>({
@@ -304,12 +304,12 @@ Always use environment-specific imports:
 
 ```typescript
 // ✅ Correct - only browser-compatible code
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 
 // ❌ Wrong - may bundle Node.js dependencies
-import { createClientAnalytics } from '@stacksee/analytics';
-import { PostHogClientProvider } from '@stacksee/analytics/providers';
+import { createClientAnalytics } from 'trackle';
+import { PostHogClientProvider } from 'trackle/providers';
 ```
 
 </Tab>
@@ -317,12 +317,12 @@ import { PostHogClientProvider } from '@stacksee/analytics/providers';
 
 ```typescript
 // ✅ Correct - only Node.js code
-import { createServerAnalytics } from '@stacksee/analytics/server';
-import { PostHogServerProvider } from '@stacksee/analytics/providers/server';
+import { createServerAnalytics } from 'trackle/server';
+import { PostHogServerProvider } from 'trackle/providers/server';
 
 // ❌ Wrong - may bundle browser code
-import { createServerAnalytics } from '@stacksee/analytics';
-import { PostHogServerProvider } from '@stacksee/analytics/providers';
+import { createServerAnalytics } from 'trackle';
+import { PostHogServerProvider } from 'trackle/providers';
 ```
 
 </Tab>

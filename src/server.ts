@@ -19,8 +19,8 @@ export interface ServerAnalyticsConfig {
  *
  * @example
  * ```typescript
- * import { createServerAnalytics } from '@stacksee/analytics/server';
- * import { PostHogServerProvider } from '@stacksee/analytics/providers/posthog';
+ * import { createServerAnalytics } from 'trackle/server';
+ * import { PostHogServerProvider } from 'trackle/providers/posthog';
  * import { AppEvents } from './events';
  *
  * const analytics = createServerAnalytics<typeof AppEvents>({

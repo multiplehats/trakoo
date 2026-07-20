@@ -3,7 +3,7 @@ title: Providers Overview
 description: Choose and configure analytics providers for your application
 ---
 
-Providers are plugins that send your events to analytics services. @stacksee/analytics includes official support for popular services and makes it easy to add custom providers.
+Providers are plugins that send your events to analytics services. trackle includes official support for popular services and makes it easy to add custom providers.
 
 ## Available Providers
 
@@ -37,7 +37,7 @@ pnpm install posthog-js posthog-node
 ```
 
 ```typescript
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 
 new PostHogClientProvider({
   token: 'your-posthog-api-key',
@@ -55,7 +55,7 @@ new PostHogClientProvider({
 ```
 
 ```typescript
-import { BentoClientProvider } from '@stacksee/analytics/providers/client';
+import { BentoClientProvider } from 'trackle/providers/client';
 
 new BentoClientProvider({
   siteUuid: 'your-bento-site-uuid'
@@ -71,7 +71,7 @@ pnpm install pirsch-sdk
 ```
 
 ```typescript
-import { PirschClientProvider } from '@stacksee/analytics/providers/client';
+import { PirschClientProvider } from 'trackle/providers/client';
 
 new PirschClientProvider({
   identificationCode: 'your-pirsch-identification-code',
@@ -88,7 +88,7 @@ new PirschClientProvider({
 ```
 
 ```typescript
-import { EmitKitServerProvider } from '@stacksee/analytics/providers/server';
+import { EmitKitServerProvider } from 'trackle/providers/server';
 
 new EmitKitServerProvider({
   apiKey: 'emitkit_xxxxx',
@@ -105,7 +105,7 @@ new EmitKitServerProvider({
 ```
 
 ```typescript
-import { VisitorsClientProvider } from '@stacksee/analytics/providers/client';
+import { VisitorsClientProvider } from 'trackle/providers/client';
 
 new VisitorsClientProvider({
   token: process.env.NEXT_PUBLIC_VISITORS_TOKEN!
@@ -119,11 +119,11 @@ new VisitorsClientProvider({
 Combine providers to leverage different capabilities:
 
 ```typescript
-import { createClientAnalytics } from '@stacksee/analytics/client';
+import { createClientAnalytics } from 'trackle/client';
 import {
   PostHogClientProvider,
   BentoClientProvider
-} from '@stacksee/analytics/providers/client';
+} from 'trackle/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
@@ -155,10 +155,10 @@ Always use the correct import path to avoid bundling issues:
 
 ```typescript
 // ✅ Correct - only browser-compatible code
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 
 // ❌ Wrong - may bundle Node.js dependencies
-import { PostHogClientProvider } from '@stacksee/analytics/providers';
+import { PostHogClientProvider } from 'trackle/providers';
 ```
 
 </Tab>
@@ -166,10 +166,10 @@ import { PostHogClientProvider } from '@stacksee/analytics/providers';
 
 ```typescript
 // ✅ Correct - only Node.js code
-import { PostHogServerProvider } from '@stacksee/analytics/providers/server';
+import { PostHogServerProvider } from 'trackle/providers/server';
 
 // ❌ Wrong - may bundle browser code
-import { PostHogServerProvider } from '@stacksee/analytics/providers';
+import { PostHogServerProvider } from 'trackle/providers';
 ```
 
 </Tab>
@@ -229,7 +229,7 @@ const analytics = createClientAnalytics({
 Want to integrate with a different analytics service? Create a custom provider:
 
 ```typescript
-import { BaseAnalyticsProvider, BaseEvent, EventContext } from '@stacksee/analytics';
+import { BaseAnalyticsProvider, BaseEvent, EventContext } from 'trackle';
 
 export class CustomProvider extends BaseAnalyticsProvider {
   name = 'CustomProvider';

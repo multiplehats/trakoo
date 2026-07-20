@@ -8,14 +8,14 @@ PostHog is an open-source product analytics platform with powerful features like
 ## Installation
 
 ```bash
-pnpm install @stacksee/analytics posthog-js posthog-node
+pnpm install trackle posthog-js posthog-node
 ```
 
 ## Client-Side Usage
 
 ```typescript
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
@@ -33,8 +33,8 @@ await analytics.initialize();
 ## Server-Side Usage
 
 ```typescript
-import { createServerAnalytics } from '@stacksee/analytics/server';
-import { PostHogServerProvider } from '@stacksee/analytics/providers/server';
+import { createServerAnalytics } from 'trackle/server';
+import { PostHogServerProvider } from 'trackle/providers/server';
 
 const serverAnalytics = createServerAnalytics({
   providers: [

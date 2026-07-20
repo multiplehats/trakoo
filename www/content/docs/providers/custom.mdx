@@ -3,12 +3,12 @@ title: Custom Providers
 description: Create your own analytics provider for any service
 ---
 
-Create custom providers to integrate @stacksee/analytics with any analytics service.
+Create custom providers to integrate trackle with any analytics service.
 
 ## Basic Provider Example
 
 ```typescript
-import { BaseAnalyticsProvider, BaseEvent, EventContext } from '@stacksee/analytics';
+import { BaseAnalyticsProvider, BaseEvent, EventContext } from 'trackle';
 
 export class CustomProvider extends BaseAnalyticsProvider {
   name = 'CustomProvider';
@@ -59,7 +59,7 @@ export class CustomProvider extends BaseAnalyticsProvider {
 ## Using Your Custom Provider
 
 ```typescript
-import { createClientAnalytics } from '@stacksee/analytics/client';
+import { createClientAnalytics } from 'trackle/client';
 import { CustomProvider } from './custom-provider';
 
 const analytics = createClientAnalytics({

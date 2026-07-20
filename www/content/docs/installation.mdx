@@ -1,11 +1,11 @@
 ---
 title: Installation
-description: Install @stacksee/analytics and your analytics providers
+description: Install trackle and your analytics providers
 ---
 
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 
-Get @stacksee/analytics installed and ready to track events in under 2 minutes.
+Get trackle installed and ready to track events in under 2 minutes.
 
 ## Quick Install
 
@@ -15,7 +15,7 @@ Get @stacksee/analytics installed and ready to track events in under 2 minutes.
 ### Install the Core Library
 
 ```bash
-npm install @stacksee/analytics
+npm install trackle
 ```
 
 The core library is zero-dependency and handles all the analytics logic.
@@ -82,28 +82,28 @@ Choose your preferred package manager:
 <Tab value="npm">
 
 ```bash
-npm install @stacksee/analytics
+npm install trackle
 ```
 
 </Tab>
 <Tab value="pnpm">
 
 ```bash
-pnpm install @stacksee/analytics
+pnpm install trackle
 ```
 
 </Tab>
 <Tab value="yarn">
 
 ```bash
-yarn add @stacksee/analytics
+yarn add trackle
 ```
 
 </Tab>
 <Tab value="bun">
 
 ```bash
-bun add @stacksee/analytics
+bun add trackle
 ```
 
 </Tab>
@@ -111,7 +111,7 @@ bun add @stacksee/analytics
 
 ## What Gets Installed
 
-### Core Library (`@stacksee/analytics`)
+### Core Library (`trackle`)
 
 - **Size**: ~10KB gzipped
 - **Dependencies**: Zero
@@ -133,25 +133,25 @@ Provider SDKs are separate packages maintained by each analytics service:
 Check that everything is installed correctly:
 
 ```bash
-npm list @stacksee/analytics
+npm list trackle
 ```
 
 You should see:
 
 ```
 your-project@1.0.0
-└── @stacksee/analytics@x.x.x
+└── trackle@x.x.x
 ```
 
 ## TypeScript Support
 
-@stacksee/analytics is written in TypeScript and includes full type definitions.
+trackle is written in TypeScript and includes full type definitions.
 
 **No additional setup required!**
 
 ```typescript
 // Types work automatically
-import { createClientAnalytics } from '@stacksee/analytics/client';
+import { createClientAnalytics } from 'trackle/client';
 //       ↑ Full autocomplete and type checking
 ```
 
@@ -283,18 +283,18 @@ const serverAnalytics = createServerAnalytics({
 
 ### Module Not Found
 
-If you see `Cannot find module '@stacksee/analytics/client'`:
+If you see `Cannot find module 'trackle/client'`:
 
-1. **Check your package.json**: Ensure `@stacksee/analytics` is installed
+1. **Check your package.json**: Ensure `trackle` is installed
 2. **Clear node_modules**: Run `rm -rf node_modules && npm install`
 3. **Check import path**: Use `/client` or `/server`, not the root package
 
 ```typescript
 // ✅ Correct
-import { createClientAnalytics } from '@stacksee/analytics/client';
+import { createClientAnalytics } from 'trackle/client';
 
 // ❌ Wrong
-import { createClientAnalytics } from '@stacksee/analytics';
+import { createClientAnalytics } from 'trackle';
 ```
 
 ### TypeScript Errors
@@ -335,18 +335,18 @@ npm install @bentonow/bento-node-sdk
 To upgrade to the latest version:
 
 ```bash
-npm install @stacksee/analytics@latest
+npm install trackle@latest
 ```
 
 Check the [changelog](https://github.com/stacksee/stacksee-analytics/releases) for breaking changes.
 
 ## Uninstalling
 
-To completely remove @stacksee/analytics:
+To completely remove trackle:
 
 ```bash
 # Remove core library
-npm uninstall @stacksee/analytics
+npm uninstall trackle
 
 # Remove provider SDKs
 npm uninstall posthog-js posthog-node @bentonow/bento-node-sdk pirsch-sdk

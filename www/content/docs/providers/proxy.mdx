@@ -17,8 +17,8 @@ The Proxy Provider routes client-side events through your own server endpoint, s
 ### 1. Client-Side
 
 ```typescript
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { ProxyProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { ProxyProvider } from 'trackle/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
@@ -42,11 +42,11 @@ analytics.track('button_clicked', {
 
 ```typescript
 // app/api/events/route.ts
-import { createServerAnalytics } from '@stacksee/analytics/server';
+import { createServerAnalytics } from 'trackle/server';
 import {
   PirschServerProvider,
   ingestProxyEvents
-} from '@stacksee/analytics/providers/server';
+} from 'trackle/providers/server';
 
 const serverAnalytics = createServerAnalytics({
   providers: [

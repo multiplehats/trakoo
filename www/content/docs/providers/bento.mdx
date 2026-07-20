@@ -28,9 +28,9 @@ pnpm install @bentonow/bento-node-sdk
 **Recommended setup (with page views disabled):**
 
 ```typescript
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { BentoClientProvider } from '@stacksee/analytics/providers/client';
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { BentoClientProvider } from 'trackle/providers/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
@@ -70,9 +70,9 @@ const analytics = createClientAnalytics({
 **Recommended setup (with page views disabled):**
 
 ```typescript
-import { createServerAnalytics } from '@stacksee/analytics/server';
-import { BentoServerProvider } from '@stacksee/analytics/providers/server';
-import { PirschServerProvider } from '@stacksee/analytics/providers/server';
+import { createServerAnalytics } from 'trackle/server';
+import { BentoServerProvider } from 'trackle/providers/server';
+import { PirschServerProvider } from 'trackle/providers/server';
 
 const serverAnalytics = createServerAnalytics({
   providers: [

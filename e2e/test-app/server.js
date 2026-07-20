@@ -127,7 +127,7 @@ function getTestPage() {
 </head>
 <body>
   <h1>Analytics E2E Test Page</h1>
-  <p>This page tests the @stacksee/analytics proxy flow.</p>
+  <p>This page tests the trackle proxy flow.</p>
   <button id="track-btn">Track Custom Event</button>
   <button id="identify-btn">Identify User</button>
   <div id="status">Ready</div>

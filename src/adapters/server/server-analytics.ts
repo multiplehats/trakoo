@@ -44,8 +44,8 @@ export class ServerAnalytics<
 	 *
 	 * @example
 	 * ```typescript
-	 * import { ServerAnalytics } from '@stacksee/analytics/server';
-	 * import { PostHogServerProvider } from '@stacksee/analytics/providers/posthog';
+	 * import { ServerAnalytics } from 'trackle/server';
+	 * import { PostHogServerProvider } from 'trackle/providers/posthog';
 	 *
 	 * const analytics = new ServerAnalytics({
 	 *   providers: [

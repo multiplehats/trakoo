@@ -19,7 +19,7 @@ Let's get you tracking your first event in **under 2 minutes**. This tutorial wi
 ## Install the Library
 
 ```bash
-npm install @stacksee/analytics
+npm install trackle
 ```
 
 That's it! The core library has zero dependencies and is ready to use.
@@ -35,7 +35,7 @@ That's it! The core library has zero dependencies and is ready to use.
 Create a file to define your analytics events:
 
 ```typescript title="lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from '@stacksee/analytics';
+import type { CreateEventDefinition, EventCollection } from 'trackle';
 
 export const appEvents = {
   buttonClicked: {
@@ -68,8 +68,8 @@ TypeScript now knows exactly what data this event needs!
 For now, we'll use a simple console logger to see events:
 
 ```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { BaseAnalyticsProvider } from '@stacksee/analytics';
+import { createClientAnalytics } from 'trackle/client';
+import { BaseAnalyticsProvider } from 'trackle';
 import type { appEvents } from './events';
 
 // Simple console logger provider
@@ -107,7 +107,7 @@ export const analytics = createClientAnalytics<typeof appEvents>({
 **Using a real analytics service?** Replace `ConsoleProvider` with a real provider:
 
 ```typescript
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 
 export const analytics = createClientAnalytics<typeof appEvents>({
   providers: [
@@ -248,7 +248,7 @@ Open your browser console and click the button. You should see:
 
 In under 2 minutes, you:
 
-1. ✅ Installed @stacksee/analytics
+1. ✅ Installed trackle
 2. ✅ Defined a type-safe event
 3. ✅ Created an analytics instance
 4. ✅ Tracked your first event
@@ -343,8 +343,8 @@ npm install posthog-js
 2. Update your analytics instance:
 
 ```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 import type { appEvents } from './events';
 
 export const analytics = createClientAnalytics<typeof appEvents>({
@@ -367,8 +367,8 @@ export const analytics = createClientAnalytics<typeof appEvents>({
 1. No installation needed for client-side! Update your analytics instance:
 
 ```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { BentoClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { BentoClientProvider } from 'trackle/providers/client';
 import type { appEvents } from './events';
 
 export const analytics = createClientAnalytics<typeof appEvents>({
@@ -396,8 +396,8 @@ npm install pirsch-sdk
 2. Update your analytics instance:
 
 ```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { PirschClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { PirschClientProvider } from 'trackle/providers/client';
 import type { appEvents } from './events';
 
 export const analytics = createClientAnalytics<typeof appEvents>({
@@ -421,7 +421,7 @@ export const analytics = createClientAnalytics<typeof appEvents>({
 
 ### Do I need an analytics provider right away?
 
-No! You can start with the console logger and add a real provider later. The beauty of @stacksee/analytics is that your tracking code doesn't change when you switch providers.
+No! You can start with the console logger and add a real provider later. The beauty of trackle is that your tracking code doesn't change when you switch providers.
 
 ### Can I use multiple providers?
 

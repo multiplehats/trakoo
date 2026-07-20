@@ -5,9 +5,9 @@ description: Type-safe, provider-agnostic analytics for TypeScript applications
 
 import { Step, Steps } from 'fumadocs-ui/components/steps';
 
-**@stacksee/analytics** is a highly typed, zero-dependency, provider-agnostic analytics library for TypeScript applications. Track events with full type safety across client and server environments.
+**trackle** is a highly typed, zero-dependency, provider-agnostic analytics library for TypeScript applications. Track events with full type safety across client and server environments.
 
-## Why @stacksee/analytics?
+## Why trackle?
 
 <Cards>
   <Card title="Fully Type-Safe" icon="target">
@@ -27,8 +27,8 @@ import { Step, Steps } from 'fumadocs-ui/components/steps';
 ## Quick Example
 
 ```typescript
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 
 // Define your events with full type safety
 const appEvents = {
@@ -64,7 +64,7 @@ analytics.track('user_signed_up', {
 ### Install the Library
 
 ```bash
-pnpm install @stacksee/analytics
+pnpm install trackle
 ```
 
 </Step>
@@ -95,7 +95,7 @@ pnpm install pirsch-sdk
 Define your events and start tracking:
 
 ```typescript
-import { createClientAnalytics } from '@stacksee/analytics/client';
+import { createClientAnalytics } from 'trackle/client';
 
 const analytics = createClientAnalytics({
   providers: [/* your providers */]
@@ -152,10 +152,10 @@ Same API works on both client and server:
 
 ```typescript
 // Client-side
-import { createClientAnalytics } from '@stacksee/analytics/client';
+import { createClientAnalytics } from 'trackle/client';
 
 // Server-side
-import { createServerAnalytics } from '@stacksee/analytics/server';
+import { createServerAnalytics } from 'trackle/server';
 
 // Both support the same methods
 analytics.track();

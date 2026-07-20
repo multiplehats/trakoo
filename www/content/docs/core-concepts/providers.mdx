@@ -10,8 +10,8 @@ Providers are plugins that send your events to analytics services. The library u
 A provider is a small adapter that translates your events into the format expected by an analytics service:
 
 ```typescript
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
@@ -455,11 +455,11 @@ Always import providers from the correct path to avoid bundling issues:
 
 ```typescript
 // ✅ Correct - only browser code
-import { createClientAnalytics } from '@stacksee/analytics/client';
-import { PostHogClientProvider } from '@stacksee/analytics/providers/client';
+import { createClientAnalytics } from 'trackle/client';
+import { PostHogClientProvider } from 'trackle/providers/client';
 
 // ❌ Wrong - may bundle Node.js code
-import { PostHogClientProvider } from '@stacksee/analytics/providers';
+import { PostHogClientProvider } from 'trackle/providers';
 ```
 
 </Tab>
@@ -467,11 +467,11 @@ import { PostHogClientProvider } from '@stacksee/analytics/providers';
 
 ```typescript
 // ✅ Correct - only Node.js code
-import { createServerAnalytics } from '@stacksee/analytics/server';
-import { PostHogServerProvider } from '@stacksee/analytics/providers/server';
+import { createServerAnalytics } from 'trackle/server';
+import { PostHogServerProvider } from 'trackle/providers/server';
 
 // ❌ Wrong - may bundle browser code
-import { PostHogServerProvider } from '@stacksee/analytics/providers';
+import { PostHogServerProvider } from 'trackle/providers';
 ```
 
 </Tab>

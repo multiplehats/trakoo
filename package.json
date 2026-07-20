@@ -49,7 +49,7 @@
 		"build:docs": "pnpm --filter @stacksee/docs build",
 		"deploy": "npm publish",
 		"typecheck": "tsc --noEmit",
-		"ci:publish": "pnpm build && changeset publish --provenance",
+		"ci:publish": "pnpm build && changeset publish",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
 		"biome": "biome"

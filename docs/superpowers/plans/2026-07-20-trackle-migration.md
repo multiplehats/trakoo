@@ -476,10 +476,17 @@ Run:
 ```bash
 git remote set-url origin https://github.com/multiplehats/trakoo.git
 git remote -v
-git push origin main
+git fetch origin main
+git merge-base --is-ancestor origin/main HEAD
+git push origin HEAD:main
 ```
 
-Expected: both fetch and push URLs are `https://github.com/multiplehats/trakoo.git`, and `main` containing the design, plan, package rename, and OIDC workflow commits is on the destination repository.
+Expected: both fetch and push URLs are
+`https://github.com/multiplehats/trakoo.git`; the ancestry check succeeds,
+proving the fetched destination `main` is an ancestor of the current reviewed
+`HEAD`; and the non-force push places that exact reviewed migration history on
+destination `main`. If the ancestry check fails, stop and incorporate and
+review the remote commits before retrying it.
 
 - [ ] **Step 5: Verify repository identity and working-tree state**
 
@@ -487,10 +494,16 @@ Run:
 
 ```bash
 gh repo view multiplehats/trakoo --json nameWithOwner,url,defaultBranchRef
+git rev-parse HEAD
+git ls-remote origin refs/heads/main
 git status --short --branch
 ```
 
-Expected: the repository is `multiplehats/trakoo`, its default branch is `main`, and local `main` is aligned with `origin/main` with no uncommitted migration files.
+Expected: the repository is `multiplehats/trakoo`, its default branch is
+`main`, the remote `main` SHA exactly matches the current reviewed `HEAD`, and
+the current worktree has no uncommitted migration files. The original checkout
+and its local `main` are out of scope for this worktree-safe procedure and must
+be preserved if they are dirty.
 
 Do not recreate a repository at `stackseehq/analytics`; GitHub uses that old location to redirect existing links and Git operations.
 

@@ -53,7 +53,7 @@ describe("VisitorsClientProvider", () => {
 	beforeEach(() => {
 		sdk = mockVisitorsSdk();
 		// Remove any leftover window.visitors from previous tests
-		delete (window as unknown as Record<string, unknown>).visitors;
+		Reflect.deleteProperty(window, "visitors");
 	});
 
 	afterEach(() => {
@@ -76,7 +76,7 @@ describe("VisitorsClientProvider", () => {
 
 			expect(scriptEl).toBeDefined();
 			expect(scriptEl?.src).toContain("cdn.visitors.now");
-			expect(scriptEl?.dataset["token"]).toBe("test-token-123");
+			expect(scriptEl?.dataset.token).toBe("test-token-123");
 		});
 
 		it("should set name to 'Visitors-Client'", () => {

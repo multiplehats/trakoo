@@ -119,7 +119,9 @@ async function waitUntil(predicate, maxMs = 15000, intervalMs = 200) {
   } catch (e) {
     fail('Analytics ready flag', e.message);
     console.log('  Console output:');
-    consoleLogs.slice(-10).forEach(l => console.log('   ', l));
+    for (const l of consoleLogs.slice(-10)) {
+      console.log('   ', l);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -195,8 +197,7 @@ async function waitUntil(predicate, maxMs = 15000, intervalMs = 200) {
         const cdnRequests = allRequests.filter(r => r.url.includes('visitors.now'));
         fail(
           'Automatic page-view request',
-          `Only ${cdnRequests.length} visitors.now request(s) found (expected tracking hit beyond CDN script): ` +
-          cdnRequests.map(r => `${r.method} ${r.url}`).join(', ')
+          `Only ${cdnRequests.length} visitors.now request(s) found (expected tracking hit beyond CDN script): ${cdnRequests.map(r => `${r.method} ${r.url}`).join(', ')}`
         );
       }
     }
@@ -345,8 +346,7 @@ async function waitUntil(predicate, maxMs = 15000, intervalMs = 200) {
       pass(`visitor cookie present: ${visitorId}`);
     } else {
       // Cookie may not be set if persist mode is off on the test account
-      console.log(`  (info) visitor cookie value: ${JSON.stringify(visitorId)} — ` +
-        'enable "persist mode" in visitors.now project settings for revenue attribution');
+      console.log(`  (info) visitor cookie value: ${JSON.stringify(visitorId)} — enable "persist mode" in visitors.now project settings for revenue attribution`);
       pass('getVisitorId() ran without error (cookie absent – persist mode may be off)');
     }
 
@@ -451,7 +451,7 @@ async function waitUntil(predicate, maxMs = 15000, intervalMs = 200) {
       }
     });
 
-    if (threw && threw.includes('token')) {
+    if (threw?.includes('token')) {
       pass(`Threw expected error: "${threw}"`);
     } else if (threw) {
       fail('Error message', `Got "${threw}" (expected message containing "token")`);
@@ -479,8 +479,7 @@ async function waitUntil(predicate, maxMs = 15000, intervalMs = 200) {
     } else {
       fail(
         'API response success',
-        `${failed.length}/${visitorsResponses.length} request(s) failed: ` +
-        failed.map(r => `${r.url} → HTTP ${r.status}`).join(', ')
+        `${failed.length}/${visitorsResponses.length} request(s) failed: ${failed.map(r => `${r.url} → HTTP ${r.status}`).join(', ')}`
       );
     }
   } catch (e) {

@@ -24,9 +24,9 @@ name is currently available and npm package names are allocated globally.
 The local `0.14.5` version change will be intentionally superseded by the new
 package's bootstrap version, `0.0.0`.
 
-The initial replacement candidate was the name `track` + `le`, but npm rejected
-it as too similar to `tsickle`. No package was published, and the user selected
-`trakoo` as the replacement identity.
+`trackle` was the initial replacement candidate, but npm rejected it as too
+similar to `tsickle`. No package was published, and the user selected `trakoo`
+as the replacement identity.
 
 ## Chosen Migration Strategy
 

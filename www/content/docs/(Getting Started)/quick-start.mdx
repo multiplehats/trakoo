@@ -3,8 +3,6 @@ title: Quick Start
 description: Get started with trakoo in 5 minutes
 ---
 
-import { Step, Steps } from 'fumadocs-ui/components/steps';
-
 This guide will get you tracking analytics events in under 5 minutes.
 
 ## Installation
@@ -26,15 +24,15 @@ pnpm install trakoo
 
 Choose which analytics services you want to use:
 
-<Tabs items={['PostHog', 'Bento', 'Pirsch']}>
-<Tab value="PostHog">
+<Tabs>
+<Tab title="PostHog">
 
 ```bash
 pnpm install posthog-js posthog-node
 ```
 
 </Tab>
-<Tab value="Bento">
+<Tab title="Bento">
 
 ```bash
 # Client-side: No installation needed (uses CDN)
@@ -43,7 +41,7 @@ pnpm install @bentonow/bento-node-sdk
 ```
 
 </Tab>
-<Tab value="Pirsch">
+<Tab title="Pirsch">
 
 ```bash
 pnpm install pirsch-sdk
@@ -102,8 +100,8 @@ export type AppEvents = typeof appEvents;
 
 Create your analytics instance with your chosen providers:
 
-<Tabs items={['PostHog', 'Bento', 'Pirsch']}>
-<Tab value="PostHog">
+<Tabs>
+<Tab title="PostHog">
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
@@ -122,7 +120,7 @@ export const analytics = createClientAnalytics<AppEvents>({
 ```
 
 </Tab>
-<Tab value="Bento">
+<Tab title="Bento">
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
@@ -144,7 +142,7 @@ export const analytics = createClientAnalytics<AppEvents>({
 ```
 
 </Tab>
-<Tab value="Pirsch">
+<Tab title="Pirsch">
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
@@ -208,8 +206,8 @@ analytics.track('feature_used', {
 
 ### Initialize Server Analytics
 
-<Tabs items={['PostHog', 'Bento', 'Pirsch']}>
-<Tab value="PostHog">
+<Tabs>
+<Tab title="PostHog">
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
@@ -228,7 +226,7 @@ export const serverAnalytics = createServerAnalytics<AppEvents>({
 ```
 
 </Tab>
-<Tab value="Bento">
+<Tab title="Bento">
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
@@ -254,7 +252,7 @@ export const serverAnalytics = createServerAnalytics<AppEvents>({
 ```
 
 </Tab>
-<Tab value="Pirsch">
+<Tab title="Pirsch">
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
@@ -339,7 +337,7 @@ analytics.track('user_signed_up', {
 
 ## Next Steps
 
-<Cards>
+<CardGroup>
   <Card title="Core Concepts" href="/docs/core-concepts" icon="book">
     Understand events, providers, and user context
   </Card>
@@ -349,7 +347,7 @@ analytics.track('user_signed_up', {
   <Card title="Framework Guides" href="/docs/guides/nextjs" icon="code">
     Integration guides for Next.js, SvelteKit, and more
   </Card>
-  <Card title="Advanced Patterns" href="/docs/guides/advanced" icon="settings">
-    Serverless, batching, error handling, and more
+  <Card title="Client vs Server" href="/docs/core-concepts/client-vs-server" icon="server">
+    Choose the right tracking environment for each event
   </Card>
-</Cards>
+</CardGroup>

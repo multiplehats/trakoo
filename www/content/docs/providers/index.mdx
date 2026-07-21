@@ -1,5 +1,5 @@
 ---
-title: Providers Overview
+title: Providers
 description: Choose and configure analytics providers for your application
 ---
 
@@ -7,112 +7,26 @@ Providers are plugins that send your events to analytics services. trakoo includ
 
 ## Available Providers
 
-<Cards>
-  <Card title="PostHog" href="/docs/providers/posthog" icon="bar-chart">
+<CardGroup>
+  <ProviderCard title="PostHog" href="/docs/providers/posthog" domain="posthog.com">
     Open-source product analytics with feature flags and session replay
-  </Card>
-  <Card title="Bento" href="/docs/providers/bento" icon="mail">
+  </ProviderCard>
+  <ProviderCard title="Bento" href="/docs/providers/bento" domain="bentonow.com">
     Email marketing and automation platform with event tracking
-  </Card>
-  <Card title="Pirsch" href="/docs/providers/pirsch" icon="shield">
+  </ProviderCard>
+  <ProviderCard title="Pirsch" href="/docs/providers/pirsch" domain="pirsch.io">
     Privacy-focused, cookie-free web analytics
-  </Card>
-  <Card title="EmitKit" href="/docs/providers/emitkit" icon="bell">
+  </ProviderCard>
+  <ProviderCard title="EmitKit" href="/docs/providers/emitkit" domain="emitkit.com">
     Event notifications and activity feeds with rich metadata
-  </Card>
-  <Card title="Visitors" href="/docs/providers/visitors" icon="eye">
+  </ProviderCard>
+  <ProviderCard title="Visitors" href="/docs/providers/visitors" domain="visitors.now">
     Lightweight analytics with Stripe revenue attribution
-  </Card>
-  <Card title="Proxy Provider" href="/docs/providers/proxy" icon="arrow-right-left">
+  </ProviderCard>
+  <ProviderCard title="Proxy Provider" href="/docs/providers/proxy" domain="trakoo.dev">
     Route events through your server to bypass ad-blockers
-  </Card>
-</Cards>
-
-## Quick Setup
-
-### PostHog
-
-```bash
-pnpm install posthog-js posthog-node
-```
-
-```typescript
-import { PostHogClientProvider } from 'trakoo/providers/client';
-
-new PostHogClientProvider({
-  token: 'your-posthog-api-key',
-  api_host: 'https://app.posthog.com'
-})
-```
-
-[Full PostHog Documentation →](/docs/providers/posthog)
-
-### Bento
-
-```bash
-# Client: No installation (uses CDN)
-# Server: pnpm install @bentonow/bento-node-sdk
-```
-
-```typescript
-import { BentoClientProvider } from 'trakoo/providers/client';
-
-new BentoClientProvider({
-  siteUuid: 'your-bento-site-uuid'
-})
-```
-
-[Full Bento Documentation →](/docs/providers/bento)
-
-### Pirsch
-
-```bash
-pnpm install pirsch-sdk
-```
-
-```typescript
-import { PirschClientProvider } from 'trakoo/providers/client';
-
-new PirschClientProvider({
-  identificationCode: 'your-pirsch-identification-code',
-  hostname: 'example.com'
-})
-```
-
-[Full Pirsch Documentation →](/docs/providers/pirsch)
-
-### EmitKit
-
-```bash
-# Server-only: pnpm install @emitkit/js
-```
-
-```typescript
-import { EmitKitServerProvider } from 'trakoo/providers/server';
-
-new EmitKitServerProvider({
-  apiKey: 'emitkit_xxxxx',
-  channelName: 'analytics'
-})
-```
-
-[Full EmitKit Documentation →](/docs/providers/emitkit)
-
-### Visitors
-
-```bash
-# No installation needed (script loaded from CDN at runtime)
-```
-
-```typescript
-import { VisitorsClientProvider } from 'trakoo/providers/client';
-
-new VisitorsClientProvider({
-  token: process.env.NEXT_PUBLIC_VISITORS_TOKEN!
-})
-```
-
-[Full Visitors Documentation →](/docs/providers/visitors)
+  </ProviderCard>
+</CardGroup>
 
 ## Using Multiple Providers
 
@@ -150,8 +64,8 @@ analytics.track('user_signed_up', {
 
 Always use the correct import path to avoid bundling issues:
 
-<Tabs items={['Client-Side', 'Server-Side']}>
-<Tab value="Client-Side">
+<Tabs>
+<Tab title="Client-Side">
 
 ```typescript
 // ✅ Correct - only browser-compatible code
@@ -162,7 +76,7 @@ import { PostHogClientProvider } from 'trakoo/providers';
 ```
 
 </Tab>
-<Tab value="Server-Side">
+<Tab title="Server-Side">
 
 ```typescript
 // ✅ Correct - only Node.js code
@@ -251,26 +165,3 @@ export class CustomProvider extends BaseAnalyticsProvider {
 ```
 
 [Learn more about creating custom providers →](/docs/providers/custom)
-
-## Next Steps
-
-<Cards>
-  <Card title="PostHog Provider" href="/docs/providers/posthog" icon="bar-chart">
-    Product analytics with feature flags
-  </Card>
-  <Card title="Bento Provider" href="/docs/providers/bento" icon="mail">
-    Email marketing and automation
-  </Card>
-  <Card title="Pirsch Provider" href="/docs/providers/pirsch" icon="shield">
-    Privacy-focused web analytics
-  </Card>
-  <Card title="EmitKit Provider" href="/docs/providers/emitkit" icon="bell">
-    Event notifications and activity feeds
-  </Card>
-  <Card title="Visitors Provider" href="/docs/providers/visitors" icon="eye">
-    Lightweight analytics with Stripe revenue attribution
-  </Card>
-  <Card title="Custom Providers" href="/docs/providers/custom" icon="code">
-    Create your own provider
-  </Card>
-</Cards>

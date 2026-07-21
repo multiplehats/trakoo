@@ -299,8 +299,8 @@ This gives you both:
 
 Always use environment-specific imports:
 
-<Tabs items={['Client', 'Server']}>
-<Tab value="Client">
+<Tabs>
+<Tab title="Client">
 
 ```typescript
 // ✅ Correct - only browser-compatible code
@@ -313,7 +313,7 @@ import { PostHogClientProvider } from 'trakoo/providers';
 ```
 
 </Tab>
-<Tab value="Server">
+<Tab title="Server">
 
 ```typescript
 // ✅ Correct - only Node.js code
@@ -493,14 +493,14 @@ await serverAnalytics.track('event', {});
 
 ## Next Steps
 
-<Cards>
+<CardGroup>
   <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield">
     Learn about TypeScript features and type safety
   </Card>
   <Card title="Framework Guides" href="/docs/guides/nextjs" icon="code">
     Integration guides for Next.js, SvelteKit, and more
   </Card>
-  <Card title="Advanced Patterns" href="/docs/guides/advanced" icon="settings">
-    Serverless, batching, and advanced usage
+  <Card title="Proxy Provider" href="/docs/providers/proxy" icon="arrow-right-left">
+    Serverless-safe routing, batching, and server enrichment
   </Card>
-</Cards>
+</CardGroup>

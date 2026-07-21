@@ -91,7 +91,7 @@ analytics.track('purchase', { amount: 99.99 });
 
 ## Available Providers
 
-<Cards>
+<CardGroup>
   <Card title="PostHog" href="/docs/providers/posthog" icon="bar-chart">
     Product analytics with feature flags and session replay
   </Card>
@@ -107,7 +107,7 @@ analytics.track('purchase', { amount: 99.99 });
   <Card title="Custom Providers" href="/docs/providers/custom" icon="code">
     Create your own provider for any analytics service
   </Card>
-</Cards>
+</CardGroup>
 
 ## Provider Lifecycle
 
@@ -450,8 +450,8 @@ const analytics = createClientAnalytics({ providers });
 
 Always import providers from the correct path to avoid bundling issues:
 
-<Tabs items={['Client-Side', 'Server-Side']}>
-<Tab value="Client-Side">
+<Tabs>
+<Tab title="Client-Side">
 
 ```typescript
 // ✅ Correct - only browser code
@@ -463,7 +463,7 @@ import { PostHogClientProvider } from 'trakoo/providers';
 ```
 
 </Tab>
-<Tab value="Server-Side">
+<Tab title="Server-Side">
 
 ```typescript
 // ✅ Correct - only Node.js code
@@ -612,7 +612,7 @@ const analytics = createClientAnalytics({
 
 ## Next Steps
 
-<Cards>
+<CardGroup>
   <Card title="Provider Guides" href="/docs/providers" icon="plug">
     Setup guides for each analytics provider
   </Card>
@@ -622,4 +622,4 @@ const analytics = createClientAnalytics({
   <Card title="Client vs Server" href="/docs/core-concepts/client-vs-server" icon="server">
     Learn when to use client-side vs server-side tracking
   </Card>
-</Cards>
+</CardGroup>

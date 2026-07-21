@@ -3,6 +3,7 @@
 
 # generated content
 .source
+.blume
 
 # test & build
 /coverage

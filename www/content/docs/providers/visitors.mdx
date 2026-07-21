@@ -67,10 +67,10 @@ analytics.identify('user-123', {
 
 Calls `visitors.identify({ id, ...traits })`. Non-scalar trait values are filtered out automatically.
 
-<Callout type="info">
+:::info
   Identification requires `persist: true` in your `VisitorsClientProvider` config.
   EU users must give explicit consent before calling `identify()`.
-</Callout>
+:::
 
 ### Page Leave
 
@@ -140,12 +140,12 @@ export async function POST(req: Request) {
 }
 ```
 
-<Callout type="warn">
+:::warning
   Revenue attribution requires:
   - `persist: true` set in `VisitorsClientProvider` config (adds `data-persist` to the script tag so the `visitor` cookie is written)
   - A **Stripe API key** connected under Settings → Integrations
   - `visitors.identify()` called when users sign in (for email-based fallback)
-</Callout>
+:::
 
 ## Framework Examples
 

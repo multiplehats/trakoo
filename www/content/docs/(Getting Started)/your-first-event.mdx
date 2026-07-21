@@ -3,15 +3,13 @@ title: Your First Event
 description: Track your first analytics event in under 2 minutes
 ---
 
-import { Step, Steps } from 'fumadocs-ui/components/steps';
-
 Let's get you tracking your first event in **under 2 minutes**. This tutorial will walk you through the absolute minimum to see analytics working.
 
-<Callout type="info">
+:::info
 **Already installed?** Jump to [Step 2](#define-your-first-event).
 
 **Need a specific framework?** Check out [Next.js](/docs/guides/nextjs) or [SvelteKit](/docs/guides/sveltekit) guides.
-</Callout>
+:::
 
 <Steps>
 <Step>
@@ -49,7 +47,7 @@ export const appEvents = {
 } as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
 ```
 
-<Callout type="success">
+:::success
 **What did we just do?**
 
 We defined a `button_clicked` event with two required properties:
@@ -57,7 +55,7 @@ We defined a `button_clicked` event with two required properties:
 - `location` - Where in the app the button lives
 
 TypeScript now knows exactly what data this event needs!
-</Callout>
+:::
 
 </Step>
 
@@ -103,7 +101,7 @@ export const analytics = createClientAnalytics<typeof appEvents>({
 });
 ```
 
-<Callout type="info">
+:::info
 **Using a real analytics service?** Replace `ConsoleProvider` with a real provider:
 
 ```typescript
@@ -119,7 +117,7 @@ export const analytics = createClientAnalytics<typeof appEvents>({
 ```
 
 See [provider guides](/docs/providers) for setup instructions.
-</Callout>
+:::
 
 </Step>
 
@@ -129,8 +127,8 @@ See [provider guides](/docs/providers) for setup instructions.
 
 Now use it anywhere in your app:
 
-<Tabs items={['React', 'Vue', 'Svelte', 'Vanilla JS']}>
-<Tab value="React">
+<Tabs>
+<Tab title="React">
 
 ```tsx title="components/Button.tsx"
 import { analytics } from '@/lib/analytics';
@@ -154,7 +152,7 @@ export function MyButton() {
 ```
 
 </Tab>
-<Tab value="Vue">
+<Tab title="Vue">
 
 ```vue title="components/Button.vue"
 <script setup lang="ts">
@@ -178,7 +176,7 @@ const handleClick = () => {
 ```
 
 </Tab>
-<Tab value="Svelte">
+<Tab title="Svelte">
 
 ```svelte title="components/Button.svelte"
 <script lang="ts">
@@ -200,7 +198,7 @@ const handleClick = () => {
 ```
 
 </Tab>
-<Tab value="Vanilla JS">
+<Tab title="Vanilla JS">
 
 ```typescript title="main.ts"
 import { analytics } from './lib/analytics';
@@ -331,8 +329,8 @@ See the [Identifying Users](/docs/identifying-users) guide for more details.
 
 Replace the console logger with a real analytics provider:
 
-<Tabs items={['PostHog', 'Bento', 'Pirsch']}>
-<Tab value="PostHog">
+<Tabs>
+<Tab title="PostHog">
 
 1. Install the SDK:
 
@@ -362,7 +360,7 @@ export const analytics = createClientAnalytics<typeof appEvents>({
 [Full PostHog setup guide →](/docs/providers/posthog)
 
 </Tab>
-<Tab value="Bento">
+<Tab title="Bento">
 
 1. No installation needed for client-side! Update your analytics instance:
 
@@ -385,7 +383,7 @@ export const analytics = createClientAnalytics<typeof appEvents>({
 [Full Bento setup guide →](/docs/providers/bento)
 
 </Tab>
-<Tab value="Pirsch">
+<Tab title="Pirsch">
 
 1. Install the SDK:
 
@@ -462,7 +460,7 @@ analytics.pageView({
 
 ## Next Steps
 
-<Cards>
+<CardGroup>
   <Card title="Identifying Users" href="/docs/identifying-users" icon="user">
     Learn how to identify users and attach user context to events
   </Card>
@@ -475,4 +473,4 @@ analytics.pageView({
   <Card title="Providers" href="/docs/providers" icon="plug">
     Choose and configure analytics providers
   </Card>
-</Cards>
+</CardGroup>

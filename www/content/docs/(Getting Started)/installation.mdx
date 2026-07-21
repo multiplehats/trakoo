@@ -3,8 +3,6 @@ title: Installation
 description: Install trakoo and your analytics providers
 ---
 
-import { Step, Steps } from 'fumadocs-ui/components/steps';
-
 Get trakoo installed and ready to track events in under 2 minutes.
 
 ## Quick Install
@@ -28,8 +26,8 @@ The core library is zero-dependency and handles all the analytics logic.
 
 Choose which analytics services you want to use and install their SDKs:
 
-<Tabs items={['PostHog', 'Bento', 'Pirsch', 'Multiple']}>
-<Tab value="PostHog">
+<Tabs>
+<Tab title="PostHog">
 
 ```bash
 npm install posthog-js posthog-node
@@ -38,7 +36,7 @@ npm install posthog-js posthog-node
 PostHog provides product analytics, feature flags, and session replay.
 
 </Tab>
-<Tab value="Bento">
+<Tab title="Bento">
 
 ```bash
 # Client-side: No installation needed (uses CDN)
@@ -50,7 +48,7 @@ npm install @bentonow/bento-node-sdk
 Bento provides email marketing and automation with event tracking.
 
 </Tab>
-<Tab value="Pirsch">
+<Tab title="Pirsch">
 
 ```bash
 npm install pirsch-sdk
@@ -59,7 +57,7 @@ npm install pirsch-sdk
 Pirsch provides privacy-focused, cookie-free web analytics.
 
 </Tab>
-<Tab value="Multiple">
+<Tab title="Multiple">
 
 ```bash
 # Install SDKs for all providers you want to use
@@ -78,29 +76,29 @@ You can use multiple providers simultaneously!
 
 Choose your preferred package manager:
 
-<Tabs items={['npm', 'pnpm', 'yarn', 'bun']}>
-<Tab value="npm">
+<Tabs>
+<Tab title="npm">
 
 ```bash
 npm install trakoo
 ```
 
 </Tab>
-<Tab value="pnpm">
+<Tab title="pnpm">
 
 ```bash
 pnpm install trakoo
 ```
 
 </Tab>
-<Tab value="yarn">
+<Tab title="yarn">
 
 ```bash
 yarn add trakoo
 ```
 
 </Tab>
-<Tab value="bun">
+<Tab title="bun">
 
 ```bash
 bun add trakoo
@@ -161,8 +159,8 @@ import { createClientAnalytics } from 'trakoo/client';
 
 Create environment variables for your API keys:
 
-<Tabs items={['Vite', 'Next.js', 'SvelteKit', 'Create React App']}>
-<Tab value="Vite">
+<Tabs>
+<Tab title="Vite">
 
 ```bash title=".env.local"
 VITE_POSTHOG_KEY=your-posthog-api-key
@@ -183,7 +181,7 @@ const analytics = createClientAnalytics({
 ```
 
 </Tab>
-<Tab value="Next.js">
+<Tab title="Next.js">
 
 ```bash title=".env.local"
 NEXT_PUBLIC_POSTHOG_KEY=your-posthog-api-key
@@ -204,7 +202,7 @@ const analytics = createClientAnalytics({
 ```
 
 </Tab>
-<Tab value="SvelteKit">
+<Tab title="SvelteKit">
 
 ```bash title=".env"
 PUBLIC_POSTHOG_KEY=your-posthog-api-key
@@ -227,7 +225,7 @@ const analytics = createClientAnalytics({
 ```
 
 </Tab>
-<Tab value="Create React App">
+<Tab title="Create React App">
 
 ```bash title=".env.local"
 REACT_APP_POSTHOG_KEY=your-posthog-api-key
@@ -272,12 +270,12 @@ const serverAnalytics = createServerAnalytics({
 });
 ```
 
-<Callout type="warn">
+:::warning
 **Never expose server API keys to the client!**
 
 - Client vars: `VITE_*`, `NEXT_PUBLIC_*`, `PUBLIC_*`, `REACT_APP_*`
 - Server vars: No prefix (e.g., `POSTHOG_API_KEY`)
-</Callout>
+:::
 
 ## Common Issues
 
@@ -354,7 +352,7 @@ npm uninstall posthog-js posthog-node @bentonow/bento-node-sdk pirsch-sdk
 
 ## Next Steps
 
-<Cards>
+<CardGroup>
   <Card title="Your First Event" href="/docs/your-first-event" icon="rocket">
     Track your first analytics event in under 2 minutes
   </Card>
@@ -364,4 +362,4 @@ npm uninstall posthog-js posthog-node @bentonow/bento-node-sdk pirsch-sdk
   <Card title="Framework Guides" href="/docs/guides/nextjs" icon="code">
     Integration guides for Next.js, SvelteKit, and more
   </Card>
-</Cards>
+</CardGroup>

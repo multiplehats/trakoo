@@ -70,7 +70,9 @@ Before publication:
 1. Confirm npm authentication resolves to the intended owner.
 2. Confirm `@stacksee/analytics@0.14.6` does not already exist.
 3. Run the frozen install, typecheck, lint, tests, and build from the isolated
-   legacy checkout.
+   legacy checkout. The approved lint exception is exactly seven pre-existing
+   violations in two untouched test files; any other lint result stops the
+   release so the retirement commit remains limited to its two published files.
 4. Inspect `npm pack --dry-run --json` and require the exact scoped name,
    version `0.14.6`, the minimal README, and the same constrained functional
    package contents as the previous release.

@@ -182,9 +182,9 @@ package.json
 readme.md
 ```
 
-- [ ] **Step 5: Run the complete legacy package verification suite**
+- [ ] **Step 5: Run the legacy package verification suite with the approved lint exception**
 
-Run each command independently and stop on the first failure:
+Run each command independently:
 
 ```bash
 CI=true pnpm install --frozen-lockfile --prefer-offline
@@ -194,7 +194,14 @@ pnpm test
 pnpm build
 ```
 
-Expected: every command exits 0 and `dist` is generated. Existing non-fatal build warnings are allowed.
+Expected:
+
+- the frozen install, typecheck, tests, and build each exit 0, and `dist` is generated;
+- full `pnpm lint` exits 1 with exactly seven pre-existing violations, confined to the untouched test files `e2e/visitors.test.js` (five) and `test/visitors-provider.test.ts` (two);
+- execution may continue past lint only when there are no other lint violations; and
+- existing non-fatal build warnings are allowed.
+
+This narrow lint exception is approved to preserve the exact two-file retirement artifact and avoid changing non-published tests in the retirement commit. Stop on any install, typecheck, test, or build failure, or if lint reports any different count, file, or additional violation.
 
 - [ ] **Step 6: Inspect and assert the exact npm tarball**
 

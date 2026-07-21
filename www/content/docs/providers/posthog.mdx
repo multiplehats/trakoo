@@ -1,70 +1,141 @@
 ---
-title: PostHog Provider
-description: Product analytics with feature flags and session replay
+title: PostHog
+description: Product analytics with feature flags and session replay, on both client and server.
 ---
 
-PostHog is an open-source product analytics platform with powerful features like feature flags, session replay, and advanced analytics.
+PostHog is an open-source product analytics platform that also offers feature flags and session replay. It supports both browser and backend tracking, so the same trakoo event definitions work on the client and the server.
+
+## When to use it
+
+- You want product analytics that span the browser and your backend.
+- You need a single tool for events, funnels, feature flags, and session replay.
+- You want to self-host or keep data in a specific region.
+
+If you only need lightweight page views, a privacy-friendly option like [Pirsch](/docs/providers/pirsch) or [Visitors](/docs/providers/visitors) may be a better fit.
 
 ## Installation
+
+Install trakoo alongside the PostHog SDKs you need — `posthog-js` for the client, `posthog-node` for the server.
 
 ```bash
 pnpm install trakoo posthog-js posthog-node
 ```
 
-## Client-Side Usage
+## Client-side usage
 
-```typescript
+Use `PostHogClientProvider` from `trakoo/providers/client`. It accepts every option from the PostHog JS SDK, so anything you can pass to `posthog.init()` works here.
+
+```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
 
-const analytics = createClientAnalytics({
+export const analytics = createClientAnalytics({
   providers: [
     new PostHogClientProvider({
-      token: 'your-posthog-project-api-key',
-      api_host: 'https://app.posthog.com', // optional
-      debug: false
+      token: import.meta.env.VITE_POSTHOG_KEY,
+      api_host: import.meta.env.VITE_POSTHOG_HOST
     })
   ]
 });
-
-await analytics.initialize();
 ```
 
-## Server-Side Usage
+## Server-side usage
 
-```typescript
+Use `PostHogServerProvider` from `trakoo/providers/server`. Server analytics is stateless, so pass user context with each call.
+
+```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
 
-const serverAnalytics = createServerAnalytics({
+export const serverAnalytics = createServerAnalytics({
   providers: [
     new PostHogServerProvider({
       apiKey: process.env.POSTHOG_API_KEY!,
-      host: 'https://app.posthog.com',
-      flushAt: 20,
-      flushInterval: 10000
+      host: 'https://us.i.posthog.com'
     })
   ]
 });
 
-// Track events
 await serverAnalytics.track('user_signed_up', {
-  userId: 'user-123',
   plan: 'pro'
 }, {
-  userId: 'user-123'
+  userId: 'user_123'
 });
-
-// Always shutdown to flush events
-await serverAnalytics.shutdown();
 ```
 
-## Configuration Options
+:::warning[Always flush on the server]
+The Node SDK queues events and sends them in batches. In serverless or edge functions, call `serverAnalytics.shutdown()` before the function returns so queued events are not lost. See [Client vs Server](/docs/core-concepts/client-vs-server) for the full picture.
+:::
 
-The PostHogClientProvider accepts all PostHog JS SDK options. See the [PostHog docs](https://posthog.com/docs/libraries/js) for details.
+## Configuration
+
+`PostHogClientProvider` forwards all [PostHog JS options](https://posthog.com/docs/libraries/js). The keys you'll set most often:
+
+<TypeTable
+  type={{
+    token: {
+      type: "string",
+      required: true,
+      description: "Your PostHog project API key."
+    },
+    api_host: {
+      type: "string",
+      default: "https://us.i.posthog.com",
+      description: "PostHog instance URL. Change this for EU or self-hosted."
+    },
+    debug: {
+      type: "boolean",
+      default: "false",
+      description: "Log PostHog SDK activity to the console."
+    },
+    enabled: {
+      type: "boolean",
+      default: "true",
+      description: "Set to false to disable the provider without removing it."
+    }
+  }}
+/>
+
+`PostHogServerProvider` forwards all [PostHog Node options](https://posthog.com/docs/libraries/node). The common ones:
+
+<TypeTable
+  type={{
+    apiKey: {
+      type: "string",
+      required: true,
+      description: "Your PostHog project API key."
+    },
+    host: {
+      type: "string",
+      default: "https://us.i.posthog.com",
+      description: "PostHog instance URL. Change this for EU or self-hosted."
+    },
+    flushAt: {
+      type: "number",
+      default: "20",
+      description: "Number of queued events that triggers a flush."
+    },
+    flushInterval: {
+      type: "number",
+      default: "10000",
+      description: "Milliseconds to wait before flushing queued events."
+    }
+  }}
+/>
 
 ## Resources
 
-- [PostHog Documentation](https://posthog.com/docs)
-- [PostHog JavaScript SDK](https://posthog.com/docs/libraries/js)
-- [PostHog Node.js SDK](https://posthog.com/docs/libraries/node)
+<CardGroup>
+  <Card title="PostHog docs" href="https://posthog.com/docs" icon="book-open">
+    Feature flags, session replay, and product analytics.
+  </Card>
+  <Card title="PostHog JS SDK" href="https://posthog.com/docs/libraries/js" icon="code">
+    Every client option you can pass through.
+  </Card>
+  <Card title="PostHog Node SDK" href="https://posthog.com/docs/libraries/node" icon="server">
+    Server-side capture and flushing.
+  </Card>
+  <Card title="Routing" href="/docs/providers#routing" icon="route">
+    Send specific methods and events to PostHog.
+  </Card>
+</CardGroup>

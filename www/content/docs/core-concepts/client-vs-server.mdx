@@ -1,181 +1,155 @@
 ---
 title: Client vs Server
-description: Understanding when and how to track analytics on client and server
+description: When to track on the client, when to track on the server, and how the stateful and stateless APIs differ.
 ---
 
-trakoo provides separate APIs for client-side and server-side tracking. Understanding when to use each is crucial for effective analytics implementation.
+trakoo ships two entry points: `trakoo/client` for the browser and `trakoo/server` for Node and edge runtimes. They share your event definitions but behave differently. The client is stateful and non-blocking; the server is stateless and must flush before the process exits. This page explains when to reach for each and how to use both together.
 
-## Quick Comparison
+## At a glance
 
-| Feature | Client | Server |
-|---------|--------|--------|
-| **State** | Stateful - persists after `identify()` | Stateless - pass per request |
-| **Usage** | Call `identify()` once | Pass `user` with each `track()` |
-| **Reset** | Call `reset()` on logout | No reset needed |
-| **Use Case** | Single user per session | Multiple users per instance |
-| **Async** | Fire-and-forget | Await for critical events |
-| **Shutdown** | Not required | Required in serverless |
+| | Client | Server |
+|---|---|---|
+| State | Stateful — `identify()` persists | Stateless — pass context per call |
+| User context | Set once, applied to later events | Passed with every `track()` |
+| Logout | Call `reset()` | Nothing to reset |
+| Lifetime | One instance per session | One instance per request or worker |
+| Delivery | Fire-and-forget | Await critical events |
+| Shutdown | Not required | Required in serverless |
 
-## Client-Side Tracking
+## When to use each
 
-### When to Use Client-Side
+Track on the **client** for things the browser knows about:
 
-Use client-side tracking for:
-- **Browser interactions** - Clicks, scrolls, form submissions
-- **Page views** - Navigation and route changes
-- **User behavior** - Time on page, feature engagement
-- **Client-side state** - UI changes, modal opens, etc.
+- Clicks, scrolls, and form interactions
+- Page views and route changes
+- UI state — modals, tabs, feature engagement
+- Non-critical events where a dropped hit is acceptable
 
-### Setup
+Track on the **server** for things you must not lose or that the browser should not see:
 
-```typescript
+- API endpoints and request/response events
+- Background jobs, cron tasks, and queue workers
+- Server actions and form actions
+- Critical business events — payments, signups, subscription changes
+- Events carrying server-only context such as IP or auth headers
+
+## Client-side tracking
+
+Import from `trakoo/client` and create one instance for the session.
+
+```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
 import type { AppEvents } from './events';
 
 export const analytics = createClientAnalytics<AppEvents>({
   providers: [
-    new PostHogClientProvider({
-      token: import.meta.env.VITE_POSTHOG_KEY
-    })
+    new PostHogClientProvider({ token: import.meta.env.VITE_POSTHOG_KEY })
   ]
 });
 ```
 
-### Stateful User Context
+### Stateful user context
 
-The client maintains user state across page interactions:
+The client remembers the current user. Call `identify()` once — usually after login — and every later event carries that context until you call `reset()`.
 
 ```typescript
-// 1. User logs in - identify once
+// 1. On login, identify once.
 analytics.identify('user-123', {
-  email: 'user@example.com',
-  name: 'John Doe',
+  email: 'ada@example.com',
   plan: 'pro'
 });
 
-// 2. Track events - user context is automatic
-analytics.track('button_clicked', {
-  buttonId: 'checkout'
-});
-// Providers receive: { userId: 'user-123', email: 'user@example.com', ... }
+// 2. Later events include the user automatically.
+analytics.track('button_clicked', { buttonId: 'checkout' });
+// Providers receive userId 'user-123' and its traits.
 
-analytics.track('feature_used', {
-  feature: 'export'
-});
-// Same user context automatically included
-
-// 3. User logs out - reset state
+// 3. On logout, clear the state.
 analytics.reset();
 ```
 
-### Fire-and-Forget Tracking
+See [Identifying Users](/docs/core-concepts/identifying-users) for traits, typing, and logout details.
 
-Client-side tracking is non-blocking by default:
+### Fire-and-forget
+
+Client tracking is non-blocking. Don't await it — let events send in the background so the UI stays responsive.
 
 ```typescript
 function handleClick() {
-  // Don't await - events send in background
-  analytics.track('button_clicked', {
-    buttonId: 'cta'
-  });
-
-  // User continues immediately
+  analytics.track('button_clicked', { buttonId: 'cta' });
   navigateTo('/checkout');
 }
 ```
 
-This keeps your UI responsive. Events are sent asynchronously without blocking user interactions.
+Awaiting `track()` on the client makes the user wait on an analytics request for no benefit.
 
-### Page Views
+### Page views
 
-Track page views automatically or manually:
+Call `pageView()` on navigation. Most framework integrations wire this to the router for you.
 
 ```typescript
-// Manual page view
 analytics.pageView({
   path: window.location.pathname,
   title: document.title,
   referrer: document.referrer
 });
-
-// Most frameworks can auto-track page views
-// See framework guides for details
 ```
 
-## Server-Side Tracking
+See the [Next.js](/docs/guides/nextjs) and [SvelteKit](/docs/guides/sveltekit) guides for automatic page view tracking.
 
-### When to Use Server-Side
+## Server-side tracking
 
-Use server-side tracking for:
-- **API endpoints** - Request/response events
-- **Background jobs** - Cron jobs, queue workers
-- **Server actions** - Next.js server actions, SvelteKit form actions
-- **Sensitive data** - Events with server-only context (IP, auth data)
-- **Critical events** - Must guarantee delivery (payments, signups)
+Import from `trakoo/server`. The server API is stateless, so create an instance per request or per worker rather than sharing one across users.
 
-### Setup
-
-```typescript
+```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
 import type { AppEvents } from './events';
 
 export const serverAnalytics = createServerAnalytics<AppEvents>({
   providers: [
-    new PostHogServerProvider({
-      apiKey: process.env.POSTHOG_API_KEY!
-    })
+    new PostHogServerProvider({ apiKey: process.env.POSTHOG_API_KEY! })
   ]
 });
 ```
 
-### Stateless User Context
+### Stateless user context
 
-The server doesn't maintain state—pass user context with each event:
+There is no `identify()` that persists. Pass the user with each event, because one instance may handle many users.
 
 ```typescript
-// Track event with user context
 await serverAnalytics.track('api_request', {
   endpoint: '/users',
   method: 'POST'
 }, {
-  // Pass user info for this event only
   userId: 'user-123',
   user: {
-    email: 'user@example.com',
-    traits: {
-      plan: 'pro',
-      company: 'Acme Corp'
-    }
+    email: 'ada@example.com',
+    traits: { plan: 'pro' }
   }
 });
 
-// Next request - must pass context again
+// A different request means a different user — pass context again.
 await serverAnalytics.track('api_request', {
   endpoint: '/products',
   method: 'GET'
 }, {
-  userId: 'user-456',  // Different user
-  user: {
-    email: 'other@example.com'
-  }
+  userId: 'user-456',
+  user: { email: 'grace@example.com' }
 });
 ```
 
-### Await for Critical Events
+### Await critical events
 
-Server-side tracking should be awaited for critical events:
+For events you must not lose, await `track()` so it completes before you respond.
 
 ```typescript
 export async function POST(req: Request) {
   const body = await req.json();
 
   try {
-    // Process payment
     const payment = await processPayment(body);
 
-    // Await analytics to ensure it completes
     await serverAnalytics.track('payment_processed', {
       amount: payment.amount,
       transactionId: payment.id
@@ -184,50 +158,33 @@ export async function POST(req: Request) {
     });
 
     return Response.json({ success: true });
-  } catch (error) {
-    // Track failure
-    await serverAnalytics.track('payment_failed', {
-      error: error.message
-    }, {
-      userId: body.userId
-    });
-
-    return Response.json({ error: 'Payment failed' }, { status: 500 });
   } finally {
-    // IMPORTANT: Always shutdown
     await serverAnalytics.shutdown();
   }
 }
 ```
 
-### Serverless Environments
+### Shutdown in serverless
 
-In serverless environments (Vercel, Netlify, AWS Lambda), always call `shutdown()`:
+Serverless platforms freeze or terminate a function the moment it returns. Providers often batch events and send them asynchronously, so anything still queued when the function ends is lost. Calling `shutdown()` flushes those queued events and closes connections before the runtime tears the function down.
 
 ```typescript
-import { serverAnalytics } from '@/lib/server-analytics';
-
 export async function handler(req, res) {
-  // Track event
-  await serverAnalytics.track('api_request', {
-    endpoint: req.url
-  });
+  await serverAnalytics.track('api_request', { endpoint: req.url });
 
-  // Shutdown to flush events before function terminates
   await serverAnalytics.shutdown();
 
   return res.json({ success: true });
 }
 ```
 
-**Why is shutdown important?**
-- Serverless functions terminate immediately after returning a response
-- Without `shutdown()`, pending events may not be sent
-- `shutdown()` flushes all queued events and closes connections
+:::warning[Always flush before the function exits]
+On Vercel, Netlify, AWS Lambda, and similar platforms, call `shutdown()` before returning. Without it, in-flight events may never reach your providers. Run it in a `finally` block so it fires even when the handler throws.
+:::
 
-### Non-Blocking with `waitUntil`
+### Non-blocking with `waitUntil`
 
-For non-critical events, use `waitUntil` to avoid blocking the response:
+For non-critical server events, respond first and let tracking finish in the background. Vercel's `waitUntil` keeps the function alive until the promise settles, which also lets you `shutdown()` after the flush.
 
 ```typescript
 import { waitUntil } from '@vercel/functions';
@@ -236,101 +193,75 @@ import { serverAnalytics } from '@/lib/server-analytics';
 export async function GET(req: Request) {
   const result = await fetchData();
 
-  // Track in background without blocking response
   waitUntil(
-    serverAnalytics.track('api_request', {
-      endpoint: req.url
-    }).then(() => serverAnalytics.shutdown())
+    serverAnalytics
+      .track('api_request', { endpoint: req.url })
+      .then(() => serverAnalytics.shutdown())
   );
 
   return Response.json(result);
 }
 ```
 
-## Choosing Between Client and Server
+## Using both together
 
-### Use Client-Side When:
-
-✅ Tracking user interactions (clicks, scrolls)
-✅ Page views and navigation
-✅ UI state changes
-✅ Performance metrics (time on page)
-✅ Non-critical events
-✅ You want automatic user context
-
-### Use Server-Side When:
-
-✅ API requests and responses
-✅ Background jobs
-✅ Critical business events (payments, signups)
-✅ Events with sensitive data
-✅ Server-only context (IP, auth headers)
-✅ You need guaranteed delivery
-
-### Use Both When:
-
-Sometimes you'll track the same event from both sides:
-
-**Example: User Signup**
+Client and server often cover two halves of the same journey. The client captures intent and interaction; the server records the authoritative outcome.
 
 ```typescript
-// Client-side: Track button click
-analytics.track('signup_button_clicked', {
-  location: 'hero'
-});
+// Client: the user clicked the signup button.
+analytics.track('signup_button_clicked', { location: 'hero' });
 
-// Server-side: Track actual signup
+// Server: the account was actually created.
 await serverAnalytics.track('user_signed_up', {
-  email: body.email,
-  plan: body.plan
+  email: user.email,
+  plan: user.plan
 }, {
-  userId: newUser.id,
-  user: {
-    email: newUser.email
-  }
+  userId: user.id,
+  user: { email: user.email }
 });
 ```
 
-This gives you both:
-- **Client data**: Where they clicked, how long they took
-- **Server data**: Actual signup details, accurate user info
+You get client context — where they clicked, how long they took — alongside server truth: the confirmed signup and accurate user identity.
 
-## Import Paths
+## Import paths
 
-Always use environment-specific imports:
+Use the environment-specific entry points. The root `trakoo` package exports shared types only, and there is no combined `trakoo/providers` export.
 
-<Tabs items={['Client', 'Server']}>
-<Tab value="Client">
+<Tabs>
+<Tab title="Client">
 
 ```typescript
-// ✅ Correct - only browser-compatible code
+// Correct — browser-safe code only.
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
 
-// ❌ Wrong - may bundle Node.js dependencies
+// Avoid — the root package exports shared types only.
 import { createClientAnalytics } from 'trakoo';
+// Avoid — there is no provider aggregate export.
 import { PostHogClientProvider } from 'trakoo/providers';
 ```
 
 </Tab>
-<Tab value="Server">
+<Tab title="Server">
 
 ```typescript
-// ✅ Correct - only Node.js code
+// Correct — Node and edge code only.
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
 
-// ❌ Wrong - may bundle browser code
+// Avoid — the root package exports shared types only.
 import { createServerAnalytics } from 'trakoo';
+// Avoid — there is no provider aggregate export.
 import { PostHogServerProvider } from 'trakoo/providers';
 ```
 
 </Tab>
 </Tabs>
 
-## Common Patterns
+## Framework patterns
 
-### Next.js App Router
+<Tabs>
+<Tab title="Next.js server action">
 
 ```typescript title="app/actions.ts"
 'use server';
@@ -338,44 +269,20 @@ import { PostHogServerProvider } from 'trakoo/providers';
 import { serverAnalytics } from '@/lib/server-analytics';
 
 export async function createUser(formData: FormData) {
-  const email = formData.get('email') as string;
+  const user = await register(formData.get('email') as string);
 
-  // Track server action
-  await serverAnalytics.track('user_created', {
-    email,
-    source: 'signup_form'
+  await serverAnalytics.track('user_signed_up', {
+    email: user.email
   }, {
-    userId: 'anonymous'  // Before user is created
+    userId: user.id
   });
 
   await serverAnalytics.shutdown();
 }
 ```
 
-```typescript title="app/components/SignupForm.tsx"
-'use client';
-
-import { analytics } from '@/lib/analytics';
-import { createUser } from '@/app/actions';
-
-export function SignupForm() {
-  const handleSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-
-    // Track client-side event
-    analytics.track('signup_form_submitted', {
-      source: 'hero'
-    });
-
-    // Call server action (tracks server-side)
-    await createUser(new FormData(e.target));
-  };
-
-  return <form onSubmit={handleSubmit}>...</form>;
-}
-```
-
-### SvelteKit
+</Tab>
+<Tab title="SvelteKit endpoint">
 
 ```typescript title="src/routes/api/signup/+server.ts"
 import { serverAnalytics } from '$lib/server-analytics';
@@ -384,7 +291,6 @@ import type { RequestHandler } from './$types';
 export const POST: RequestHandler = async ({ request }) => {
   const body = await request.json();
 
-  // Track server-side
   await serverAnalytics.track('user_signed_up', {
     email: body.email
   }, {
@@ -397,110 +303,41 @@ export const POST: RequestHandler = async ({ request }) => {
 };
 ```
 
-```typescript title="src/routes/signup/+page.svelte"
-<script lang="ts">
-  import { analytics } from '$lib/analytics';
-
-  async function handleSignup() {
-    // Track client-side
-    analytics.track('signup_button_clicked', {
-      location: 'hero'
-    });
-
-    // Call API (tracks server-side)
-    await fetch('/api/signup', { method: 'POST', ... });
-  }
-</script>
-```
-
-### API Routes
+</Tab>
+<Tab title="API route">
 
 ```typescript title="pages/api/users.ts"
 import { serverAnalytics } from '@/lib/server-analytics';
 import type { NextApiRequest, NextApiResponse } from 'next';
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse
-) {
-  if (req.method === 'POST') {
-    await serverAnalytics.track('user_created', {
-      email: req.body.email
-    }, {
-      userId: req.body.userId
-    });
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  await serverAnalytics.track('user_created', {
+    email: req.body.email
+  }, {
+    userId: req.body.userId
+  });
 
-    await serverAnalytics.shutdown();
+  await serverAnalytics.shutdown();
 
-    return res.status(200).json({ success: true });
-  }
+  res.status(200).json({ success: true });
 }
 ```
 
-## Best Practices
+</Tab>
+</Tabs>
 
-### 1. One Client Instance, Multiple Server Instances
+See the [Next.js](/docs/guides/nextjs) and [SvelteKit](/docs/guides/sveltekit) guides for end-to-end setup.
 
-```typescript
-// ✅ Client - one instance for the session
-// lib/analytics.ts
-export const analytics = createClientAnalytics({ /* ... */ });
+## Next steps
 
-// ✅ Server - new instance per request/function
-// Each API route creates its own instance
-export function createAnalytics() {
-  return createServerAnalytics({ /* ... */ });
-}
-```
-
-### 2. Always Shutdown Server Analytics
-
-```typescript
-// ✅ Good
-await serverAnalytics.track('event', {});
-await serverAnalytics.shutdown();
-
-// ❌ Bad - events may be lost
-await serverAnalytics.track('event', {});
-// Function terminates before events are sent!
-```
-
-### 3. Don't Await Client Tracking
-
-```typescript
-// ✅ Good - fire and forget
-analytics.track('button_clicked', { id: 'cta' });
-navigate('/checkout');
-
-// ❌ Bad - blocks UI
-await analytics.track('button_clicked', { id: 'cta' });
-navigate('/checkout');  // User waits for analytics!
-```
-
-### 4. Pass User Context Server-Side
-
-```typescript
-// ✅ Good - explicit context
-await serverAnalytics.track('event', {}, {
-  userId: 'user-123',
-  user: { email: 'user@example.com' }
-});
-
-// ❌ Bad - no user context
-await serverAnalytics.track('event', {});
-// Who triggered this event?
-```
-
-## Next Steps
-
-<Cards>
-  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield">
-    Learn about TypeScript features and type safety
+<CardGroup>
+  <Card title="Identifying Users" href="/docs/core-concepts/identifying-users" icon="user">
+    Set user context on the client and pass it on the server.
+  </Card>
+  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield-check">
+    Understand the types behind the autocomplete.
   </Card>
   <Card title="Framework Guides" href="/docs/guides/nextjs" icon="code">
-    Integration guides for Next.js, SvelteKit, and more
+    Wire trakoo into Next.js and SvelteKit.
   </Card>
-  <Card title="Advanced Patterns" href="/docs/guides/advanced" icon="settings">
-    Serverless, batching, and advanced usage
-  </Card>
-</Cards>
+</CardGroup>

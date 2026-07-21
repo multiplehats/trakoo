@@ -1,0 +1,104 @@
+---
+import { ParsewBrands } from "@parsew/sdk/client";
+
+interface Props {
+	title: string;
+	href: string;
+	domain: string;
+}
+
+const { title, href, domain } = Astro.props;
+const token =
+	"pk_YCbJttvhoHWurKrHEBSyMiWiBFeYyjNOXvgKbUruDvIdTnjgKbhhAXBjhTGPPYpd";
+const logoUrl = token
+	? new ParsewBrands({ token }).url(domain, {
+			fallback: "monogram",
+			format: "webp",
+			size: 128,
+			retina: true,
+		})
+	: null;
+const fallback = title.slice(0, 1).toUpperCase();
+---
+
+<a class="provider-card" href={href}>
+	<span class="provider-card__icon" aria-hidden="true">
+		{
+			logoUrl ? (
+				<img src={logoUrl} alt="" loading="lazy" decoding="async" />
+			) : (
+				<span>{fallback}</span>
+			)
+		}
+	</span>
+	<span class="provider-card__content">
+		<strong>{title}</strong>
+		<span><slot /></span>
+	</span>
+</a>
+
+<style>
+	.provider-card {
+		display: grid;
+		grid-template-columns: 2.75rem minmax(0, 1fr);
+		gap: 0.875rem;
+		align-items: flex-start;
+		height: 100%;
+		padding: 1rem;
+		border: 1px solid var(--blume-border);
+		border-radius: var(--blume-radius);
+		background: var(--blume-background);
+		color: inherit;
+		text-decoration: none;
+		transition:
+			border-color 160ms ease,
+			background 160ms ease,
+			transform 160ms ease;
+	}
+
+	.provider-card:hover {
+		border-color: color-mix(in srgb, var(--blume-accent) 42%, var(--blume-border));
+		background: color-mix(in srgb, var(--blume-accent) 5%, var(--blume-background));
+		transform: translateY(-1px);
+	}
+
+	.provider-card__icon {
+		display: grid;
+		place-items: center;
+		width: 2.75rem;
+		height: 2.75rem;
+		overflow: hidden;
+		border: 1px solid var(--blume-border);
+		border-radius: calc(var(--blume-radius) * 0.75);
+		background: color-mix(in srgb, var(--blume-foreground) 4%, transparent);
+		flex-shrink: 0;
+	}
+
+	.provider-card__icon img {
+		width: 1.8rem;
+		height: 1.8rem;
+		object-fit: contain;
+	}
+
+	.provider-card__icon span {
+		font-weight: 700;
+		color: var(--blume-accent);
+	}
+
+	.provider-card__content {
+		display: grid;
+		gap: 0.25rem;
+		min-width: 0;
+	}
+
+	.provider-card__content strong {
+		font-size: 0.98rem;
+		line-height: 1.35;
+	}
+
+	.provider-card__content span {
+		color: var(--blume-muted-foreground);
+		font-size: 0.9rem;
+		line-height: 1.45;
+	}
+</style>

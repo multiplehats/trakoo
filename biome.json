@@ -7,7 +7,16 @@
 	},
 	"files": {
 		"ignoreUnknown": false,
-		"ignore": ["dist/*", "node_modules/*", "coverage/*", "www/.next/*", ".next/*", "www/.source/*"]
+		"ignore": [
+			"dist/*",
+			"node_modules/*",
+			"coverage/*",
+			"www/.next/*",
+			".next/*",
+			"www/.source/*",
+			"www/.blume/*",
+			"www/dist/*"
+		]
 	},
 	"formatter": {
 		"enabled": true,

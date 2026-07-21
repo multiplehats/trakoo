@@ -45,7 +45,7 @@ export class ServerAnalytics<
 	 * @example
 	 * ```typescript
 	 * import { ServerAnalytics } from 'trakoo/server';
-	 * import { PostHogServerProvider } from 'trakoo/providers/posthog';
+	 * import { PostHogServerProvider } from 'trakoo/providers/server';
 	 *
 	 * const analytics = new ServerAnalytics({
 	 *   providers: [

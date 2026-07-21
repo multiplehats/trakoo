@@ -1,48 +1,45 @@
 ---
-title: Visitors Provider
-description: Lightweight, privacy-friendly web analytics with Stripe revenue attribution
+title: Visitors
+description: Client-only, privacy-friendly web analytics with optional Stripe revenue attribution.
 ---
 
-[Visitors.now](https://visitors.now) is a lightweight, privacy-focused web analytics platform with built-in Stripe revenue attribution.
+[Visitors.now](https://visitors.now) is a lightweight, privacy-focused web analytics service with built-in Stripe revenue attribution.
+
+## When to use it
+
+- You want page-view analytics that sets no cookies by default.
+- You want to attribute Stripe revenue to individual visitors.
+- You care about GDPR-friendly defaults and built-in bot filtering.
+
+Visitors is client-only. For backend events such as payments or signups you must not lose, pair it with a server provider like [PostHog](/docs/providers/posthog), [Bento](/docs/providers/bento), or [Pirsch](/docs/providers/pirsch).
 
 ## Installation
 
-No npm package required. `VisitorsClientProvider` loads the tracking script directly from the Visitors CDN at runtime.
+No npm package required. `VisitorsClientProvider` loads the tracking script from the Visitors CDN at runtime.
 
-## Client-Side Usage
+## Client-side usage
 
-```typescript
+```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { VisitorsClientProvider } from 'trakoo/providers/client';
 
-const analytics = createClientAnalytics({
-  providers: [
-    new VisitorsClientProvider({
-      token: process.env.NEXT_PUBLIC_VISITORS_TOKEN!,
-      persist: true // sets data-persist on the script tag
-    })
-  ]
+export const visitorsProvider = new VisitorsClientProvider({
+  token: process.env.NEXT_PUBLIC_VISITORS_TOKEN!,
+  persist: true // sets data-persist on the script tag
+});
+
+export const analytics = createClientAnalytics({
+  providers: [visitorsProvider]
 });
 
 await analytics.initialize();
 ```
 
-### Configuration Options
+### Page views
 
-| Option | Type | Required | Description |
-|--------|------|----------|-------------|
-| `token` | `string` | Yes | Your Visitors project token from the dashboard |
-| `persist` | `boolean` | No | Enable persist mode — sets `data-persist` on the script tag so a `visitor` cookie is written. Required for cross-session tracking and Stripe revenue attribution (default: `false`) |
-| `debug` | `boolean` | No | Enable debug logging (default: `false`) |
-| `enabled` | `boolean` | No | Disable the provider entirely (default: `true`) |
+Page views are tracked automatically when the Visitors script loads. Calling `analytics.pageView()` is optional and produces a debug log only — it sends no duplicate event.
 
-## Tracking Events
-
-### Page Views
-
-Page views are tracked **automatically** when the Visitors script loads. Calling `analytics.pageView()` is optional and results in a debug log only — no duplicate event is sent.
-
-### Custom Events
+### Custom events
 
 ```typescript
 analytics.track('button_clicked', {
@@ -52,9 +49,9 @@ analytics.track('button_clicked', {
 });
 ```
 
-Property values must be `string` or `number`. Object and array values are silently dropped to match the Visitors API contract.
+Property values must be `string` or `number`. Object and array values are dropped to match the Visitors API contract.
 
-### Identify Users
+### Identify users
 
 ```typescript
 analytics.identify('user-123', {
@@ -65,34 +62,61 @@ analytics.identify('user-123', {
 });
 ```
 
-Calls `visitors.identify({ id, ...traits })`. Non-scalar trait values are filtered out automatically.
+This calls `visitors.identify({ id, ...traits })`. Non-scalar trait values are filtered out automatically.
 
-<Callout type="info">
-  Identification requires `persist: true` in your `VisitorsClientProvider` config.
-  EU users must give explicit consent before calling `identify()`.
-</Callout>
+:::info
+Identification requires `persist: true` in your `VisitorsClientProvider` config. EU users must give explicit consent before you call `identify()`.
+:::
 
-### Page Leave
+### Page leave
 
 ```typescript
 analytics.pageLeave({ section: 'hero' });
 ```
 
-Sends a `page_leave` custom event via `visitors.track()`.
+This sends a `page_leave` custom event via `visitors.track()`.
 
-## Stripe Revenue Attribution
+## Server-side usage
 
-Visitors.now can attribute Stripe revenue to individual visitors through a fallback chain: checkout metadata → previous attribution → email matching.
+Visitors is client-only, so there is no server provider. Track backend events with a server-capable provider such as [PostHog](/docs/providers/posthog), [Bento](/docs/providers/bento), or [Pirsch](/docs/providers/pirsch).
 
-### How It Works
+## Configuration
 
-1. The Visitors script sets a `visitor` cookie in the browser (requires **persist mode**)
-2. You read the cookie value and pass it in the Stripe checkout session metadata
-3. Visitors.now matches the purchase to the visitor session
+<TypeTable
+  type={{
+    token: {
+      type: "string",
+      required: true,
+      description: "Your Visitors project token from the dashboard."
+    },
+    persist: {
+      type: "boolean",
+      default: "false",
+      description: "Sets data-persist on the script tag so a visitor cookie is written. Required for cross-session tracking and Stripe revenue attribution."
+    },
+    debug: {
+      type: "boolean",
+      default: "false",
+      description: "Enable debug logging."
+    },
+    enabled: {
+      type: "boolean",
+      default: "true",
+      description: "Set to false to disable the provider entirely."
+    }
+  }}
+/>
 
-### Implementation
+## Stripe revenue attribution
 
-**Step 1 — Identify users when they sign in** (required for email-based fallback):
+Visitors.now can attribute Stripe revenue to individual visitors through a fallback chain: checkout metadata, then previous attribution, then email matching.
+
+The Visitors script sets a `visitor` cookie in the browser (this needs `persist: true`). You read that cookie, pass it in your Stripe checkout session metadata, and Visitors matches the purchase back to the visitor session.
+
+<Steps>
+<Step title="Identify users when they sign in">
+
+This enables the email-based fallback.
 
 ```typescript
 analytics.identify('user-123', {
@@ -101,23 +125,24 @@ analytics.identify('user-123', {
 });
 ```
 
-**Step 2 — Read the visitor cookie on the client** and send it to your server:
+</Step>
+<Step title="Read the visitor cookie on the client">
+
+Send the visitor ID to your server when starting checkout.
 
 ```typescript
-// Get the visitor ID for Stripe attribution
 const visitorId = visitorsProvider.getVisitorId();
 
-// Send to your server when creating a checkout session
 const response = await fetch('/api/create-checkout', {
   method: 'POST',
   body: JSON.stringify({ visitorId, priceId: 'price_xxx' })
 });
 ```
 
-**Step 3 — Pass the visitor ID in your Stripe checkout session** (server-side):
+</Step>
+<Step title="Pass the visitor ID in the checkout session">
 
-```typescript
-// pages/api/create-checkout.ts (Next.js example)
+```typescript title="app/api/create-checkout/route.ts"
 import Stripe from 'stripe';
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
@@ -130,7 +155,6 @@ export async function POST(req: Request) {
     line_items: [{ price: priceId, quantity: 1 }],
     success_url: `${process.env.NEXT_PUBLIC_URL}/success`,
     cancel_url: `${process.env.NEXT_PUBLIC_URL}/pricing`,
-    // Pass the visitor cookie for revenue attribution
     metadata: {
       visitor: visitorId ?? ''
     }
@@ -140,60 +164,20 @@ export async function POST(req: Request) {
 }
 ```
 
-<Callout type="warn">
-  Revenue attribution requires:
-  - `persist: true` set in `VisitorsClientProvider` config (adds `data-persist` to the script tag so the `visitor` cookie is written)
-  - A **Stripe API key** connected under Settings → Integrations
-  - `visitors.identify()` called when users sign in (for email-based fallback)
-</Callout>
+</Step>
+</Steps>
 
-## Framework Examples
+:::warning[Revenue attribution requirements]
+- `persist: true` in your `VisitorsClientProvider` config, so the `visitor` cookie is written.
+- A Stripe API key connected under Settings → Integrations.
+- `identify()` called when users sign in, for the email-based fallback.
+:::
 
-### Next.js App Router
-
-```typescript
-// lib/analytics.ts
-import { createClientAnalytics } from 'trakoo/client';
-import { VisitorsClientProvider } from 'trakoo/providers/client';
-
-export const visitorsProvider = new VisitorsClientProvider({
-  token: process.env.NEXT_PUBLIC_VISITORS_TOKEN!,
-  persist: true,
-  debug: process.env.NODE_ENV === 'development'
-});
-
-export const analytics = createClientAnalytics({
-  providers: [visitorsProvider]
-});
-```
-
-```tsx
-// app/layout.tsx
-'use client';
-import { useEffect } from 'react';
-import { usePathname } from 'next/navigation';
-import { analytics } from '@/lib/analytics';
-
-export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-
-  useEffect(() => {
-    analytics.initialize();
-  }, []);
-
-  useEffect(() => {
-    analytics.pageView({ path: pathname });
-  }, [pathname]);
-
-  return <html><body>{children}</body></html>;
-}
-```
-
-## Provider Behaviour Reference
+## Provider behaviour reference
 
 | Method | Behaviour |
 |--------|-----------|
-| `initialize()` | Injects `cdn.visitors.now/v.js` script; idempotent |
+| `initialize()` | Injects the `cdn.visitors.now/v.js` script; idempotent |
 | `track(event, ctx)` | Calls `visitors.track(action, scalarProps)` |
 | `identify(id, traits)` | Calls `visitors.identify({ id, ...scalarTraits })` |
 | `pageView()` | No-op — page views are automatic |
@@ -201,15 +185,16 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 | `reset()` | No-op — Visitors has no native reset method |
 | `getVisitorId()` | Reads the `visitor` cookie for Stripe attribution |
 
-## Privacy Features
+## Privacy
 
-- No cookies by default — opt in via `persist: true`
-- GDPR-compliant — `identify()` requires explicit EU consent when persist mode is enabled
-- Bot filtering built-in
+- No cookies by default — opt in with `persist: true`.
+- GDPR-friendly — `identify()` requires explicit EU consent when persist mode is enabled.
+- Bot filtering built in.
 
 ## Resources
 
-- [Visitors Documentation](https://visitors.now/docs)
-- [Custom Events](https://visitors.now/docs/custom-events)
-- [User Identification](https://visitors.now/docs/identify)
-- [Stripe Integration](https://visitors.now/docs/stripe)
+- [Visitors documentation](https://visitors.now/docs)
+- [Custom events](https://visitors.now/docs/custom-events)
+- [User identification](https://visitors.now/docs/identify)
+- [Stripe integration](https://visitors.now/docs/stripe)
+- [Provider routing](/docs/providers#routing)

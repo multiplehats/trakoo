@@ -1,28 +1,27 @@
 ---
 title: Events
-description: Define and track type-safe analytics events
+description: Define type-safe analytics events once and track them across every provider.
 ---
 
-Events are the core of analytics tracking. They represent actions that happen in your application—like button clicks, purchases, signups, or any user interaction you want to measure.
+Events are the core of analytics tracking. Each one represents an action in your app — a button click, a signup, a purchase — that you want to measure. In trakoo you define events once, in a typed collection, and every `track()` call is checked against those definitions.
 
-## Defining Events
+## Defining events
 
-Events in trakoo are defined with full TypeScript support for autocomplete and type safety:
+Describe your events in a single collection. The object keys organize your code; the `name` values are what trakoo sends to providers.
 
-```typescript
+```typescript title="lib/events.ts"
 import type { CreateEventDefinition, EventCollection } from 'trakoo';
 
 export const appEvents = {
   userSignedUp: {
-    name: 'user_signed_up',      // Event name sent to providers
-    category: 'user',              // Optional category for organization
-    properties: {} as {            // Fully typed properties
+    name: 'user_signed_up',
+    category: 'user',
+    properties: {} as {
       email: string;
       plan: 'free' | 'pro' | 'enterprise';
-      referralSource?: string;     // Optional properties with ?
+      referralSource?: string;
     }
   },
-
   buttonClicked: {
     name: 'button_clicked',
     category: 'engagement',
@@ -34,61 +33,40 @@ export const appEvents = {
 } as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
 ```
 
-### Why Use `as const satisfies`?
+The `as const satisfies` pattern is what gives you exact event names, autocomplete on properties, and a compile error when a definition or a `track()` call is wrong. See [Type Safety](/docs/core-concepts/type-safety) for how it works.
 
-The `as const satisfies` pattern gives you:
-- **Type inference** - TypeScript knows exact event names and property types
-- **Autocomplete** - Your IDE suggests valid events and properties
-- **Type safety** - Compile errors if you use wrong event names or properties
-- **Validation** - Ensures your definitions match the required structure
+## The three parts
 
-## Event Structure
+Every event definition has a name, an optional category, and a set of properties.
 
-Each event definition has three parts:
+### Name
 
-### 1. Event Name
+The `name` is the string sent to your providers. A few conventions keep your data clean:
 
-The `name` field is what gets sent to your analytics providers:
+- Use `snake_case` — it matches most analytics tools.
+- Use past tense: `button_clicked`, not `button_click`.
+- Be descriptive but concise: `checkout_completed`, not `user_clicked_complete_checkout_button`.
 
-```typescript
-{
-  name: 'user_signed_up'  // Sent to PostHog, Bento, etc.
-}
-```
+Once an event is live, treat its name as stable. Renaming it splits your history — add a new event and deprecate the old one instead.
 
-**Naming conventions:**
-- Use snake_case for consistency with most analytics tools
-- Be descriptive but concise: `checkout_completed` not `user_clicked_complete_checkout_button`
-- Use past tense: `button_clicked` not `button_click`
+### Category
 
-### 2. Category
+Categories group related events. The field is optional, but it keeps large collections navigable. trakoo ships a set of common categories:
 
-Categories help organize events into logical groups:
+- `user` — lifecycle events like signup, login, and profile updates
+- `navigation` — page views and navigation
+- `conversion` — goals and revenue events
+- `engagement` — feature usage and interactions
+- `error` — error tracking
+- `performance` — performance monitoring
 
-```typescript
-{
-  category: 'user'  // Groups with other user-related events
-}
-```
-
-**Predefined categories:**
-- `product` - Product-related events (viewed, added to cart)
-- `user` - User lifecycle events (signup, login, profile updates)
-- `navigation` - Page views and navigation
-- `conversion` - Conversion events and goals
-- `engagement` - Feature usage and interactions
-- `error` - Error tracking
-- `performance` - Performance monitoring
-
-**Custom categories:**
-
-You can also define your own:
+You can also use your own domain-specific categories such as `product`, `billing`, or `ai`:
 
 ```typescript
 export const appEvents = {
   aiResponseGenerated: {
     name: 'ai_response_generated',
-    category: 'ai',  // Custom category
+    category: 'ai',
     properties: {} as {
       model: string;
       tokensUsed: number;
@@ -98,31 +76,19 @@ export const appEvents = {
 } as const;
 ```
 
-### 3. Properties
+### Properties
 
-Properties are the data attached to each event:
-
-```typescript
-{
-  properties: {} as {
-    email: string;           // Required property
-    plan: 'free' | 'pro';   // Union types for valid values
-    referralSource?: string; // Optional with ?
-  }
-}
-```
-
-**Best practices for properties:**
+Properties are the data attached to each event. Type them as narrowly as the data allows — specific types catch mistakes at the call site and keep your reports consistent.
 
 ```typescript
-// ✅ Good - specific types
+// Good — narrow types and explicit units
 properties: {} as {
   plan: 'free' | 'pro' | 'enterprise';
   amount: number;
   currency: 'USD' | 'EUR' | 'GBP';
 }
 
-// ❌ Bad - too loose
+// Avoid — anything goes, nothing is checked
 properties: {} as {
   plan: string;
   amount: any;
@@ -130,83 +96,54 @@ properties: {} as {
 }
 ```
 
-## Tracking Events
+Mark optional properties with `?`.
 
-Once events are defined, tracking them is simple:
+## Tracking events
 
-### Client-Side
+With events defined, `track()` takes the event key and its typed properties. Mistype the name or omit a required property, and TypeScript flags it before the event ships.
+
+Client analytics is fire-and-forget, so calls don't block the UI:
 
 ```typescript
 import { analytics } from '@/lib/analytics';
 
-// Fire-and-forget (non-blocking)
 analytics.track('button_clicked', {
   buttonId: 'cta',
   location: 'hero'
 });
-
-// User continues immediately
 ```
 
-### Server-Side
+Server analytics is stateless: pass user context with each call, and flush before the process exits.
 
 ```typescript
 import { serverAnalytics } from '@/lib/server-analytics';
 
-// Await for critical events
-await serverAnalytics.track('payment_processed', {
-  amount: 99.99,
-  currency: 'USD'
+await serverAnalytics.track('user_signed_up', {
+  email: 'ada@example.com',
+  plan: 'pro'
 }, {
-  userId: 'user-123',
-  user: {
-    email: 'user@example.com'
-  }
+  userId: 'user_123',
+  user: { email: 'ada@example.com' }
 });
 
-// Always shutdown in serverless
 await serverAnalytics.shutdown();
 ```
 
-## Event Organization
+See [Client vs Server](/docs/core-concepts/client-vs-server) for where each kind of event belongs.
 
-### Single File Approach
+## Organizing events
 
-For small apps, keep all events in one file:
+For a small app, one file is enough:
 
 ```typescript title="lib/events.ts"
 export const appEvents = {
-  // User events
   userSignedUp: { /* ... */ },
-  userLoggedIn: { /* ... */ },
-
-  // Product events
   productViewed: { /* ... */ },
-  productPurchased: { /* ... */ },
-
-  // Engagement events
-  buttonClicked: { /* ... */ },
-  featureUsed: { /* ... */ }
+  buttonClicked: { /* ... */ }
 } as const;
 ```
 
-### Multi-File Approach
-
-For larger apps, split by category:
-
-```typescript title="lib/events/user.ts"
-export const userEvents = {
-  userSignedUp: { /* ... */ },
-  userLoggedIn: { /* ... */ }
-} as const;
-```
-
-```typescript title="lib/events/product.ts"
-export const productEvents = {
-  productViewed: { /* ... */ },
-  productPurchased: { /* ... */ }
-} as const;
-```
+As the collection grows, split by area and merge in an index:
 
 ```typescript title="lib/events/index.ts"
 import { userEvents } from './user';
@@ -218,9 +155,9 @@ export const appEvents = {
 } as const;
 ```
 
-## Common Event Patterns
+## Common patterns
 
-### E-commerce
+E-commerce apps track the path from view to purchase:
 
 ```typescript
 export const appEvents = {
@@ -229,62 +166,25 @@ export const appEvents = {
     category: 'product',
     properties: {} as {
       productId: string;
-      productName: string;
-      price: number;
-      currency: string;
-    }
-  },
-
-  addedToCart: {
-    name: 'added_to_cart',
-    category: 'product',
-    properties: {} as {
-      productId: string;
-      quantity: number;
       price: number;
     }
   },
-
-  checkoutStarted: {
-    name: 'checkout_started',
-    category: 'conversion',
-    properties: {} as {
-      cartTotal: number;
-      itemCount: number;
-    }
-  },
-
   purchaseCompleted: {
     name: 'purchase_completed',
     category: 'conversion',
     properties: {} as {
       orderId: string;
       total: number;
-      currency: string;
-      items: Array<{
-        productId: string;
-        quantity: number;
-        price: number;
-      }>;
+      currency: 'USD' | 'EUR' | 'GBP';
     }
   }
 } as const;
 ```
 
-### SaaS Application
+SaaS apps focus on activation and upgrades:
 
 ```typescript
 export const appEvents = {
-  userSignedUp: {
-    name: 'user_signed_up',
-    category: 'user',
-    properties: {} as {
-      email: string;
-      plan: 'free' | 'pro' | 'enterprise';
-      referralSource?: string;
-    }
-  },
-
   trialStarted: {
     name: 'trial_started',
     category: 'conversion',
@@ -293,16 +193,6 @@ export const appEvents = {
       trialDays: number;
     }
   },
-
-  featureUsed: {
-    name: 'feature_used',
-    category: 'engagement',
-    properties: {} as {
-      featureName: string;
-      plan: string;
-    }
-  },
-
   subscriptionUpgraded: {
     name: 'subscription_upgraded',
     category: 'conversion',
@@ -315,88 +205,30 @@ export const appEvents = {
 } as const;
 ```
 
-## Best Practices
+## Best practices
 
-### 1. Define Events Early
-
-Create your event definitions before implementing tracking:
-
-```typescript
-// ✅ Good - centralized, typed definitions
-// lib/events.ts
-export const appEvents = { /* all events */ };
-
-// components/Button.tsx
-analytics.track('button_clicked', { /* autocomplete works! */ });
-```
+- Define events before you track them. A central, typed collection means autocomplete works everywhere and typos become compile errors.
+- Document non-obvious events with a comment on when and why they fire, and who relies on them.
+- Keep names stable in production. Add and deprecate rather than rename.
 
 ```typescript
-// ❌ Bad - scattered, untyped tracking
-// components/Button.tsx
-analytics.track('btn_click', { id: 'foo' }); // Typo? What properties?
-```
-
-### 2. Document Your Events
-
-Add comments to explain when and why events fire:
-
-```typescript
-export const appEvents = {
-  // Fired when user completes the onboarding flow
-  // Triggers: After final step submission
-  // Used by: Marketing team for conversion tracking
-  onboardingCompleted: {
-    name: 'onboarding_completed',
-    category: 'user',
-    properties: {} as {
-      steps: number;
-      duration: number;
-      skipped: boolean;
-    }
-  }
-} as const;
-```
-
-### 3. Keep Event Names Stable
-
-Once an event is in production, avoid renaming it:
-
-```typescript
-// ✅ Good - add new event, deprecate old one
 export const appEvents = {
   // @deprecated Use 'subscription_upgraded' instead
   planUpgraded: { /* ... */ },
-
-  subscriptionUpgraded: { /* ... */ }  // New event
+  subscriptionUpgraded: { /* ... */ }
 } as const;
 ```
 
-### 4. Use Consistent Naming
+## Next steps
 
-Pick a convention and stick to it:
-
-```typescript
-// ✅ Good - consistent past tense
-userSignedUp: { name: 'user_signed_up' }
-buttonClicked: { name: 'button_clicked' }
-formSubmitted: { name: 'form_submitted' }
-
-// ❌ Bad - inconsistent tenses
-userSignup: { name: 'user_signup' }      // noun
-clickButton: { name: 'click_button' }    // imperative
-formSubmitted: { name: 'form_submitted' } // past tense
-```
-
-## Next Steps
-
-<Cards>
-  <Card title="Providers" href="/docs/core-concepts/providers" icon="plug">
-    Learn how providers send events to analytics services
+<CardGroup>
+  <Card title="How Providers Work" href="/docs/core-concepts/providers" icon="plug">
+    See how providers send your events to analytics services.
   </Card>
   <Card title="Client vs Server" href="/docs/core-concepts/client-vs-server" icon="server">
-    Understand the differences between client and server tracking
+    Decide where each event belongs.
   </Card>
-  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield">
-    Deep dive into TypeScript features
+  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield-check">
+    Understand the types behind the autocomplete.
   </Card>
-</Cards>
+</CardGroup>

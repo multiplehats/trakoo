@@ -1,47 +1,74 @@
 ---
-title: Proxy Provider
-description: Route events through your server to bypass ad-blockers
+title: Proxy
+description: Send browser events through your own endpoint, then forward them to server providers.
 ---
 
-The Proxy Provider routes client-side events through your own server endpoint, solving issues like ad-blockers and providing server-side control.
+The Proxy sends browser events through an endpoint you control, then forwards them to your server providers. Because the request goes to your own domain, it bypasses ad-blockers, and your server can enrich or filter events before they reach a vendor.
 
-## Benefits
+The Proxy is not an analytics service. It is the transport between client analytics and server analytics: the browser batches events to your API, and your API replays them through whatever server providers you configure.
 
-- **Ad-blocker bypass** - Events go through your domain
-- **Server enrichment** - Add server context to events
-- **Privacy control** - Data flows through your infrastructure
-- **Unified tracking** - Same client API, server-side processing
+## When to use it
 
-## Quick Setup
+- You want first-party delivery so ad-blockers and tracking-prevention features don't drop browser events.
+- You need to add server-side context (authenticated user, geography, feature flags) before events reach a vendor.
+- You use a server provider that needs the incoming request, such as [Pirsch](/docs/providers/pirsch), which reads headers to derive page views.
+- You want provider API keys to stay on the server instead of shipping in your client bundle.
 
-### 1. Client-Side
+If none of these apply, send events straight to a client provider — the Proxy adds an extra hop you don't need.
 
-```typescript
+## Installation
+
+The Proxy ships with trakoo. There is no extra package to install. You do install the server providers you forward to (for example `posthog-node` for PostHog); [Pirsch](/docs/providers/pirsch) and [EmitKit](/docs/providers/emitkit) need no additional package.
+
+## Client-side usage
+
+Add `ProxyProvider` to your client analytics and point it at the endpoint that will receive events. Events are buffered and flushed in batches.
+
+```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { ProxyProvider } from 'trakoo/providers/client';
+import type { AppEvents } from './events';
 
-const analytics = createClientAnalytics({
+export const analytics = createClientAnalytics<AppEvents>({
   providers: [
     new ProxyProvider({
       endpoint: '/api/events',
-      batch: {
-        size: 10,
-        interval: 5000
-      }
+      batch: { size: 10, interval: 5000 }
     })
   ]
 });
 
-// Events batched and sent to your server
-analytics.track('button_clicked', {
-  buttonId: 'signup-cta'
-});
+analytics.track('button_clicked', { buttonId: 'signup-cta' });
 ```
 
-### 2. Server-Side
+## Server-side usage
 
-```typescript
-// app/api/events/route.ts
+Your endpoint receives the batched events and replays them through server analytics. You have two options.
+
+Let trakoo own the whole route with `createProxyHandler`:
+
+```typescript title="app/api/events/route.ts"
+import { createServerAnalytics } from 'trakoo/server';
+import {
+  EmitKitServerProvider,
+  createProxyHandler
+} from 'trakoo/providers/server';
+
+const serverAnalytics = createServerAnalytics({
+  providers: [
+    new EmitKitServerProvider({
+      apiKey: process.env.EMITKIT_API_KEY!,
+      channelName: 'product-events'
+    })
+  ]
+});
+
+export const POST = createProxyHandler(serverAnalytics);
+```
+
+Or keep your own handler and call `ingestProxyEvents` when you need to run auth, enrichment, or logging around ingestion:
+
+```typescript title="app/api/events/route.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import {
   PirschServerProvider,
@@ -63,14 +90,64 @@ export async function POST(req: Request) {
 }
 ```
 
-## How It Works
+## How events flow
 
 ```
-Client → ProxyProvider → Your Server → Analytics Services
+Browser → ProxyProvider (batches) → your /api/events → server providers
 ```
 
-Events are batched on the client, sent to your API, then forwarded to configured server providers.
+The browser collects events and flushes a batch once `batch.size` is reached or `batch.interval` elapses, whichever comes first. Your endpoint hands the batch to server analytics, which fans it out to each configured server provider — the same routing rules from [Providers](/docs/providers#routing) apply on the server side.
+
+## Configuration
+
+`ProxyProvider` takes the endpoint and an optional batching policy.
+
+<TypeTable
+  type={{
+    endpoint: {
+      type: "string",
+      required: true,
+      description: "URL that receives batched events, usually a route on your own domain."
+    },
+    batch: {
+      type: "object",
+      description: "Controls how events are buffered before they are sent."
+    }
+  }}
+/>
+
+The `batch` object accepts:
+
+<TypeTable
+  type={{
+    size: {
+      type: "number",
+      description: "Number of events to buffer before flushing a batch."
+    },
+    interval: {
+      type: "number",
+      description: "Milliseconds to wait before flushing a partial batch."
+    }
+  }}
+/>
+
+:::tip
+Server providers are stateless. `createProxyHandler` and `ingestProxyEvents` process each request and return — there is no long-lived instance to flush. See [Client vs Server](/docs/core-concepts/client-vs-server).
+:::
 
 ## Resources
 
-See the full [Proxy Provider documentation](../../docs/providers/proxy.md) in the repository for advanced patterns and configurations.
+<CardGroup>
+  <Card title="EmitKit" href="/docs/providers/emitkit" icon="zap">
+    Server-only notifications, a common target behind the Proxy.
+  </Card>
+  <Card title="Pirsch" href="/docs/providers/pirsch" icon="route">
+    Privacy-friendly analytics that reads the forwarded request context.
+  </Card>
+  <Card title="Routing" href="/docs/providers#routing" icon="route">
+    Send specific methods and events to specific server providers.
+  </Card>
+  <Card title="Custom providers" href="/docs/providers/custom" icon="code">
+    Forward proxied events to a provider you build yourself.
+  </Card>
+</CardGroup>

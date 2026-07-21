@@ -3,6 +3,7 @@
 
 # generated content
 .source
+.blume
 
 # test & build
 /coverage
@@ -24,3 +25,4 @@ yarn-error.log*
 .env*.local
 .vercel
 next-env.d.ts
+.blume-verify/

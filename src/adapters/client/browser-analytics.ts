@@ -48,13 +48,13 @@ export class BrowserAnalytics<
 	 * @example
 	 * ```typescript
 	 * import { BrowserAnalytics } from 'trakoo/client';
-	 * import { PostHogClientProvider } from 'trakoo/providers/posthog';
+	 * import { PostHogClientProvider } from 'trakoo/providers/client';
 	 *
 	 * const analytics = new BrowserAnalytics({
 	 *   providers: [
 	 *     new PostHogClientProvider({
 	 *       apiKey: 'your-posthog-api-key',
-	 *       host: 'https://app.posthog.com'
+	 *       api_host: 'https://app.posthog.com'
 	 *     })
 	 *   ],
 	 *   defaultContext: {

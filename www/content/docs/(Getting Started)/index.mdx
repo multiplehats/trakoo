@@ -1,0 +1,119 @@
+---
+title: Getting Started
+description: trakoo is one typed analytics API for TypeScript. Define your events once, choose your providers, and keep the same track() calls when your stack changes.
+sidebar:
+  label: Introduction
+---
+
+trakoo gives your TypeScript app a single, typed analytics API. You define the events your product emits, pick the providers you trust, and call `track()`. When your analytics stack changes, those call sites stay the same — you swap providers in one place, not across your codebase.
+
+It runs the same way in the browser and on the server, ships zero dependencies, and works on the edge.
+
+## Providers
+
+Start with one provider and add more when you need them. Every provider is optional and independently configured.
+
+<CardGroup>
+  <ProviderCard title="PostHog" href="/docs/providers/posthog" domain="posthog.com">
+    Product analytics, feature flags, and session replay
+  </ProviderCard>
+  <ProviderCard title="Bento" href="/docs/providers/bento" domain="bentonow.com">
+    Email automation and lifecycle events for identified users
+  </ProviderCard>
+  <ProviderCard title="Pirsch" href="/docs/providers/pirsch" domain="pirsch.io">
+    Privacy-friendly, cookie-free web analytics
+  </ProviderCard>
+  <ProviderCard title="EmitKit" href="/docs/providers/emitkit" domain="emitkit.com">
+    Server-side event notifications and activity feeds
+  </ProviderCard>
+  <ProviderCard title="Visitors" href="/docs/providers/visitors" domain="visitors.now">
+    Lightweight web analytics with Stripe revenue attribution
+  </ProviderCard>
+  <ProviderCard title="Proxy" href="/docs/providers/proxy" domain="trakoo.dev">
+    Send browser events through your own API endpoint
+  </ProviderCard>
+</CardGroup>
+
+## How it works
+
+You describe your events once. That single definition becomes autocomplete, compile-time validation, and provider routing everywhere you track.
+
+```typescript title="lib/events.ts"
+import type { CreateEventDefinition, EventCollection } from 'trakoo';
+
+export const appEvents = {
+  userSignedUp: {
+    name: 'user_signed_up',
+    category: 'user',
+    properties: {} as {
+      email: string;
+      plan: 'free' | 'pro' | 'enterprise';
+    }
+  }
+} as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
+
+export type AppEvents = typeof appEvents;
+```
+
+Create an analytics instance with the providers you want, typed by those events:
+
+```typescript title="lib/analytics.ts"
+import { createClientAnalytics } from 'trakoo/client';
+import {
+  PostHogClientProvider,
+  VisitorsClientProvider
+} from 'trakoo/providers/client';
+import type { AppEvents } from './events';
+
+export const analytics = createClientAnalytics<AppEvents>({
+  providers: [
+    new PostHogClientProvider({ token: import.meta.env.VITE_POSTHOG_KEY }),
+    new VisitorsClientProvider({ token: import.meta.env.VITE_VISITORS_TOKEN })
+  ]
+});
+```
+
+Then track from anywhere. TypeScript knows the valid event names and their required properties:
+
+```typescript
+analytics.track('user_signed_up', {
+  email: 'ada@example.com',
+  plan: 'pro'
+});
+```
+
+Add Bento for lifecycle email later, or move browser events through the [Proxy](/docs/providers/proxy) — the code calling `analytics.track()` doesn't change.
+
+## Why trakoo
+
+<CardGroup>
+  <Card title="Typed events" href="/docs/core-concepts/type-safety" icon="shield-check">
+    Event names and properties are inferred from your definitions and enforced at every call site.
+  </Card>
+  <Card title="Provider-agnostic" href="/docs/providers" icon="plug">
+    Official providers for PostHog, Bento, Pirsch, EmitKit, Visitors, and a first-party proxy — plus a simple interface for your own.
+  </Card>
+  <Card title="Client and server" href="/docs/core-concepts/client-vs-server" icon="server">
+    Stateful browser tracking for interactions, stateless server tracking for critical events — one shared event map.
+  </Card>
+  <Card title="Route events anywhere" href="/docs/providers#routing" icon="route">
+    Send page views to one provider, lifecycle events to another, and noisy events nowhere.
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup>
+  <Card title="Quick Start" href="/docs/quick-start" icon="rocket">
+    Go from install to your first tracked event in a few minutes.
+  </Card>
+  <Card title="Installation" href="/docs/installation" icon="download">
+    Install the core package and the SDKs each provider needs.
+  </Card>
+  <Card title="Core Concepts" href="/docs/core-concepts/events" icon="book-open">
+    Understand events, providers, and the client/server split.
+  </Card>
+  <Card title="Framework Guides" href="/docs/guides/nextjs" icon="code">
+    Wire trakoo into Next.js or SvelteKit end to end.
+  </Card>
+</CardGroup>

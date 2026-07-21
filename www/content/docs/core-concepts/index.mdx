@@ -1,124 +1,57 @@
 ---
-title: Core Concepts Overview
-description: Deep dive into the fundamental concepts of trakoo
+title: Core Concepts
+description: The five ideas behind trakoo — events, providers, the client/server split, user identification, and type safety.
+sidebar:
+  label: Overview
 ---
 
-This section covers the fundamental concepts you need to master trakoo. Each guide goes deep into a specific topic with examples and best practices.
+trakoo is small, but a few ideas do the heavy lifting. Read these in order and you'll understand everything the rest of the docs build on.
 
-## What You'll Learn
-
-<Cards>
+<CardGroup>
   <Card title="Events" href="/docs/core-concepts/events" icon="zap">
-    Define type-safe events with categories and properties. Learn event organization patterns and best practices.
+    Define type-safe events once — names, categories, and typed properties.
   </Card>
-  <Card title="Providers" href="/docs/core-concepts/providers" icon="plug">
-    Understand the plugin architecture, use multiple providers, and handle errors gracefully.
+  <Card title="How Providers Work" href="/docs/core-concepts/providers" icon="plug">
+    The plugin model that fans one event out to every service you use.
   </Card>
   <Card title="Client vs Server" href="/docs/core-concepts/client-vs-server" icon="server">
-    Learn when to track on client vs server, handle user context, and work with serverless environments.
+    Two APIs — stateful in the browser, stateless on the server.
   </Card>
-  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield">
-    Leverage TypeScript for compile-time validation, autocomplete, and bulletproof analytics tracking.
+  <Card title="Identifying Users" href="/docs/core-concepts/identifying-users" icon="user">
+    Attach user context so events tell you who did what.
   </Card>
-</Cards>
+  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield-check">
+    How your definitions become autocomplete and compile-time checks.
+  </Card>
+</CardGroup>
 
-## Learning Path
+## The shape of the API
 
-If you're new to trakoo, we recommend reading these guides in order:
-
-1. **Events** - Start here to understand how to define and track events
-2. **Providers** - Learn how events get delivered to analytics services
-3. **Client vs Server** - Understand when and how to track in different environments
-4. **Type Safety** - Master TypeScript features for error-free tracking
-
-## Prerequisites
-
-Before diving into these concepts, make sure you've:
-
-- ✅ Completed [Your First Event](/docs/your-first-event) tutorial
-- ✅ Installed trakoo and at least one provider
-- ✅ Have a basic understanding of TypeScript
-
-## Quick Reference
-
-### Event Definition Pattern
+Everything comes back to three moves: define events, create an instance with providers, and track.
 
 ```typescript
+// 1. Define events once
 export const appEvents = {
-  eventName: {
-    name: 'event_name',
-    category: 'category',
-    properties: {} as {
-      // Type-safe properties
-    }
+  buttonClicked: {
+    name: 'button_clicked',
+    category: 'engagement',
+    properties: {} as { buttonId: string }
   }
 } as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
-```
 
-### Client-Side Tracking
-
-```typescript
-import { analytics } from '@/lib/analytics';
-
-// Track event
-analytics.track('eventName', { /* properties */ });
-
-// Identify user
-analytics.identify('user-id', { /* traits */ });
-
-// Reset on logout
-analytics.reset();
-```
-
-### Server-Side Tracking
-
-```typescript
-import { serverAnalytics } from '@/lib/server-analytics';
-
-// Track with user context
-await serverAnalytics.track('eventName', { /* properties */ }, {
-  userId: 'user-id',
-  user: { /* user data */ }
+// 2. Create an instance with your providers
+const analytics = createClientAnalytics<typeof appEvents>({
+  providers: [new PostHogClientProvider({ token: 'xxx' })]
 });
 
-// Always shutdown in serverless
-await serverAnalytics.shutdown();
+// 3. Track — fully typed
+analytics.track('button_clicked', { buttonId: 'cta' });
 ```
 
-## Common Questions
+Client tracking is stateful: `identify()` once, and later events carry that user until you `reset()`. Server tracking is stateless: pass user context with each `track()`, then `shutdown()` to flush. [Client vs Server](/docs/core-concepts/client-vs-server) covers the difference in full.
 
-### When should I use client-side vs server-side tracking?
+## Before you start
 
-- **Client-side**: User interactions, page views, UI events
-- **Server-side**: API calls, background jobs, critical events
+These guides assume you've run through the [Quick Start](/docs/quick-start), installed trakoo with at least one provider, and are comfortable with basic TypeScript.
 
-See [Client vs Server](/docs/core-concepts/client-vs-server) for detailed guidance.
-
-### How do I use multiple analytics providers?
-
-Add them to the `providers` array when creating your analytics instance:
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({ token: 'xxx' }),
-    new BentoClientProvider({ siteUuid: 'xxx' })
-  ]
-});
-```
-
-Events are automatically sent to all providers. See [Providers](/docs/core-concepts/providers) for more.
-
-### How does type safety work?
-
-TypeScript infers event names and properties from your event definitions. This gives you autocomplete and compile-time errors for typos or wrong property types. See [Type Safety](/docs/core-concepts/type-safety) for the full picture.
-
-## Next Steps
-
-Ready to dive deep? Start with [Events →](/docs/core-concepts/events)
-
-Or jump to a specific topic:
-
-- [Providers →](/docs/core-concepts/providers)
-- [Client vs Server →](/docs/core-concepts/client-vs-server)
-- [Type Safety →](/docs/core-concepts/type-safety)
+Start with [Events →](/docs/core-concepts/events)

@@ -1,0 +1,180 @@
+---
+title: Installation
+description: Install trakoo and the SDK packages required by each provider.
+---
+
+Install the core package first, then add only the provider SDKs your app uses.
+
+## Core package
+
+<Tabs>
+<Tab title="pnpm">
+
+```bash
+pnpm install trakoo
+```
+
+</Tab>
+<Tab title="npm">
+
+```bash
+npm install trakoo
+```
+
+</Tab>
+<Tab title="yarn">
+
+```bash
+yarn add trakoo
+```
+
+</Tab>
+<Tab title="bun">
+
+```bash
+bun add trakoo
+```
+
+</Tab>
+</Tabs>
+
+trakoo’s public API is split by environment:
+
+```typescript
+import { createClientAnalytics } from 'trakoo/client';
+import { createServerAnalytics } from 'trakoo/server';
+
+import { PostHogClientProvider } from 'trakoo/providers/client';
+import { PostHogServerProvider } from 'trakoo/providers/server';
+```
+
+Use `trakoo/providers/client` in browser bundles and `trakoo/providers/server` in server-only code.
+
+## Provider SDKs
+
+| Provider | Client support | Server support | Extra install |
+|----------|----------------|----------------|---------------|
+| PostHog | Yes | Yes | `posthog-js posthog-node` |
+| Bento | Yes, CDN script | Yes | `@bentonow/bento-node-sdk` for server |
+| Pirsch | Yes, CDN script | Yes | No extra package |
+| EmitKit | No | Yes | `@emitkit/js` |
+| Visitors | Yes, CDN script | No | No extra package |
+| Proxy | Yes | Server ingest helpers | No extra package |
+
+<Tabs>
+<Tab title="PostHog">
+
+```bash
+pnpm install posthog-js posthog-node
+```
+
+</Tab>
+<Tab title="Bento">
+
+```bash
+pnpm install @bentonow/bento-node-sdk
+```
+
+The browser provider loads Bento from its CDN. Install the SDK only when using `BentoServerProvider`.
+
+</Tab>
+<Tab title="Pirsch">
+
+```bash
+# No extra package required
+```
+
+trakoo’s Pirsch providers call Pirsch directly or load the browser script at runtime.
+
+</Tab>
+<Tab title="EmitKit">
+
+```bash
+pnpm install @emitkit/js
+```
+
+EmitKit is server-side only. Use the [Proxy Provider](/docs/providers/proxy) if you need browser events to reach EmitKit.
+
+</Tab>
+<Tab title="Visitors">
+
+```bash
+# No extra package required
+```
+
+`VisitorsClientProvider` loads `https://cdn.visitors.now/v.js` at runtime.
+
+</Tab>
+</Tabs>
+
+## Environment variables
+
+Keep browser tokens public and server keys private.
+
+<Tabs>
+<Tab title="Vite">
+
+```bash title=".env.local"
+VITE_POSTHOG_KEY=your-posthog-project-key
+VITE_POSTHOG_HOST=https://app.posthog.com
+VITE_BENTO_SITE_UUID=your-bento-site-uuid
+VITE_VISITORS_TOKEN=your-visitors-token
+```
+
+</Tab>
+<Tab title="Next.js">
+
+```bash title=".env.local"
+NEXT_PUBLIC_POSTHOG_KEY=your-posthog-project-key
+NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
+NEXT_PUBLIC_BENTO_SITE_UUID=your-bento-site-uuid
+NEXT_PUBLIC_VISITORS_TOKEN=your-visitors-token
+
+POSTHOG_API_KEY=your-posthog-server-key
+BENTO_SITE_UUID=your-bento-site-uuid
+BENTO_PUBLISHABLE_KEY=your-bento-publishable-key
+BENTO_SECRET_KEY=your-bento-secret-key
+EMITKIT_API_KEY=emitkit_xxx
+PIRSCH_ACCESS_KEY=pa_xxx
+```
+
+</Tab>
+<Tab title="SvelteKit">
+
+```bash title=".env"
+PUBLIC_POSTHOG_KEY=your-posthog-project-key
+PUBLIC_POSTHOG_HOST=https://app.posthog.com
+PUBLIC_BENTO_SITE_UUID=your-bento-site-uuid
+PUBLIC_VISITORS_TOKEN=your-visitors-token
+
+POSTHOG_API_KEY=your-posthog-server-key
+BENTO_SITE_UUID=your-bento-site-uuid
+BENTO_PUBLISHABLE_KEY=your-bento-publishable-key
+BENTO_SECRET_KEY=your-bento-secret-key
+EMITKIT_API_KEY=emitkit_xxx
+PIRSCH_ACCESS_KEY=pa_xxx
+```
+
+</Tab>
+</Tabs>
+
+## Verify imports
+
+Create a small file and let TypeScript confirm the package resolves:
+
+```typescript
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
+
+const analytics = createClientAnalytics({
+  providers: [
+    new PostHogClientProvider({
+      token: 'test'
+    })
+  ]
+});
+
+analytics.track('test_event', {});
+```
+
+If your project compiles, continue to the [Quick Start](/docs/quick-start).

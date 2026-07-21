@@ -1,50 +1,41 @@
 ---
 title: SvelteKit
-description: Complete integration guide for SvelteKit applications
+description: Integrate trakoo into a SvelteKit app — client tracking, server events, and user identification.
 ---
 
-This guide shows you how to integrate trakoo into a SvelteKit application.
+trakoo runs the same in the browser and on the server, which maps onto SvelteKit's split between components and `+server.ts`/load functions/actions. This guide wires up both sides with PostHog as the example provider; the event definitions you write are shared across them.
 
-## Installation
+## Install
 
 <Steps>
-<Step>
-
-### Install Dependencies
+<Step title="Install trakoo and your provider SDK">
 
 ```bash
-npm install trakoo
+npm install trakoo posthog-js posthog-node
 ```
 
-Install your provider SDKs (we'll use PostHog as an example):
-
-```bash
-npm install posthog-js posthog-node
-```
+PostHog ships separate browser and Node packages. Other providers differ — see [Providers](/docs/providers) for each one's requirements.
 
 </Step>
+<Step title="Set environment variables">
 
-<Step>
-
-### Set Up Environment Variables
+SvelteKit only exposes variables prefixed with `PUBLIC_` to the browser. Keep server secrets unprefixed.
 
 ```bash title=".env"
-# Client-side (public - must be prefixed with PUBLIC_)
+# Browser (exposed to the client)
 PUBLIC_POSTHOG_KEY=your-posthog-api-key
 PUBLIC_POSTHOG_HOST=https://app.posthog.com
 
-# Server-side (private - no prefix)
+# Server only (never sent to the browser)
 POSTHOG_API_KEY=your-posthog-api-key
 ```
 
 </Step>
 </Steps>
 
-## Client-Side Setup
+## Define your events
 
-### 1. Define Your Events
-
-Create a shared event definitions file:
+Describe every event once in a shared file so the client and server instances stay in sync.
 
 ```typescript title="src/lib/events.ts"
 import type { CreateEventDefinition, EventCollection } from 'trakoo';
@@ -58,7 +49,6 @@ export const appEvents = {
       title: string;
     }
   },
-
   buttonClicked: {
     name: 'button_clicked',
     category: 'engagement',
@@ -67,7 +57,6 @@ export const appEvents = {
       location: string;
     }
   },
-
   userSignedUp: {
     name: 'user_signed_up',
     category: 'user',
@@ -75,13 +64,24 @@ export const appEvents = {
       email: string;
       plan: 'free' | 'pro' | 'enterprise';
     }
+  },
+
+  apiRequest: {
+    name: 'api_request',
+    category: 'system',
+    properties: {} as {
+      path: string;
+      method: string;
+    }
   }
 } as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
 
 export type AppEvents = typeof appEvents;
 ```
 
-### 2. Create Analytics Instance
+## Client analytics
+
+Create one stateful client instance and import it wherever you track in the browser.
 
 ```typescript title="src/lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
@@ -100,38 +100,37 @@ export const analytics = createClientAnalytics<AppEvents>({
 });
 ```
 
-### 3. Initialize in Root Layout
+### Initialize and track page views
+
+Initialize once in the root layout, then track a page view on every client-side navigation with `afterNavigate`. It also fires on the first load, so the initial view is captured too.
 
 ```svelte title="src/routes/+layout.svelte"
 <script lang="ts">
   import { onMount } from 'svelte';
+  import { afterNavigate } from '$app/navigation';
   import { page } from '$app/state';
   import { analytics } from '$lib/analytics';
 
   let { children } = $props();
 
-  // Initialize analytics on mount
-  onMount(async () => {
-    await analytics.initialize();
+  onMount(() => {
+    analytics.initialize();
   });
 
-  // Track page views on route change
-  $effect(() => {
-    if ($page.url.pathname) {
-      analytics.pageView({
-        path: $page.url.pathname,
-        title: document.title
-      });
-    }
+  afterNavigate(() => {
+    analytics.pageView({
+      path: page.url.pathname,
+      title: document.title
+    });
   });
 </script>
 
 {@render children()}
 ```
 
-### 4. Track Events in Components
+### Track events in components
 
-```svelte title="src/routes/components/SignupButton.svelte"
+```svelte title="src/lib/components/SignupButton.svelte"
 <script lang="ts">
   import { analytics } from '$lib/analytics';
 
@@ -143,19 +142,46 @@ export const analytics = createClientAnalytics<AppEvents>({
   }
 </script>
 
-<button on:click={handleClick}>
-  Sign Up
-</button>
+<button on:click={handleClick}>Sign up</button>
 ```
 
-## Server-Side Setup
+### Identify users
 
-### 1. Create Server Analytics Instance
+Client analytics is stateful: call `identify()` when the user logs in and every later event carries them until you `reset()`. Driving it from layout data keeps identification in one place.
+
+```svelte title="src/routes/+layout.svelte"
+<script lang="ts">
+  import { analytics } from '$lib/analytics';
+
+  let { data, children } = $props();
+
+  $effect(() => {
+    if (data.user) {
+      analytics.identify(data.user.id, {
+        email: data.user.email,
+        name: data.user.name,
+        plan: data.user.plan
+      });
+    } else {
+      analytics.reset();
+    }
+  });
+</script>
+
+{@render children()}
+```
+
+See [Identifying Users](/docs/core-concepts/identifying-users) for traits and typing.
+
+## Server analytics
+
+Server analytics is stateless and edge-ready: pass user context with each call, and flush before the request finishes. Create one instance from private env vars.
 
 ```typescript title="src/lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
-import { POSTHOG_API_KEY, PUBLIC_POSTHOG_HOST } from '$env/static/private';
+import { POSTHOG_API_KEY } from '$env/static/private';
+import { PUBLIC_POSTHOG_HOST } from '$env/static/public';
 import type { AppEvents } from './events';
 
 export const serverAnalytics = createServerAnalytics<AppEvents>({
@@ -169,32 +195,17 @@ export const serverAnalytics = createServerAnalytics<AppEvents>({
 });
 ```
 
-> [!NOTE]
-> Note: `PUBLIC_POSTHOG_HOST` can be imported from either `$env/static/private` or `$env/static/public` since it's a public variable. We're importing it from `private` here for convenience alongside `POSTHOG_API_KEY`.
+:::note
+Import secrets from `$env/static/private` and public values from `$env/static/public`. SvelteKit keeps them separate: anything prefixed with `PUBLIC_` is only available from `$env/static/public`.
+:::
 
-### 2. Track in Load Functions
+:::warning[Always flush on the server]
+Serverless and edge functions can freeze or exit as soon as the response is sent. Call `serverAnalytics.shutdown()` before returning so providers can send queued events, or you'll lose them.
+:::
 
-```typescript title="src/routes/blog/[slug]/+page.server.ts"
-import { serverAnalytics } from '$lib/server-analytics';
-import type { PageServerLoad } from './$types';
+### Load functions and actions
 
-export const load: PageServerLoad = async ({ params }) => {
-  const post = await db.getPost(params.slug);
-
-  // Track page view
-  await serverAnalytics.track('page_viewed', {
-    path: `/blog/${params.slug}`,
-    title: post.title
-  });
-
-  // Always shutdown in serverless
-  await serverAnalytics.shutdown();
-
-  return { post };
-};
-```
-
-### 3. Track in Form Actions
+Track wherever the server does meaningful work. Load functions, form actions, and API endpoints all follow the same shape: `track(event, properties, context)`, then `shutdown()`.
 
 ```typescript title="src/routes/signup/+page.server.ts"
 import { serverAnalytics } from '$lib/server-analytics';
@@ -207,29 +218,17 @@ export const actions: Actions = {
     const email = data.get('email') as string;
     const plan = data.get('plan') as 'free' | 'pro' | 'enterprise';
 
-    // Validate
     if (!email) {
       return fail(400, { email, missing: true });
     }
 
-    // Create user
-    const user = await db.user.create({
-      data: { email, plan }
-    });
+    const user = await db.user.create({ data: { email, plan } });
 
-    // Track signup
-    await serverAnalytics.track('user_signed_up', {
-      email,
-      plan
-    }, {
+    await serverAnalytics.track('user_signed_up', { email, plan }, {
       userId: user.id,
-      user: {
-        email: user.email,
-        traits: { plan }
-      }
+      user: { email: user.email, traits: { plan } }
     });
 
-    // Always shutdown
     await serverAnalytics.shutdown();
 
     throw redirect(303, '/dashboard');
@@ -237,7 +236,7 @@ export const actions: Actions = {
 };
 ```
 
-### 4. Track in API Endpoints
+An API endpoint looks the same:
 
 ```typescript title="src/routes/api/users/+server.ts"
 import { json } from '@sveltejs/kit';
@@ -246,135 +245,63 @@ import type { RequestHandler } from './$types';
 
 export const POST: RequestHandler = async ({ request }) => {
   const body = await request.json();
+  const user = await db.user.create({ data: body });
 
-  // Create user
-  const user = await db.user.create({
-    data: body
-  });
-
-  // Track event
   await serverAnalytics.track('user_signed_up', {
     email: body.email,
     plan: body.plan
   }, {
     userId: user.id,
-    user: {
-      email: user.email,
-      traits: {
-        plan: user.plan
-      }
-    }
+    user: { email: user.email, traits: { plan: user.plan } }
   });
 
-  // Shutdown to flush events
   await serverAnalytics.shutdown();
 
   return json({ user });
 };
 ```
 
-## User Identification
+### Reuse user context
 
-### Client-Side Identification
-
-Identify users in your root layout after they log in:
-
-```svelte title="src/routes/+layout.svelte"
-<script lang="ts">
-  import { onMount } from 'svelte';
-  import { page } from '$app/state';
-  import { analytics } from '$lib/analytics';
-
-  let { data, children } = $props();
-
-  // Initialize analytics
-  onMount(async () => {
-    await analytics.initialize();
-  });
-
-  // Identify user when logged in
-  $effect(() => {
-    const user = data.user;
-
-    if (user) {
-      analytics.identify(user.id, {
-        email: user.email,
-        name: user.name,
-        plan: user.plan
-      });
-    } else {
-      analytics.reset();
-    }
-  });
-</script>
-
-{@render children()}
-```
-
-### Server-Side Identification
-
-Pass user context with each server-side event:
+Resolve the current user once and share a small helper across load functions, actions, and hooks.
 
 ```typescript title="src/lib/get-user-context.ts"
 import type { RequestEvent } from '@sveltejs/kit';
 
 export function getUserContext(event: RequestEvent) {
   const user = event.locals.user;
-
-  if (!user) {
-    return undefined;
-  }
+  if (!user) return undefined;
 
   return {
     userId: user.id,
     user: {
       email: user.email,
-      traits: {
-        name: user.name,
-        plan: user.plan
-      }
+      traits: { name: user.name, plan: user.plan }
     }
   };
 }
 ```
 
-Use it in load functions and actions:
-
 ```typescript title="src/routes/profile/+page.server.ts"
 import { serverAnalytics } from '$lib/server-analytics';
 import { getUserContext } from '$lib/get-user-context';
-import type { PageServerLoad, Actions } from './$types';
+import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async (event) => {
-  const userContext = getUserContext(event);
+  await serverAnalytics.track('page_viewed', {
+    path: '/profile',
+    title: 'Profile'
+  }, getUserContext(event));
 
-  await serverAnalytics.track('profile_viewed', {}, userContext);
   await serverAnalytics.shutdown();
 
-  return {
-    user: event.locals.user
-  };
-};
-
-export const actions: Actions = {
-  update: async (event) => {
-    const data = await event.request.formData();
-    const userContext = getUserContext(event);
-
-    await serverAnalytics.track('profile_updated', {
-      fields: Array.from(data.keys())
-    }, userContext);
-
-    await serverAnalytics.shutdown();
-
-    return { success: true };
-  }
+  return { user: event.locals.user };
 };
 ```
 
-## Hooks Integration
+### Track requests in hooks
 
-Track requests in hooks:
+`hooks.server.ts` is a good place to populate the user from a session and track server-wide events such as API requests.
 
 ```typescript title="src/hooks.server.ts"
 import { serverAnalytics } from '$lib/server-analytics';
@@ -382,20 +309,16 @@ import { getUserContext } from '$lib/get-user-context';
 import type { Handle } from '@sveltejs/kit';
 
 export const handle: Handle = async ({ event, resolve }) => {
-  // Populate user from session
   const sessionId = event.cookies.get('sessionid');
   if (sessionId) {
     event.locals.user = await db.getUserFromSession(sessionId);
   }
 
-  // Track API requests
   if (event.url.pathname.startsWith('/api/')) {
-    const userContext = getUserContext(event);
-
     await serverAnalytics.track('api_request', {
       path: event.url.pathname,
       method: event.request.method
-    }, userContext);
+    }, getUserContext(event));
 
     await serverAnalytics.shutdown();
   }
@@ -404,9 +327,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 };
 ```
 
-## Form Handling
+## Enhanced forms
 
-### With Enhanced Forms
+With `use:enhance` you can track the submission client-side while the action records the authoritative server event. Both call the same event definitions, so send a lightweight signal from the browser and the meaningful one from the server.
 
 ```svelte title="src/routes/signup/+page.svelte"
 <script lang="ts">
@@ -420,295 +343,61 @@ export const handle: Handle = async ({ event, resolve }) => {
   method="POST"
   action="?/signup"
   use:enhance={() => {
-    // Track form submission client-side
-    analytics.track('form_submitted', {
-      formId: 'signup',
-      formType: 'signup'
+    analytics.track('button_clicked', {
+      buttonId: 'signup-submit',
+      location: 'signup-form'
     });
 
-    return async ({ result, update }) => {
-      await update();
-    };
+    return async ({ update }) => update();
   }}
 >
-  <label>
-    Email
-    <input
-      name="email"
-      type="email"
-      value={form?.email ?? ''}
-      required
-    />
-  </label>
-
-  {#if form?.missing}
-    <p class="error">Email is required</p>
-  {/if}
-
-  <button type="submit">Sign Up</button>
+  <input name="email" type="email" value={form?.email ?? ''} required />
+  {#if form?.missing}<p class="error">Email is required</p>{/if}
+  <button type="submit">Sign up</button>
 </form>
 ```
 
-The server action handles the server-side tracking:
+## Deployment
 
-```typescript title="src/routes/signup/+page.server.ts"
-import { serverAnalytics } from '$lib/server-analytics';
-import { fail, redirect } from '@sveltejs/kit';
-import type { Actions } from './$types';
-
-export const actions: Actions = {
-  signup: async ({ request }) => {
-    const data = await request.formData();
-    const email = data.get('email') as string;
-
-    if (!email) {
-      return fail(400, { email, missing: true });
-    }
-
-    const user = await db.user.create({ data: { email } });
-
-    // Track server-side
-    await serverAnalytics.track('user_signed_up', {
-      email,
-      plan: 'free'
-    }, {
-      userId: user.id,
-      user: { email, traits: { plan: 'free' } }
-    });
-
-    await serverAnalytics.shutdown();
-
-    throw redirect(303, '/dashboard');
-  }
-};
-```
-
-## Common Patterns
-
-### Protected Routes
-
-```typescript title="src/hooks.server.ts"
-import { redirect } from '@sveltejs/kit';
-import { serverAnalytics } from '$lib/server-analytics';
-import type { Handle } from '@sveltejs/kit';
-
-export const handle: Handle = async ({ event, resolve }) => {
-  const sessionId = event.cookies.get('sessionid');
-
-  if (sessionId) {
-    event.locals.user = await db.getUserFromSession(sessionId);
-  }
-
-  // Protect dashboard routes
-  if (event.url.pathname.startsWith('/dashboard') && !event.locals.user) {
-    // Track unauthorized access
-    await serverAnalytics.track('unauthorized_access', {
-      path: event.url.pathname
-    });
-
-    await serverAnalytics.shutdown();
-
-    throw redirect(307, '/login');
-  }
-
-  return resolve(event);
-};
-```
-
-### Error Tracking
-
-```svelte title="src/routes/+error.svelte"
-<script lang="ts">
-  import { onMount } from 'svelte';
-  import { page } from '$app/stores';
-  import { analytics } from '$lib/analytics';
-
-  onMount(() => {
-    analytics.track('error_occurred', {
-      message: $page.error?.message || 'Unknown error',
-      status: $page.status
-    });
-  });
-</script>
-
-<h1>Oops! Something went wrong</h1>
-<p>{$page.error?.message}</p>
-```
-
-### Layout Data with Analytics
-
-```typescript title="src/routes/+layout.server.ts"
-import { serverAnalytics } from '$lib/server-analytics';
-import type { LayoutServerLoad } from './$types';
-
-export const load: LayoutServerLoad = async ({ locals, url }) => {
-  // Track if user is logged in
-  if (locals.user) {
-    await serverAnalytics.track('page_view', {
-      path: url.pathname,
-      title: 'App'
-    }, {
-      userId: locals.user.id,
-      user: {
-        email: locals.user.email,
-        traits: {
-          plan: locals.user.plan
-        }
-      }
-    });
-
-    await serverAnalytics.shutdown();
-  }
-
-  return {
-    user: locals.user
-  };
-};
-```
-
-## Adapters & Deployment
-
-### Vercel Adapter
+The server instance runs on Node and edge adapters alike, and the rule is the same on both: flush before the response returns.
 
 ```typescript title="src/routes/api/edge/+server.ts"
 import { json } from '@sveltejs/kit';
 import { serverAnalytics } from '$lib/server-analytics';
 import type { RequestHandler } from './$types';
 
-export const config = {
-  runtime: 'edge'
-};
+export const config = { runtime: 'edge' };
 
 export const GET: RequestHandler = async () => {
-  await serverAnalytics.track('edge_function', {
-    runtime: 'edge'
+  await serverAnalytics.track('api_request', {
+    path: '/api/edge',
+    method: 'GET'
   });
 
-  // Always shutdown in edge functions
   await serverAnalytics.shutdown();
 
-  return json({ success: true });
-};
-```
-
-### Node Adapter
-
-For Node.js deployments, shutdown is still important:
-
-```typescript title="src/routes/api/data/+server.ts"
-import { json } from '@sveltejs/kit';
-import { serverAnalytics } from '$lib/server-analytics';
-import type { RequestHandler } from './$types';
-
-export const GET: RequestHandler = async () => {
-  const data = await fetchData();
-
-  await serverAnalytics.track('data_fetched', {
-    count: data.length
-  });
-
-  // Shutdown to flush events
-  await serverAnalytics.shutdown();
-
-  return json(data);
+  return json({ ok: true });
 };
 ```
 
 ## Troubleshooting
 
-### Events Not Tracking
+**Events aren't reaching the browser provider.** Client variables must be prefixed with `PUBLIC_`; without it SvelteKit won't expose them, and `PUBLIC_POSTHOG_KEY` will be undefined. Server variables stay unprefixed.
 
-Make sure environment variables are correctly prefixed:
+**`$env` import errors.** Use static imports — `PUBLIC_*` from `$env/static/public`, secrets from `$env/static/private` — rather than `$env/dynamic/*`, so values are inlined at build time.
 
-```bash
-# ✅ Correct - client-side variables must have PUBLIC_ prefix
-PUBLIC_POSTHOG_KEY=xxx
+**Type errors on the analytics functions.** Import the client from `trakoo/client` and the server from `trakoo/server`. The root `trakoo` entry exports types only, not the `createClientAnalytics`/`createServerAnalytics` factories.
 
-# ✅ Correct - server-side variables have no prefix
-POSTHOG_API_KEY=xxx
-
-# ❌ Wrong - missing PUBLIC_ prefix for client
-POSTHOG_KEY=xxx
-```
-
-### Import Errors
-
-Use the correct import paths for SvelteKit:
-
-```typescript
-// ✅ Correct
-import { PUBLIC_POSTHOG_KEY } from '$env/static/public';
-import { POSTHOG_API_KEY } from '$env/static/private';
-
-// ❌ Wrong
-import { env } from '$env/dynamic/public';
-```
-
-### Type Errors
-
-Ensure you're importing from the correct paths:
-
-```typescript
-// ✅ Correct
-import { createClientAnalytics } from 'trakoo/client';
-import { createServerAnalytics } from 'trakoo/server';
-
-// ❌ Wrong
-import { createClientAnalytics, createServerAnalytics } from 'trakoo';
-```
-
-## Using with Svelte Runes
-
-If you're using Svelte 5 with runes, here's how to integrate analytics:
-
-```svelte title="src/routes/+layout.svelte"
-<script lang="ts">
-  import { onMount } from 'svelte';
-  import { page } from '$app/state';
-  import { analytics } from '$lib/analytics';
-
-  let { data, children } = $props();
-
-  // Initialize
-  onMount(() => {
-    analytics.initialize();
-  });
-
-  // Reactive tracking
-  $effect(() => {
-    if (page.url.pathname) {
-      analytics.pageView({
-        path: page.url.pathname,
-        title: document.title
-      });
-    }
-  });
-
-  // User identification
-  $effect(() => {
-    const user = data.user;
-    if (user) {
-      analytics.identify(user.id, {
-        email: user.email,
-        name: user.name
-      });
-    }
-  });
-</script>
-
-{@render children()}
-```
-
-## Next Steps
+## Next steps
 
 <CardGroup>
-  <Card title="Core Concepts" href="/docs/core-concepts/events" icon="book">
-    Understand events, providers, and type safety
+  <Card title="Core Concepts" href="/docs/core-concepts/events" icon="book-open">
+    Events, providers, and type safety in depth.
   </Card>
-  <Card title="Identifying Users" href="/docs/identifying-users" icon="user">
-    Learn how to identify and track users
+  <Card title="Identifying Users" href="/docs/core-concepts/identifying-users" icon="user">
+    Attach user context on the client and server.
   </Card>
-  <Card title="PostHog Provider" href="/docs/providers/posthog" icon="bar-chart">
-    Complete PostHog setup guide
+  <Card title="PostHog Provider" href="/docs/providers/posthog" icon="plug">
+    Full PostHog configuration options.
   </Card>
 </CardGroup>

@@ -1,21 +1,37 @@
 ---
-title: Pirsch Provider
-description: Privacy-focused, cookie-free web analytics
+title: Pirsch
+description: Privacy-friendly, cookie-free web analytics for the browser and server.
 ---
 
-Pirsch is a privacy-friendly, cookie-free web analytics platform that's GDPR compliant by design.
+Pirsch is a cookie-free, GDPR-compliant web analytics platform. It focuses on page views and lightweight events without tracking users across sites.
+
+## When to use it
+
+Reach for Pirsch when you want privacy-first web analytics:
+
+- No cookies and no cross-site tracking.
+- IP addresses are anonymized.
+- GDPR, CCPA, and PECR compliant by design.
+
+It is built for page views and simple events, not for identified user lifecycle automation. For email-triggered flows on identified users, pair it with [Bento](/docs/providers/bento).
 
 ## Installation
 
 No extra package is required. The client provider loads the Pirsch script at runtime, and the server provider calls the Pirsch API directly.
 
-## Client-Side Usage
+```bash
+pnpm install trakoo
+```
 
-```typescript
+## Client-side usage
+
+Pass your Pirsch identification code and the hostname registered in your Pirsch dashboard.
+
+```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { PirschClientProvider } from 'trakoo/providers/client';
 
-const analytics = createClientAnalytics({
+export const analytics = createClientAnalytics({
   providers: [
     new PirschClientProvider({
       identificationCode: 'your-pirsch-identification-code',
@@ -27,33 +43,40 @@ const analytics = createClientAnalytics({
 await analytics.initialize();
 ```
 
-## Server-Side Usage
+## Server-side usage
 
-### Option 1: Using Access Key (Recommended)
+Pirsch supports two authentication modes. An access key is simpler because it skips the OAuth token refresh.
 
-Access keys are simpler and more efficient as they don't require OAuth token refresh:
+<Tabs>
+<Tab title="Access key (recommended)">
 
-```typescript
+Use a client secret that starts with `pa_`.
+
+```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { PirschServerProvider } from 'trakoo/providers/server';
 
-const serverAnalytics = createServerAnalytics({
+export const serverAnalytics = createServerAnalytics({
   providers: [
     new PirschServerProvider({
       hostname: 'example.com',
-      clientSecret: process.env.PIRSCH_ACCESS_KEY!, // Starts with 'pa_'
+      clientSecret: process.env.PIRSCH_ACCESS_KEY!, // starts with 'pa_'
       protocol: 'https'
     })
   ]
 });
 ```
 
-### Option 2: Using OAuth Client Credentials
+</Tab>
+<Tab title="OAuth">
 
-If using OAuth authentication, you must provide both `clientId` and `clientSecret`:
+Provide both `clientId` and `clientSecret`.
 
-```typescript
-const serverAnalytics = createServerAnalytics({
+```typescript title="lib/server-analytics.ts"
+import { createServerAnalytics } from 'trakoo/server';
+import { PirschServerProvider } from 'trakoo/providers/server';
+
+export const serverAnalytics = createServerAnalytics({
   providers: [
     new PirschServerProvider({
       hostname: 'example.com',
@@ -65,23 +88,70 @@ const serverAnalytics = createServerAnalytics({
 });
 ```
 
-### Important: Context Requirements
+</Tab>
+</Tabs>
 
-The Pirsch server provider requires valid request context (IP address and User-Agent) to function properly. If you're tracking server-side events without request context, those events will be automatically skipped.
+:::warning[Server events need request context]
+The Pirsch server provider requires the visitor's IP address and User-Agent to attribute a hit. Events tracked without that context are skipped. Route browser events through your own API with the [Proxy provider](/docs/providers/proxy) so each event carries the original IP and User-Agent.
+:::
 
-For proper tracking:
-- Use the Proxy pattern to capture client requests
-- Ensure your proxy handler enriches events with IP and User-Agent
-- See [Proxy Provider documentation](/docs/providers/proxy) for setup instructions
+## Configuration
 
-## Privacy Features
+Client options:
 
-- ✅ No cookies
-- ✅ IP addresses anonymized
-- ✅ GDPR, CCPA, and PECR compliant
-- ✅ No cross-site tracking
+<TypeTable
+  type={{
+    identificationCode: {
+      type: 'string',
+      required: true,
+      description: 'The identification code from your Pirsch dashboard.'
+    },
+    hostname: {
+      type: 'string',
+      description: 'The domain registered in Pirsch.'
+    }
+  }}
+/>
+
+Server options:
+
+<TypeTable
+  type={{
+    hostname: {
+      type: 'string',
+      required: true,
+      description: 'The domain registered in Pirsch.'
+    },
+    clientSecret: {
+      type: 'string',
+      required: true,
+      description: "Access key (starts with 'pa_') or the OAuth client secret."
+    },
+    clientId: {
+      type: 'string',
+      description: 'OAuth client ID. Required only when using OAuth authentication.'
+    },
+    protocol: {
+      type: "'http' | 'https'",
+      default: 'https',
+      description: 'Protocol used to reach the Pirsch API.'
+    }
+  }}
+/>
 
 ## Resources
 
-- [Pirsch Documentation](https://docs.pirsch.io/)
-- [Pirsch JavaScript SDK](https://github.com/pirsch-analytics/pirsch-js-sdk)
+<CardGroup>
+  <Card title="Pirsch documentation" href="https://docs.pirsch.io/" icon="book-open">
+    Official Pirsch guides and API reference.
+  </Card>
+  <Card title="Pirsch JavaScript SDK" href="https://github.com/pirsch-analytics/pirsch-js-sdk" icon="code">
+    Pirsch's official browser SDK, for reference — trakoo needs no SDK.
+  </Card>
+  <Card title="Routing" href="/docs/providers#routing" icon="route">
+    Send only the right methods and events to Pirsch.
+  </Card>
+  <Card title="Proxy provider" href="/docs/providers/proxy" icon="server">
+    Forward browser events with IP and User-Agent intact.
+  </Card>
+</CardGroup>

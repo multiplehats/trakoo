@@ -1,624 +1,105 @@
 ---
-title: Providers
-description: Understanding the plugin architecture that powers event delivery
+title: How Providers Work
+description: The plugin architecture that delivers your events — fan-out to many services, a shared lifecycle, and graceful failure.
+sidebar:
+  label: How Providers Work
 ---
 
-Providers are plugins that send your events to analytics services. The library uses a flexible plugin architecture that allows you to use any analytics service—or multiple services simultaneously.
-
-## What Are Providers?
-
-A provider is a small adapter that translates your events into the format expected by an analytics service:
+A provider is a small adapter that translates a trakoo event into the API of a specific analytics service. You call `track()`; the provider handles the transport.
 
 ```typescript
-import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
-
 const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({ token: 'xxx' })
-  ]
+  providers: [new PostHogClientProvider({ token: 'xxx' })]
 });
 
-// You call track()
-analytics.track('user_signed_up', { email: 'user@example.com' });
-
-// Provider handles the rest:
-// 1. Transforms event to PostHog format
-// 2. Sends to PostHog servers
-// 3. Handles errors gracefully
+analytics.track('user_signed_up', { email: 'ada@example.com' });
+// PostHogClientProvider transforms the event and sends it to PostHog.
 ```
 
-## Why Use Providers?
+This indirection is what lets your tracking code outlive your tooling. Switch from PostHog to Pirsch, or add a second destination, and your `track()` calls don't change — only the `providers` array does.
 
-### 1. **Switch Services Without Code Changes**
+## One instance, many providers
 
-Your tracking code stays the same, just swap providers:
-
-```typescript
-// Week 1: Using PostHog
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({ token: 'xxx' })
-  ]
-});
-
-// Week 2: Switched to Pirsch - same tracking code!
-const analytics = createClientAnalytics({
-  providers: [
-    new PirschClientProvider({ identificationCode: 'xxx' })
-  ]
-});
-
-// Your components don't change at all
-analytics.track('button_clicked', { id: 'cta' });
-```
-
-### 2. **Use Multiple Services**
-
-Send events to multiple analytics services with one call:
+An analytics instance can hold any number of providers. Each call fans out to all of them.
 
 ```typescript
 const analytics = createClientAnalytics({
   providers: [
-    new PostHogClientProvider({ token: 'xxx' }),  // Product analytics
-    // Bento doesn't support anonymous page views - exclude pageView by default
-    {
-      provider: new BentoClientProvider({ siteUuid: 'xxx' }),  // Email marketing
-      exclude: ['pageView']
-    },
-    new PirschClientProvider({ identificationCode: 'xxx' })  // Privacy-focused analytics
+    new PostHogClientProvider({ token: 'xxx' }),     // product analytics
+    new PirschClientProvider({ identificationCode: 'yyy' }), // privacy-friendly
+    new BentoClientProvider({ siteUuid: 'zzz' })     // email automation
   ]
 });
 
-// All three services receive this event
-analytics.track('user_signed_up', {
-  email: 'user@example.com',
-  plan: 'pro'
-});
+// All three providers receive this event.
+analytics.track('user_signed_up', { email: 'ada@example.com', plan: 'pro' });
 ```
 
-### 3. **Graceful Error Handling**
+Not every provider should receive every call — Bento is built for identified users, not anonymous page views. Control which methods and events reach each provider with [routing](/docs/providers#routing).
 
-If one provider fails, others continue working:
+## The provider lifecycle
 
-```typescript
-// PostHog is down, but other providers still receive events
-analytics.track('purchase', { amount: 99.99 });
-// ❌ PostHog fails silently
-// ✅ Bento receives event
-// ✅ Pirsch receives event
-```
-
-## Available Providers
-
-<CardGroup>
-  <Card title="PostHog" href="/docs/providers/posthog" icon="bar-chart">
-    Product analytics with feature flags and session replay
-  </Card>
-  <Card title="Bento" href="/docs/providers/bento" icon="mail">
-    Email marketing and automation with event tracking
-  </Card>
-  <Card title="Pirsch" href="/docs/providers/pirsch" icon="shield">
-    Privacy-focused, cookie-free web analytics
-  </Card>
-  <Card title="Proxy Provider" href="/docs/providers/proxy" icon="arrow-right-left">
-    Route events through your server to bypass ad-blockers
-  </Card>
-  <Card title="Custom Providers" href="/docs/providers/custom" icon="code">
-    Create your own provider for any analytics service
-  </Card>
-</CardGroup>
-
-## Provider Lifecycle
-
-All providers implement a standard interface:
+Every provider implements the same interface, so the analytics instance can drive them uniformly:
 
 ```typescript
 interface AnalyticsProvider {
-  // Initialize the provider (load SDK, connect, etc.)
+  name: string;
   initialize(): Promise<void> | void;
-
-  // Track a custom event
-  track(event: BaseEvent, context?: EventContext): Promise<void> | void;
-
-  // Identify a user
   identify(userId: string, traits?: Record<string, unknown>): Promise<void> | void;
-
-  // Track page view
+  track(event: BaseEvent, context?: EventContext): Promise<void> | void;
   pageView(properties?: Record<string, unknown>, context?: EventContext): Promise<void> | void;
-
-  // Track page leave
   pageLeave?(properties?: Record<string, unknown>, context?: EventContext): Promise<void> | void;
-
-  // Reset user session (logout)
   reset(): Promise<void> | void;
-
-  // Some server providers also expose shutdown(); ServerAnalytics calls it when present.
+  flush?(useBeacon?: boolean): Promise<void> | void;
 }
 ```
 
-### Initialization
+- **`initialize`** runs when the instance is created — loading a script, opening a connection, or setting up the SDK. It's always called, regardless of routing.
+- **`track`, `identify`, `pageView`, `pageLeave`, `reset`** map to the calls you make on the analytics instance.
+- Server providers may also expose **`shutdown()`**, which `ServerAnalytics.shutdown()` calls to flush queued events before the process exits.
 
-Providers are initialized automatically when you create an analytics instance:
+You rarely call these directly — the instance does. See [Client vs Server](/docs/core-concepts/client-vs-server) for when each one fires.
+
+## Resilient by default
+
+Providers are isolated from one another. If one fails, the others still receive the event, and the error is caught rather than thrown into your app.
+
+```typescript
+analytics.track('purchase', { amount: 99.99 });
+// If PostHog is unreachable, Bento and Pirsch still get the event.
+```
+
+Turn on `debug` to surface what would otherwise be swallowed:
 
 ```typescript
 const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({ token: 'xxx' })
-  ]
-});
-
-// PostHogClientProvider.initialize() is called automatically
-await analytics.initialize();
-```
-
-You can also initialize manually if needed:
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({ token: 'xxx' })
-  ]
-});
-
-// Initialize later
-await analytics.initialize();
-```
-
-### Tracking Events
-
-When you call `track()`, all providers receive the event:
-
-```typescript
-analytics.track('button_clicked', {
-  buttonId: 'cta',
-  location: 'hero'
-});
-
-// Behind the scenes:
-// 1. Event is normalized
-// 2. Each provider's track() method is called
-// 3. Providers transform and send the event
-// 4. Errors are caught and logged
-```
-
-### User Identification
-
-The `identify()` method tells providers who the current user is:
-
-```typescript
-analytics.identify('user-123', {
-  email: 'user@example.com',
-  name: 'John Doe',
-  plan: 'pro'
-});
-
-// All providers are notified:
-// - PostHog creates/updates user profile
-// - Bento adds/updates subscriber (requires email)
-// - Pirsch associates future events with this user
-```
-
-### Shutdown (Server-Side)
-
-Server providers must be shut down to flush pending events:
-
-```typescript
-import { serverAnalytics } from '@/lib/server-analytics';
-
-// Track some events
-await serverAnalytics.track('api_request', { endpoint: '/users' });
-
-// IMPORTANT: Always shutdown in serverless environments
-await serverAnalytics.shutdown();
-```
-
-Without `shutdown()`, events may be lost when the serverless function terminates.
-
-## Provider Routing
-
-Sometimes you want to use a provider for specific methods only. For example, you might want Bento for email marketing (identify, track) but not for page views, or use different providers for different types of events.
-
-**Important:** Bento requires an email address for all events and does not support anonymous tracking. Always exclude `pageView` from Bento unless you're certain all visitors are identified before page views are tracked.
-
-### Selective Method Routing
-
-**Include specific methods:**
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    // Use Bento only for identify and track
-    {
-      provider: new BentoClientProvider({ siteUuid: 'xxx' }),
-      methods: ['identify', 'track']
-    }
-  ]
-});
-
-// ✅ Called on Bento
-analytics.identify('user-123');
-analytics.track('purchase', { amount: 99 });
-
-// ❌ NOT called on Bento
-analytics.pageView();
-analytics.pageLeave();
-```
-
-**Exclude specific methods:**
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    // Use Bento for everything except pageView
-    {
-      provider: new BentoClientProvider({ siteUuid: 'xxx' }),
-      exclude: ['pageView']
-    }
-  ]
-});
-
-// ✅ Called on Bento
-analytics.identify('user-123');
-analytics.track('purchase', { amount: 99 });
-analytics.pageLeave();
-
-// ❌ NOT called on Bento
-analytics.pageView();
-```
-
-### Mixed Provider Configuration
-
-Combine simple and routed providers for maximum flexibility:
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    // PostHog gets all events
-    new PostHogClientProvider({ token: 'xxx' }),
-
-    // Google Analytics only gets page views
-    {
-      provider: new GoogleAnalyticsProvider({ measurementId: 'xxx' }),
-      methods: ['pageView']
-    },
-
-    // Bento gets everything except page views
-    {
-      provider: new BentoClientProvider({ siteUuid: 'xxx' }),
-      exclude: ['pageView']
-    },
-
-    // Custom CRM provider only gets identify calls
-    {
-      provider: new CustomCRMProvider({ apiKey: 'xxx' }),
-      methods: ['identify']
-    }
-  ]
+  providers: [new PostHogClientProvider({ token: 'xxx', debug: true })],
+  debug: true
 });
 ```
 
-### Available Methods
+## Import from the right entry point
 
-You can route these methods:
-
-- `initialize` - Always called, cannot be excluded
-- `identify` - User identification
-- `track` - Custom event tracking
-- `pageView` - Page view events
-- `pageLeave` - Page leave events
-- `reset` - Clear user session
-
-**Note:** `initialize()` is always called on all providers regardless of routing configuration, as providers must be initialized before they can function.
-
-### Use Cases
-
-**Reduce noise in specific providers:**
+Providers are split by environment. Import browser providers from `trakoo/providers/client` and server providers from `trakoo/providers/server` so nothing server-only ends up in your browser bundle.
 
 ```typescript
-// Bento is for email automation - exclude page views (they don't support anonymous tracking)
-{
-  provider: new BentoClientProvider({ siteUuid: 'xxx' }),
-  exclude: ['pageView']
-}
-```
-
-**Specialized provider roles:**
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    // Full-featured analytics
-    new PostHogClientProvider({ token: 'xxx' }),
-
-    // CRM only needs user data
-    {
-      provider: new HubSpotProvider({ apiKey: 'xxx' }),
-      methods: ['identify']
-    },
-
-    // Email marketing needs identity and conversion events (exclude page views)
-    {
-      provider: new BentoClientProvider({ siteUuid: 'xxx' }),
-      exclude: ['pageView']  // or use methods: ['identify', 'track'] to be explicit
-    }
-  ]
-});
-```
-
-**Custom provider implementation:**
-
-When building custom providers, routing lets you implement only what you need without making noop methods:
-
-```typescript
-// Instead of implementing all methods with empty bodies...
-class CustomProvider extends BaseAnalyticsProvider {
-  identify(userId: string) { /* actually implemented */ }
-  track(event: BaseEvent) { /* actually implemented */ }
-  pageView() { /* empty - not supported */ }
-  pageLeave() { /* empty - not supported */ }
-  reset() { /* empty - not supported */ }
-}
-
-// ...just implement what you need and use routing
-class CustomProvider extends BaseAnalyticsProvider {
-  identify(userId: string) { /* implemented */ }
-  track(event: BaseEvent) { /* implemented */ }
-
-  // Don't need to implement these
-  pageView() {}
-  pageLeave() {}
-  reset() {}
-}
-
-// Then configure routing
-{
-  provider: new CustomProvider(),
-  methods: ['identify', 'track']
-}
-```
-
-## Using Multiple Providers
-
-### Common Combinations
-
-**Product Analytics + Email Marketing:**
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({ token: 'xxx' }),  // Track all behavior
-    {
-      provider: new BentoClientProvider({ siteUuid: 'xxx' }),  // Email automation
-      exclude: ['pageView']  // Bento requires email, skip anonymous page views
-    }
-  ]
-});
-```
-
-**Privacy-Focused + Full-Featured:**
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new PirschClientProvider({ identificationCode: 'xxx' }),  // GDPR-compliant
-    new PostHogClientProvider({ token: 'xxx' })               // Full features
-  ]
-});
-```
-
-**Client-Side + Server-Side Proxy:**
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new ProxyProvider({
-      endpoint: '/api/analytics'  // Bypass ad-blockers
-    })
-  ]
-});
-```
-
-### Conditional Providers
-
-Enable providers based on environment or user consent:
-
-```typescript
-const providers = [];
-
-// Always use privacy-focused analytics
-providers.push(new PirschClientProvider({ identificationCode: 'xxx' }));
-
-// Only add PostHog if user consented
-if (userConsent.analytics) {
-  providers.push(new PostHogClientProvider({ token: 'xxx' }));
-}
-
-// Only use Bento in production (exclude page views by default)
-if (process.env.NODE_ENV === 'production') {
-  providers.push({
-    provider: new BentoClientProvider({ siteUuid: 'xxx' }),
-    exclude: ['pageView']
-  });
-}
-
-const analytics = createClientAnalytics({ providers });
-```
-
-## Environment-Specific Imports
-
-Always import providers from the correct path to avoid bundling issues:
-
-<Tabs>
-<Tab title="Client-Side">
-
-```typescript
-// ✅ Correct - only browser code
-import { createClientAnalytics } from 'trakoo/client';
+// Browser
 import { PostHogClientProvider } from 'trakoo/providers/client';
 
-// ❌ Wrong - no provider aggregate export
-import { PostHogClientProvider } from 'trakoo/providers';
-```
-
-</Tab>
-<Tab title="Server-Side">
-
-```typescript
-// ✅ Correct - only Node.js code
-import { createServerAnalytics } from 'trakoo/server';
+// Server
 import { PostHogServerProvider } from 'trakoo/providers/server';
-
-// ❌ Wrong - no provider aggregate export
-import { PostHogServerProvider } from 'trakoo/providers';
 ```
 
-</Tab>
-</Tabs>
-
-## Provider Configuration
-
-### Common Options
-
-Most providers support these options:
-
-```typescript
-new PostHogClientProvider({
-  token: 'xxx',
-
-  // Enable debug logging
-  debug: process.env.NODE_ENV === 'development',
-
-  // Disable the provider
-  enabled: !!process.env.POSTHOG_TOKEN,
-
-  // Custom API endpoint
-  api_host: 'https://analytics.example.com'
-})
-```
-
-### Provider-Specific Options
-
-Each provider has its own configuration options. See the provider guides for details:
-
-- [PostHog Configuration](/docs/providers/posthog)
-- [Bento Configuration](/docs/providers/bento)
-- [Pirsch Configuration](/docs/providers/pirsch)
-
-## Error Handling
-
-Providers handle errors gracefully:
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({ token: 'xxx' }),
-    {
-      provider: new BentoClientProvider({ siteUuid: 'xxx' }),
-      exclude: ['pageView']  // Recommended for Bento
-    }
-  ]
-});
-
-// If PostHog fails, Bento still receives the event
-analytics.track('user_signed_up', { email: 'user@example.com' });
-```
-
-Enable debug mode to see errors:
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({
-      token: 'xxx',
-      debug: true  // Logs errors to console
-    })
-  ],
-  debug: true  // Logs all analytics activity
-});
-```
-
-## Best Practices
-
-### 1. Use Environment Variables
-
-Never hardcode API keys:
-
-```typescript
-// ✅ Good
-new PostHogClientProvider({
-  token: import.meta.env.VITE_POSTHOG_KEY  // Vite
-  // OR
-  token: process.env.NEXT_PUBLIC_POSTHOG_KEY  // Next.js
-})
-
-// ❌ Bad
-new PostHogClientProvider({
-  token: 'phc_1234567890'  // Hardcoded!
-})
-```
-
-### 2. Initialize Once
-
-Create your analytics instance once and reuse it:
-
-```typescript
-// ✅ Good - lib/analytics.ts
-export const analytics = createClientAnalytics({ /* ... */ });
-
-// components/Button.tsx
-import { analytics } from '@/lib/analytics';
-
-// ❌ Bad - components/Button.tsx
-function Button() {
-  const analytics = createClientAnalytics({ /* ... */ }); // Recreated every render!
-}
-```
-
-### 3. Graceful Degradation
-
-Make providers optional:
-
-```typescript
-const providers = [];
-
-if (process.env.VITE_POSTHOG_KEY) {
-  providers.push(new PostHogClientProvider({
-    token: process.env.VITE_POSTHOG_KEY
-  }));
-}
-
-const analytics = createClientAnalytics({
-  providers: providers.length > 0 ? providers : [new NoOpProvider()]
-});
-```
-
-### 4. Test with Debug Mode
-
-Enable debug mode during development:
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({
-      token: 'xxx',
-      debug: import.meta.env.DEV
-    })
-  ],
-  debug: import.meta.env.DEV
-});
-```
-
-## Next Steps
+## Next steps
 
 <CardGroup>
-  <Card title="Provider Guides" href="/docs/providers" icon="plug">
-    Setup guides for each analytics provider
+  <Card title="Provider catalog" href="/docs/providers" icon="plug">
+    Support matrix, routing reference, and setup for every provider.
   </Card>
-  <Card title="Custom Providers" href="/docs/providers/custom" icon="code">
-    Create your own provider for any analytics service
+  <Card title="Build a custom provider" href="/docs/providers/custom" icon="code">
+    Implement the interface for any service with a JavaScript SDK.
   </Card>
   <Card title="Client vs Server" href="/docs/core-concepts/client-vs-server" icon="server">
-    Learn when to use client-side vs server-side tracking
+    See when each lifecycle method fires.
   </Card>
 </CardGroup>

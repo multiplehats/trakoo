@@ -1,84 +1,15 @@
 ---
 title: Custom Providers
-description: Create your own analytics provider for any service
+description: Build a provider for any analytics service with a JavaScript SDK.
 ---
 
-Create custom providers to integrate trakoo with any analytics service.
+trakoo ships providers for several services, but you are not limited to them. If a service has a JavaScript SDK or an HTTP API, you can write a provider that sends trakoo events to it. That covers tools like Google Analytics, Mixpanel, Amplitude, Segment, and Customer.io.
 
-## Basic Provider Example
+A provider is an adapter: it implements a small interface, and the analytics instance drives it. You have two ways to build one — implement the `AnalyticsProvider` interface directly, or extend `BaseAnalyticsProvider` to inherit debug logging and enabled-state handling.
 
-```typescript
-import {
-  BaseAnalyticsProvider,
-  type BaseEvent,
-  type EventContext
-} from 'trakoo/client';
+## The provider interface
 
-export class CustomProvider extends BaseAnalyticsProvider {
-  name = 'CustomProvider';
-  private client?: any;
-
-  constructor(config: { apiKey: string; debug?: boolean }) {
-    super({ debug: config.debug });
-    // Store config
-  }
-
-  async initialize(): Promise<void> {
-    if (!this.isEnabled()) return;
-    // Initialize your SDK
-    this.log('Initialized successfully');
-  }
-
-  track(event: BaseEvent, context?: EventContext): void {
-    if (!this.isEnabled() || !this.client) return;
-
-    // Send event to your service
-    this.client.track(event.action, event.properties);
-    this.log('Tracked event', { event });
-  }
-
-  identify(userId: string, traits?: Record<string, unknown>): void {
-    if (!this.isEnabled() || !this.client) return;
-
-    this.client.identify(userId, traits);
-    this.log('Identified user', { userId, traits });
-  }
-
-  pageView(properties?: Record<string, unknown>, context?: EventContext): void {
-    if (!this.isEnabled() || !this.client) return;
-
-    this.client.page(properties);
-    this.log('Tracked page view', { properties });
-  }
-
-  reset(): void {
-    if (!this.isEnabled() || !this.client) return;
-
-    this.client.reset();
-    this.log('Reset user session');
-  }
-}
-```
-
-## Using Your Custom Provider
-
-```typescript
-import { createClientAnalytics } from 'trakoo/client';
-import { CustomProvider } from './custom-provider';
-
-const analytics = createClientAnalytics({
-  providers: [
-    new CustomProvider({
-      apiKey: 'your-api-key',
-      debug: true
-    })
-  ]
-});
-```
-
-## Provider Interface
-
-All providers must implement:
+Every provider implements the same shape, so the analytics instance can call it uniformly:
 
 ```typescript
 interface AnalyticsProvider {
@@ -93,16 +24,92 @@ interface AnalyticsProvider {
 }
 ```
 
-Server-side providers can also expose `shutdown()`. `ServerAnalytics.shutdown()` calls it when the provider has that method.
+A `BaseEvent` has the shape `{ category, action, properties }`, so `event.action` and `event.properties` are what you forward to your service.
 
-## Best Practices
+:::note
+Server providers can also expose a `shutdown()` method. `ServerAnalytics.shutdown()` calls it when the provider defines it, giving you a place to flush queued events before the process exits.
+:::
 
-1. **Extend BaseAnalyticsProvider** - Get built-in debug logging
-2. **Check isEnabled()** - Respect enabled/disabled state
-3. **Handle errors gracefully** - Don't throw, log instead
-4. **Type your config** - Export configuration interfaces
-5. **Document your provider** - Add JSDoc comments
+## Extend BaseAnalyticsProvider
+
+Extending `BaseAnalyticsProvider` gives you `isEnabled()` and `log()` for free, so each method stays focused on the transport.
+
+```typescript
+import {
+  BaseAnalyticsProvider,
+  type BaseEvent,
+  type EventContext
+} from 'trakoo/client';
+
+export class CustomProvider extends BaseAnalyticsProvider {
+  name = 'CustomProvider';
+  private client?: YourSdk;
+
+  constructor(private config: { apiKey: string; debug?: boolean }) {
+    super({ debug: config.debug });
+  }
+
+  async initialize(): Promise<void> {
+    if (!this.isEnabled()) return;
+    // Load or configure your SDK here.
+    this.log('Initialized');
+  }
+
+  track(event: BaseEvent, context?: EventContext): void {
+    if (!this.isEnabled() || !this.client) return;
+    this.client.track(event.action, event.properties);
+    this.log('Tracked event', { event });
+  }
+
+  identify(userId: string, traits?: Record<string, unknown>): void {
+    if (!this.isEnabled() || !this.client) return;
+    this.client.identify(userId, traits);
+  }
+
+  pageView(properties?: Record<string, unknown>, context?: EventContext): void {
+    if (!this.isEnabled() || !this.client) return;
+    this.client.page(properties);
+  }
+
+  reset(): void {
+    if (!this.isEnabled() || !this.client) return;
+    this.client.reset();
+  }
+}
+```
+
+## Register your provider
+
+A custom provider goes in the `providers` array like any built-in one, and it works with routing the same way.
+
+```typescript
+import { createClientAnalytics } from 'trakoo/client';
+import { CustomProvider } from './custom-provider';
+
+const analytics = createClientAnalytics({
+  providers: [
+    new CustomProvider({ apiKey: 'your-api-key', debug: true })
+  ]
+});
+```
+
+## Best practices
+
+- **Extend `BaseAnalyticsProvider`** to inherit debug logging and enabled-state handling.
+- **Check `isEnabled()`** at the top of each method so a disabled provider stays silent.
+- **Catch errors instead of throwing** — log the failure so one provider can't break the others.
+- **Type your config** and export the interface so callers get autocomplete.
 
 ## Resources
 
-See the examples above for detailed custom provider patterns.
+<CardGroup>
+  <Card title="How Providers Work" href="/docs/core-concepts/providers" icon="plug">
+    The lifecycle and fan-out model your provider plugs into.
+  </Card>
+  <Card title="Provider catalog" href="/docs/providers" icon="book-open">
+    Support matrix and setup for every built-in provider.
+  </Card>
+  <Card title="Routing" href="/docs/providers#routing" icon="route">
+    Control which methods and events reach your provider.
+  </Card>
+</CardGroup>

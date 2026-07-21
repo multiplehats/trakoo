@@ -1,47 +1,47 @@
 ---
-title: EmitKit Provider
-description: Event notifications and activity feeds with rich metadata
+title: EmitKit
+description: Server-only event notifications and activity feeds with channel routing and rich metadata.
 ---
 
-EmitKit is a notification and event tracking service that allows you to send events to channels with rich metadata, user identification, and flexible display options.
+EmitKit sends events to named channels with rich metadata, so your team can watch activity feeds and get notified when something important happens.
+
+## When to use it
+
+- Real-time activity feeds and internal dashboards for team visibility.
+- Notifications for high-signal events like signups, payments, or errors.
+- Event logging with user context, routed into channels by topic.
+
+EmitKit is not a product-analytics dashboard. Pair it with a provider like [PostHog](/docs/providers/posthog) or [Pirsch](/docs/providers/pirsch) when you need charts and funnels.
 
 ## Installation
 
 ```bash
-# Server-side only:
 pnpm install @emitkit/js
 ```
 
-## Important Notes
+## Client-side usage
 
-**EmitKit is server-side only.** The EmitKit SDK does not provide a client-side package. For client-side event tracking, use the [Proxy Provider](/docs/providers/proxy) to forward events from the browser to your server, where they can be sent to EmitKit.
+EmitKit is server-only — its SDK has no browser package. To capture browser events, use the [Proxy](/docs/providers/proxy) to forward them to your server, then send them to EmitKit from there. See [Browser events via proxy](#browser-events-via-proxy) below.
 
-## Server-Side Usage
+## Server-side usage
 
-### Basic Configuration
-
-```typescript
+```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { EmitKitServerProvider } from 'trakoo/providers/server';
 
-const serverAnalytics = createServerAnalytics({
+export const serverAnalytics = createServerAnalytics({
   providers: [
     new EmitKitServerProvider({
       apiKey: process.env.EMITKIT_API_KEY!, // starts with 'emitkit_'
-      channelName: 'general', // default channel (default: 'general')
-      notify: true, // send notifications (default: true)
-      displayAs: 'notification' // 'message' | 'notification'
+      channelName: 'general'
     })
   ]
 });
-
-serverAnalytics.initialize();
 ```
 
-### Tracking Events
+Track events with properties and optional user context. EmitKit accepts multiple identifiers per user, so later events can reference a user by id, email, or username.
 
 ```typescript
-// Track a custom event
 await serverAnalytics.track('purchase_completed', {
   orderId: 'order-123',
   amount: 99.99,
@@ -50,66 +50,70 @@ await serverAnalytics.track('purchase_completed', {
   userId: 'user-456',
   user: {
     email: 'user@example.com',
-    traits: {
-      plan: 'pro',
-      company: 'Acme Corp'
-    }
+    traits: { plan: 'pro' }
   }
 });
 ```
 
-### User Identification
+## Channel routing
 
-EmitKit supports powerful user aliasing, allowing you to reference users by multiple identifiers:
+Channels group events into separate streams, similar to Slack channels. The provider resolves the channel for each event in this order:
+
+1. Per-event override — a `__emitkit_channel` value in the event properties (highest priority).
+2. Category mapping — the event's category matched against `categoryChannelMap`.
+3. Default channel — the `channelName` option (falls back to `'general'`).
+
+Map categories to channels so events route automatically:
 
 ```typescript
-// Identify user with aliases
-serverAnalytics.identify('user-123', {
-  email: 'john@example.com',
-  name: 'John Doe',
-  username: 'johndoe',
-  plan: 'pro'
+new EmitKitServerProvider({
+  apiKey: process.env.EMITKIT_API_KEY!,
+  channelName: 'general', // fallback for unmapped categories
+  categoryChannelMap: {
+    user: 'user-activity',
+    error: 'alerts',
+    conversion: 'revenue'
+  }
 });
 
-// Now you can track events using any of these identifiers
-await serverAnalytics.track('feature_used', {
-  feature: 'export'
-}, {
-  userId: 'john@example.com' // Email works as alias!
+// Category 'user' → 'user-activity'
+await serverAnalytics.track('user_signed_up', { plan: 'pro' });
+```
+
+Override the channel for a single event by adding `__emitkit_channel`. trakoo strips this key before sending, so it never appears in the event metadata.
+
+```typescript
+await serverAnalytics.track('large_payment', {
+  amount: 50000,
+  __emitkit_channel: 'critical-payments'
 });
 ```
 
-## Client-to-Server with Proxy
+## Titles and icons
 
-Since EmitKit is server-only, use the proxy pattern for client-side events:
+EmitKit turns event names into readable titles (`user_signed_up` becomes "User Signed Up") and assigns an icon based on the event category, so feeds stay legible without extra configuration.
 
-### Client Setup
+## Browser events via proxy
 
-```typescript
+Send browser events through your own API, then forward them to EmitKit on the server.
+
+```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { ProxyProvider } from 'trakoo/providers/client';
 
-const analytics = createClientAnalytics({
-  providers: [
-    new ProxyProvider({
-      endpoint: '/api/analytics'
-    })
-  ]
+export const analytics = createClientAnalytics({
+  providers: [new ProxyProvider({ endpoint: '/api/analytics' })]
 });
 
-await analytics.initialize();
-
-// Events are queued and sent to your API endpoint
 analytics.track('button_clicked', { buttonId: 'signup' });
 ```
 
-### Server API Endpoint
-
-```typescript
-// app/api/analytics/route.ts (Next.js example)
+```typescript title="app/api/analytics/route.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import { EmitKitServerProvider } from 'trakoo/providers/server';
-import { ingestProxyEvents } from 'trakoo/providers/server';
+import {
+  EmitKitServerProvider,
+  ingestProxyEvents
+} from 'trakoo/providers/server';
 
 const serverAnalytics = createServerAnalytics({
   providers: [
@@ -120,283 +124,63 @@ const serverAnalytics = createServerAnalytics({
   ]
 });
 
-serverAnalytics.initialize();
-
 export async function POST(request: Request) {
   await ingestProxyEvents(request, serverAnalytics);
   return new Response('OK');
 }
 ```
 
-## Configuration Options
+## Configuration
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `apiKey` | `string` | **required** | Your EmitKit API key (starts with `emitkit_`) |
-| `channelName` | `string` | `'general'` | Default channel for events |
-| `categoryChannelMap` | `Record<string, string>` | `undefined` | Map event categories to specific channels |
-| `notify` | `boolean` | `true` | Send notifications for events |
-| `displayAs` | `'message' \| 'notification'` | `'notification'` | Display style for events |
-| `debug` | `boolean` | `false` | Enable debug logging |
-| `enabled` | `boolean` | `true` | Enable/disable the provider |
-
-## Channel Routing
-
-EmitKit's power comes from its channel system, similar to Slack channels, where you can organize events into different streams. The provider supports flexible channel routing to automatically send events to the right channels.
-
-### Channel Resolution Priority
-
-Events are routed to channels based on this priority order:
-
-1. **Event property override** (highest priority) - Use `__emitkit_channel` in event properties
-2. **Category mapping** - Map event categories to channels via `categoryChannelMap`
-3. **Default channel** (fallback) - Use the `channelName` config option (default: `'general'`)
-
-### Default Channel
-
-Set a global default channel for all events:
-
-```typescript
-const serverAnalytics = createServerAnalytics({
-  providers: [
-    new EmitKitServerProvider({
-      apiKey: process.env.EMITKIT_API_KEY!,
-      channelName: 'app-events' // All events go here by default
-    })
-  ]
-});
-```
-
-### Category-Based Channel Mapping
-
-Automatically route events to specific channels based on their category:
-
-```typescript
-const serverAnalytics = createServerAnalytics({
-  providers: [
-    new EmitKitServerProvider({
-      apiKey: process.env.EMITKIT_API_KEY!,
-      channelName: 'general', // Fallback channel
-      categoryChannelMap: {
-        'user': 'user-activity',      // All user events → user-activity
-        'engagement': 'product-usage', // All engagement → product-usage
-        'error': 'alerts',             // All errors → alerts
-        'conversion': 'revenue',       // All conversions → revenue
-        'navigation': 'page-views'     // All navigation → page-views
-      }
-    })
-  ]
-});
-
-// This event automatically goes to 'user-activity' channel
-await serverAnalytics.track('user_signed_up', {
-  plan: 'pro'
-});
-
-// This event automatically goes to 'alerts' channel
-await serverAnalytics.track('api_error', {
-  endpoint: '/api/users',
-  statusCode: 500
-});
-```
-
-**Predefined Categories:**
-- `user` - User lifecycle events (signup, login, etc.)
-- `engagement` - Feature usage and interactions
-- `error` - Errors and exceptions
-- `conversion` - Conversion and revenue events
-- `navigation` - Page views and navigation
-- `performance` - Performance metrics
-
-You can also use custom categories for your specific needs.
-
-### Per-Event Channel Override
-
-Override the channel for specific critical events:
-
-```typescript
-// Send critical payment to a dedicated channel
-await serverAnalytics.track('payment_processed', {
-  amount: 10000,
-  currency: 'USD',
-  __emitkit_channel: 'critical-payments' // Override to critical channel
-});
-
-// Send error alert to team notification channel
-await serverAnalytics.track('service_down', {
-  service: 'api',
-  __emitkit_channel: 'team-alerts'
-});
-```
-
-The `__emitkit_channel` property is automatically stripped from the metadata sent to EmitKit - it's only used for internal routing.
-
-### Complete Example
-
-Combining all three routing methods:
-
-```typescript
-const serverAnalytics = createServerAnalytics({
-  providers: [
-    new EmitKitServerProvider({
-      apiKey: process.env.EMITKIT_API_KEY!,
-      channelName: 'general', // Fallback for unmapped categories
-      categoryChannelMap: {
-        'user': 'user-activity',
-        'error': 'alerts',
-        'conversion': 'revenue'
-      }
-    })
-  ]
-});
-
-// Goes to 'user-activity' (category mapping)
-await serverAnalytics.track('user_signed_up', { plan: 'pro' });
-
-// Goes to 'alerts' (category mapping)
-await serverAnalytics.track('api_error', { endpoint: '/users' });
-
-// Goes to 'critical-payments' (event override)
-await serverAnalytics.track('large_payment', {
-  amount: 50000,
-  __emitkit_channel: 'critical-payments'
-});
-
-// Goes to 'general' (no mapping, uses default)
-await serverAnalytics.track('feature_flag_changed', { flag: 'beta' });
-```
-
-## Features
-
-### Auto-Formatted Event Titles
-
-Event names are automatically formatted into readable titles:
-
-```typescript
-// 'user_signed_up' → 'User Signed Up'
-// 'purchase_completed' → 'Purchase Completed'
-await serverAnalytics.track('user_signed_up', {
-  plan: 'pro'
-});
-```
-
-### Category-Based Icons
-
-Events automatically get icons based on their category:
-
-- `engagement` → 👆
-- `user` → 👤
-- `navigation` → 🧭
-- `error` → ❌
-- `performance` → ⚡
-- `conversion` → 💰
-
-### Rich Metadata
-
-All event context is included as metadata:
-
-```typescript
-await serverAnalytics.track('page_viewed', {
-  pageName: 'Dashboard'
-}, {
-  userId: 'user-123',
-  context: {
-    page: { path: '/dashboard', title: 'Dashboard' },
-    device: { userAgent: req.headers['user-agent'] },
-    utm: { source: 'google', medium: 'cpc' }
-  }
-});
-```
-
-### User Aliasing
-
-EmitKit supports multiple identifiers per user:
-
-```typescript
-serverAnalytics.identify('user-123', {
-  email: 'john@example.com',
-  username: 'johndoe',
-  name: 'John Doe'
-});
-
-// Creates aliases for:
-// - user-123 (user ID)
-// - john@example.com (email)
-// - johndoe (username)
-```
-
-## Typical Use Cases
-
-EmitKit works best for:
-
-- **Activity feeds** - Real-time user activity streams
-- **Notification systems** - Alert users about important events
-- **Event logging** - Centralized event tracking with rich metadata
-- **User journey tracking** - Monitor user behavior with context
-- **Internal dashboards** - Team visibility into product usage
-
-**Use with other providers:**
-- Combine with PostHog/Pirsch for analytics dashboards
-- Combine with Bento for email marketing automation
-- Use proxy pattern for unified client/server tracking
-
-## Provider Routing
-
-Recommended setup with multiple providers:
-
-```typescript
-import { createServerAnalytics } from 'trakoo/server';
-import { EmitKitServerProvider } from 'trakoo/providers/server';
-import { PostHogServerProvider } from 'trakoo/providers/server';
-
-const serverAnalytics = createServerAnalytics({
-  providers: [
-    // Use PostHog for analytics and dashboards
-    new PostHogServerProvider({
-      apiKey: process.env.POSTHOG_API_KEY!
-    }),
-    // Use EmitKit for activity feeds and notifications
-    {
-      provider: new EmitKitServerProvider({
-        apiKey: process.env.EMITKIT_API_KEY!,
-        channelName: 'user-activity',
-        notify: true
-      }),
-      // Only send important events to EmitKit
-      methods: ['track', 'identify']
+<TypeTable
+  type={{
+    apiKey: {
+      type: "string",
+      required: true,
+      description: "Your EmitKit API key. Starts with 'emitkit_'."
+    },
+    channelName: {
+      type: "string",
+      default: "general",
+      description: "Default channel when no override or category mapping applies."
+    },
+    categoryChannelMap: {
+      type: "Record<string, string>",
+      description: "Map event categories to specific channels."
+    },
+    notify: {
+      type: "boolean",
+      default: "true",
+      description: "Send a notification for each event."
+    },
+    displayAs: {
+      type: "'message' | 'notification'",
+      default: "notification",
+      description: "How events appear in EmitKit."
+    },
+    debug: {
+      type: "boolean",
+      default: "false",
+      description: "Log debug output for the provider."
+    },
+    enabled: {
+      type: "boolean",
+      default: "true",
+      description: "Enable or disable the provider."
     }
-  ]
-});
-```
+  }}
+/>
 
-## Best Practices
+## Best practices
 
-1. **Organize with channels** - Use category mapping to automatically route events to appropriate channels
-   ```typescript
-   categoryChannelMap: {
-     'user': 'user-activity',
-     'error': 'alerts',
-     'conversion': 'revenue'
-   }
-   ```
-
-2. **Use meaningful channel names** - Name channels by domain (e.g., `'payments'`, `'user-signups'`, `'team-alerts'`)
-
-3. **Reserve overrides for critical events** - Use `__emitkit_channel` sparingly for high-priority events that need special attention
-
-4. **Leverage user aliasing** - Always include email and username for flexible identification
-
-5. **Include rich context** - Add page, device, and UTM data for better insights
-
-6. **Combine with analytics providers** - Use EmitKit for notifications and activity feeds, PostHog for analytics dashboards
-
-7. **Use the proxy pattern** - Forward client events through your server to EmitKit for client-side tracking
-
-8. **Map standard categories** - Start with the predefined categories (`user`, `engagement`, `error`, `conversion`, `navigation`, `performance`) before creating custom ones
+- Route by category with `categoryChannelMap` and reserve `__emitkit_channel` for the few events that need a dedicated channel.
+- Name channels by domain — `payments`, `user-signups`, `team-alerts` — so feeds stay scannable.
+- Include email and username in user traits so events resolve to the same person across identifiers.
+- Run EmitKit alongside an analytics provider: EmitKit for feeds and notifications, PostHog or Pirsch for dashboards. See [routing](/docs/providers#routing) to control which events reach each provider.
 
 ## Resources
 
-- [EmitKit Documentation](https://emitkit.com/docs)
+- [EmitKit documentation](https://emitkit.com/docs)
 - [EmitKit JavaScript SDK](https://www.npmjs.com/package/@emitkit/js)
-- [Proxy Provider Guide](/docs/providers/proxy)
-- [Provider Routing Guide](/docs/core-concepts/providers#provider-routing)
+- [Proxy provider](/docs/providers/proxy)
+- [Routing](/docs/providers#routing)

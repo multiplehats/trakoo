@@ -1,108 +1,44 @@
 ---
 title: Framework Guides
-description: Integration guides for popular frameworks
+description: Step-by-step trakoo integrations for popular web frameworks, covering client and server tracking.
+sidebar:
+  label: Overview
 ---
 
-Step-by-step integration guides for popular web frameworks. Each guide includes complete examples for both client-side and server-side tracking.
+These guides show how to wire trakoo into a specific framework end to end: where to create your client and server instances, how to track from components and server code, and the framework-specific gotchas to watch for.
 
-## Available Guides
+## Available guides
 
 <CardGroup>
   <Card title="Next.js App Router" href="/docs/guides/nextjs" icon="triangle">
-    Complete integration guide for Next.js 13+ with App Router, Server Components, and Server Actions.
+    Next.js 13+ with the App Router, Server Components, and Server Actions.
   </Card>
   <Card title="SvelteKit" href="/docs/guides/sveltekit" icon="flame">
-    Full SvelteKit integration with load functions, form actions, and hooks.
+    SvelteKit with load functions, form actions, and hooks.
   </Card>
 </CardGroup>
 
-## What's Covered
+## Any framework
 
-Each framework guide includes:
+trakoo has no framework requirement, so the pattern is the same everywhere:
 
-- ✅ **Installation** - Dependencies and environment setup
-- ✅ **Client-side tracking** - Page views, user interactions, and events
-- ✅ **Server-side tracking** - API routes, server actions, and background jobs
-- ✅ **User identification** - Session management and user context
-- ✅ **Form handling** - Progressive enhancement and data submission
-- ✅ **Common patterns** - Auth, errors, protected routes, and more
-- ✅ **Serverless best practices** - Edge functions and deployment
+1. Create a client analytics instance for browser code with `createClientAnalytics()`.
+2. Create a server analytics instance for server code with `createServerAnalytics()`.
+3. Track events on the instance that matches where the code runs.
 
-## Quick Start by Framework
+If your framework isn't listed yet, start from [Quick Start](/docs/quick-start) and read [Client vs Server](/docs/core-concepts/client-vs-server) to decide where each event belongs. The same typed event definitions work in any framework.
 
-### Next.js App Router
+:::note[More guides coming]
+Want a guide for the framework you use? [Open an issue](https://github.com/multiplehats/trakoo/issues) and let us know.
+:::
 
-```typescript
-// lib/analytics.ts
-import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
-
-export const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({
-      token: process.env.NEXT_PUBLIC_POSTHOG_KEY!
-    })
-  ]
-});
-```
-
-[Full Next.js guide →](/docs/guides/nextjs)
-
-### SvelteKit
-
-```typescript
-// src/lib/analytics.ts
-import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
-import { PUBLIC_POSTHOG_KEY } from '$env/static/public';
-
-export const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({
-      token: PUBLIC_POSTHOG_KEY
-    })
-  ]
-});
-```
-
-[Full SvelteKit guide →](/docs/guides/sveltekit)
-
-## Framework-Agnostic Setup
-
-If your framework isn't listed, you can still use trakoo! The core concepts remain the same:
-
-1. Create a client analytics instance for browser code
-2. Create a server analytics instance for server code
-3. Track events using the appropriate instance
-
-Check out the [Core Concepts](/docs/core-concepts/events) for framework-agnostic guidance.
-
-## Coming Soon
-
-We're working on guides for:
-
-- Vite + React
-- Remix
-- Astro
-- Nuxt
-
-Want to see a specific framework? [Open an issue](https://github.com/stacksee/stacksee-analytics/issues) and let us know!
-
-## Need Help?
-
-- Check the [Core Concepts](/docs/core-concepts/events) for deeper understanding
-- Browse [Provider guides](/docs/providers) for service-specific setup
-- See [Your First Event](/docs/your-first-event) for a quick tutorial
-
-## Next Steps
-
-Choose your framework and get started:
+## Next steps
 
 <CardGroup>
-  <Card title="Next.js" href="/docs/guides/nextjs" icon="triangle">
-    App Router, Server Components, Server Actions
+  <Card title="Core Concepts" href="/docs/core-concepts/events" icon="book-open">
+    Understand events, providers, and type safety.
   </Card>
-  <Card title="SvelteKit" href="/docs/guides/sveltekit" icon="flame">
-    Load functions, form actions, hooks
+  <Card title="Providers" href="/docs/providers" icon="plug">
+    Set up PostHog, Bento, Pirsch, EmitKit, Visitors, or the Proxy.
   </Card>
 </CardGroup>

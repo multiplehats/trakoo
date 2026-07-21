@@ -1,0 +1,207 @@
+---
+title: Identifying Users
+description: Attach user context to your events so analytics tells you who did what — stateful in the browser, per-request on the server.
+---
+
+Identification connects events to the person who triggered them. Without it, you see anonymous actions; with it, you see journeys.
+
+```text
+Anonymous            Identified
+─────────            ──────────
+Someone upgraded  →  ada@example.com (Pro) upgraded
+Someone viewed pricing  →  ada@example.com viewed pricing
+Someone checked out  →  ada@example.com started Enterprise checkout
+```
+
+That context is what powers funnels, cohorts, retention, and per-user segmentation downstream.
+
+How you attach it depends on where you're tracking. In the browser, trakoo is **stateful** — identify once and it remembers. On the server, it's **stateless** — pass context with each call. [Client vs Server](/docs/core-concepts/client-vs-server) covers that split in depth; this page is the how-to for user context specifically.
+
+## Client-side: identify once
+
+Call `identify()` when you learn who the user is — usually right after login. Every later event carries that user automatically, no extra arguments needed.
+
+```typescript
+import { analytics } from '@/lib/analytics';
+
+analytics.identify('user_123', {
+  email: 'ada@example.com',
+  name: 'Ada Lovelace',
+  plan: 'pro'
+});
+
+// User context is attached to everything that follows.
+analytics.track('button_clicked', { buttonId: 'upgrade' });
+// Providers receive: { userId: 'user_123', email: 'ada@example.com', traits: { name, plan } }
+```
+
+Good moments to identify:
+
+- After a successful login or signup.
+- On app load, when a session already exists.
+
+### Reset on logout
+
+Clear the stored user when the session ends, so the next person's events aren't attributed to the last one.
+
+```typescript
+async function handleLogout() {
+  await logout();
+  analytics.reset();
+}
+```
+
+## Server-side: pass context per call
+
+The server holds no session state. Attach user context as the third argument to `track()` — it applies to that event only.
+
+```typescript
+import { serverAnalytics } from '@/lib/server-analytics';
+
+await serverAnalytics.track('project_created', {
+  name: 'Analytics dashboard'
+}, {
+  userId: 'user_123',
+  user: {
+    email: 'ada@example.com',
+    traits: { plan: 'pro', company: 'Acme' }
+  }
+});
+
+await serverAnalytics.shutdown();
+```
+
+Each request stands alone, so a single server instance can safely handle many users. There's no `reset()` — there's nothing stored to clear.
+
+## Type your traits
+
+Pass a traits type as the second generic argument to type-check `identify()` alongside your events.
+
+```typescript title="lib/analytics.ts"
+import { createClientAnalytics } from 'trakoo/client';
+import type { AppEvents } from './events';
+
+interface UserTraits {
+  email: string;
+  name: string;
+  plan: 'free' | 'pro' | 'enterprise';
+  company?: string;
+  role?: 'admin' | 'member' | 'viewer';
+}
+
+export const analytics = createClientAnalytics<AppEvents, UserTraits>({
+  providers: [/* ... */]
+});
+
+analytics.identify('user_123', {
+  email: 'ada@example.com',
+  name: 'Ada Lovelace',
+  plan: 'pro',      // autocompleted and checked
+  role: 'admin'
+  // wrong: true    // compile error — 'wrong' is not a UserTrait
+});
+```
+
+## Guidelines
+
+**Use a stable user ID.** Pick an identifier that never changes — a database ID or UUID — and use the same format everywhere. Emails and session IDs change, which fragments a user's history across identities.
+
+```typescript
+analytics.identify('550e8400-e29b-41d4-a716-446655440000', { email: 'ada@example.com' }); // Good
+analytics.identify('ada@example.com', { /* ... */ }); // Avoid — email can change
+```
+
+**Keep traits current.** Re-identify with the same ID when a user's data changes; providers merge the update.
+
+```typescript
+async function handleUpgrade(userId: string, plan: string) {
+  await upgradePlan(userId, plan);
+  analytics.identify(userId, { plan });
+}
+```
+
+**Send only segmentation data, never secrets.** Plans, roles, company, and signup date are useful. Passwords, tokens, full card numbers, and government IDs must never be sent to a provider.
+
+:::warning[Email is required for some providers]
+Bento and other email tools need an email trait for every identified event, and Bento won't track anonymous users at all. Route those providers to identified events only — see [routing](/docs/providers#routing).
+:::
+
+## Framework patterns
+
+<Tabs>
+<Tab title="React (auth context)">
+
+Identify from your auth provider so it happens once per session, wherever the user becomes known.
+
+```tsx title="contexts/AuthContext.tsx"
+'use client';
+
+import { useEffect } from 'react';
+import { analytics } from '@/lib/analytics';
+
+export function AuthProvider({ user, children }: { user: User | null; children: React.ReactNode }) {
+  useEffect(() => {
+    if (user) {
+      analytics.identify(user.id, {
+        email: user.email,
+        name: user.name,
+        plan: user.plan
+      });
+    } else {
+      analytics.reset();
+    }
+  }, [user]);
+
+  return <>{children}</>;
+}
+```
+
+</Tab>
+<Tab title="Server (per request)">
+
+Resolve the user from the request and pass context with each event.
+
+```typescript title="app/api/projects/route.ts"
+import { serverAnalytics } from '@/lib/server-analytics';
+
+export async function POST(req: Request) {
+  const user = await getCurrentUser(req);
+  const body = await req.json();
+
+  await serverAnalytics.track('project_created', { name: body.name }, {
+    userId: user.id,
+    user: { email: user.email, traits: { plan: user.plan } }
+  });
+
+  await serverAnalytics.shutdown();
+  return Response.json({ ok: true });
+}
+```
+
+</Tab>
+</Tabs>
+
+## Debugging
+
+Turn on `debug` to log identification and the context attached to each event.
+
+```typescript
+const analytics = createClientAnalytics({ providers: [/* ... */], debug: true });
+
+analytics.identify('user_123', { email: 'ada@example.com', plan: 'pro' });
+// [Analytics] User identified: user_123 { email: 'ada@example.com', plan: 'pro' }
+```
+
+## Next steps
+
+<CardGroup>
+  <Card title="Client vs Server" href="/docs/core-concepts/client-vs-server" icon="server">
+    The full comparison of stateful and stateless tracking.
+  </Card>
+  <Card title="Events" href="/docs/core-concepts/events" icon="zap">
+    Define the events you attach this context to.
+  </Card>
+  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield-check">
+    Type events and traits end to end.
+  </Card>
+</CardGroup>

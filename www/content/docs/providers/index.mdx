@@ -1,6 +1,8 @@
 ---
 title: Providers
 description: Choose official providers, understand support by environment, and route events intentionally.
+sidebar:
+  label: Overview
 ---
 
 Providers translate trakoo events into the APIs of the services you already use. You can start with one provider, add another later, or route specific methods and event names to the tools that should receive them.
@@ -75,9 +77,9 @@ analytics.track('user_signed_up', {
 
 The application emits one typed event. trakoo fans it out to each enabled provider.
 
-## Route providers by method or event
+## Routing
 
-Some providers should not receive every call. Bento is usually better for identified user lifecycle events than anonymous page views. EmitKit is usually better for selected events than high-volume click streams.
+Some providers should not receive every call. Bento is usually better for identified user lifecycle events than anonymous page views. EmitKit is usually better for selected events than high-volume click streams. Wrap a provider in a config object to control exactly which methods and events reach it.
 
 ```typescript
 const analytics = createClientAnalytics({

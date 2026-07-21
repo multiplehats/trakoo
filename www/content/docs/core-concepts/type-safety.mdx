@@ -1,45 +1,42 @@
 ---
 title: Type Safety
-description: Leverage TypeScript for bulletproof analytics tracking
+description: Define your events once and get autocomplete, compile-time checks, and inferred property types across client and server.
 ---
 
-One of the biggest advantages of trakoo is full TypeScript support. Define your events once and get autocomplete, type checking, and compile-time validation everywhere.
+trakoo is built around one typed event definition. Define your events once, pass the type to your analytics instance, and every `track()` and `identify()` call is checked against it. Misspelled event names, missing properties, and wrong values fail at compile time instead of silently shipping bad data.
 
-## Why Type Safety Matters
+## Why type safety matters
 
-Without type safety, analytics tracking is error-prone:
+Analytics bugs are quiet. A typo in an event name or a property doesn't throw — it records the wrong thing, and you find out weeks later when a funnel comes up empty.
 
 ```typescript
-// ❌ Without type safety
-analytics.track('user_signedup', {  // Typo in event name!
-  emai: 'user@example.com',          // Typo in property!
-  plan: 'premium'                    // Wrong value! (should be 'pro')
+// Avoid: no types, so nothing catches these mistakes
+analytics.track('user_signedup', {  // wrong event name
+  emai: 'user@example.com',          // wrong property
+  plan: 'premium'                    // not a valid plan
 });
-
-// Event is sent with wrong data
-// You discover the error weeks later in your analytics dashboard
 ```
 
-With type safety, these errors are caught at compile time:
+With a typed instance, each of those is a compile error before the event ships:
 
 ```typescript
-// ✅ With type safety
+// Good: every argument is checked against your event definition
 analytics.track('user_signed_up', {
   email: 'user@example.com',
   plan: 'pro'
 });
 
-// TypeScript errors:
-// - "user_signedup" doesn't exist, did you mean "user_signed_up"?
-// - Property "emai" doesn't exist, did you mean "email"?
-// - Type "premium" is not assignable to type "free" | "pro" | "enterprise"
+// TypeScript flags:
+// - 'user_signedup' is not a known event name
+// - 'emai' does not exist on this event's properties
+// - 'premium' is not assignable to 'free' | 'pro' | 'enterprise'
 ```
 
-## Event Type Definitions
+## The event definition
 
-The foundation of type safety is the event definition:
+Everything starts with one typed collection of events. The `as const satisfies` combination is what makes the checks work.
 
-```typescript
+```typescript title="lib/events.ts"
 import type { CreateEventDefinition, EventCollection } from 'trakoo';
 
 export const appEvents = {
@@ -53,141 +50,73 @@ export const appEvents = {
     }
   }
 } as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
+
+export type AppEvents = typeof appEvents;
 ```
 
-### Breaking Down the Type Magic
+Three pieces do the work.
 
-Let's understand each part:
+### `as const`
 
-#### 1. `as const`
-
-Tells TypeScript to infer literal types instead of widening:
+Without it, TypeScript widens each literal to its base type — `name` becomes `string`, and `'user'` becomes `string`. `as const` locks every value to its literal type, so trakoo can offer `'user_signed_up'` as an autocomplete suggestion instead of "any string".
 
 ```typescript
-// Without as const
-const event = {
-  name: 'user_signed_up'  // Type: string
-};
-
-// With as const
-const event = {
-  name: 'user_signed_up'  // Type: 'user_signed_up'
-} as const;
+const a = { name: 'user_signed_up' };           // name: string
+const b = { name: 'user_signed_up' } as const;  // name: 'user_signed_up'
 ```
 
-#### 2. `satisfies EventCollection<...>`
+### `satisfies EventCollection<...>`
 
-Validates the structure without widening types:
+`satisfies` checks that your object matches the expected shape without changing its inferred type. You get validation — a malformed event is a compile error — while keeping the exact literal types from `as const`.
 
-```typescript
-// Validates structure AND preserves literal types
-export const appEvents = {
-  userSignedUp: { /* ... */ }
-} as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
+### `properties: {} as { ... }`
 
-// TypeScript checks:
-// ✅ Is this a valid EventCollection? Yes
-// ✅ Preserve exact types? Yes
-```
-
-#### 3. `properties: {} as { ... }`
-
-Defines the shape of event properties:
+Event properties are a type, not a runtime value. `{} as { ... }` hands trakoo the property shape to check `track()` calls against, without allocating a real object at runtime.
 
 ```typescript
 properties: {} as {
-  email: string;           // Required property
-  plan: 'free' | 'pro';   // Union type for specific values
-  referralSource?: string; // Optional property
+  email: string;            // required
+  plan: 'free' | 'pro';     // union — only these values
+  referralSource?: string;  // optional
 }
 ```
 
-## Autocomplete Everywhere
+## Autocomplete everywhere
 
-Once events are typed, you get autocomplete in your IDE:
+Pass your event type to the analytics instance and every call is driven by it.
 
-### Event Names
-
-```typescript
-analytics.track('user_')
-//              ↑
-// IDE suggests:
-// - user_signed_up
-// - user_logged_in
-// - user_updated_profile
-```
-
-### Event Properties
-
-```typescript
-analytics.track('user_signed_up', {
-  email: 'user@example.com',
-  pl
-  // ↑ IDE suggests: plan
-})
-```
-
-### Property Values
-
-```typescript
-analytics.track('user_signed_up', {
-  email: 'user@example.com',
-  plan: 'pr'
-  //     ↑ IDE suggests: 'pro'
-})
-```
-
-## Type Inference
-
-TypeScript infers the correct property type for each event:
-
-```typescript
-// TypeScript knows 'user_signed_up' requires these properties
-analytics.track('user_signed_up', {
-  email: '',      // ✅ Required
-  plan: 'pro',    // ✅ Required
-  // TypeScript error: Property 'email' is missing
-});
-
-// TypeScript knows 'button_clicked' requires different properties
-analytics.track('button_clicked', {
-  buttonId: '',   // ✅ Required
-  location: ''    // ✅ Required
-});
-```
-
-## Generic Types
-
-Pass event types to the analytics instance for full type safety:
-
-```typescript
+```typescript title="lib/analytics.ts"
+import { createClientAnalytics } from 'trakoo/client';
 import type { AppEvents } from './events';
 
-// Client-side
-const analytics = createClientAnalytics<AppEvents>({
-  providers: [/* ... */]
-});
-
-// Server-side
-const serverAnalytics = createServerAnalytics<AppEvents>({
+export const analytics = createClientAnalytics<AppEvents>({
   providers: [/* ... */]
 });
 ```
 
-Now all methods are fully typed:
+The same generic applies on the server:
 
 ```typescript
-analytics.track(
-  //          ↑ Autocomplete for event names
-  'user_signed_up',
-  //              ↑ Autocomplete for properties
-  { email: '', plan: 'pro' }
-);
+import { createServerAnalytics } from 'trakoo/server';
+import type { AppEvents } from './events';
+
+export const serverAnalytics = createServerAnalytics<AppEvents>({
+  providers: [/* ... */]
+});
 ```
 
-## User Traits Type Safety
+From there, your editor completes event names, then the property object for whichever event you picked, then the allowed values for each union property. Each event carries its own property type, so `track('user_signed_up', …)` and `track('button_clicked', …)` expect different shapes.
 
-Define types for user traits:
+```typescript
+analytics.track('user_signed_up', {
+  email: 'ada@example.com'
+  // compile error: property 'plan' is missing
+});
+```
+
+## Type your user traits
+
+`createClientAnalytics` takes a second generic for user traits. It types `identify()` the same way the first generic types `track()`.
 
 ```typescript
 interface UserTraits {
@@ -195,52 +124,48 @@ interface UserTraits {
   name: string;
   plan: 'free' | 'pro' | 'enterprise';
   company?: string;
-  role?: 'admin' | 'user' | 'viewer';
+  role?: 'admin' | 'member' | 'viewer';
 }
 
 const analytics = createClientAnalytics<AppEvents, UserTraits>({
   providers: [/* ... */]
 });
 
-// Now identify() is fully typed
-analytics.identify('user-123', {
-  email: 'user@example.com',
-  name: 'John Doe',
-  plan: 'pro',     // ✅ Autocomplete works!
+analytics.identify('user_123', {
+  email: 'ada@example.com',
+  name: 'Ada Lovelace',
+  plan: 'pro',
   role: 'admin'
-  // wrongProperty: true  // ❌ TypeScript error!
+  // wrong: true  // compile error — 'wrong' is not a UserTrait
 });
 ```
 
-## Type-Safe Event Categories
+:::note
+Traits are covered end to end in [Identifying Users](/docs/core-concepts/identifying-users).
+:::
 
-Use predefined or custom categories with type safety:
+## Event categories
+
+Every event has a `category`. trakoo ships a set of common ones through the `EventCategory` type, and you can add your own with `as const`.
 
 ```typescript
 import type { EventCategory } from 'trakoo';
 
-// Predefined categories (fully typed)
 const category: EventCategory = 'user';
-//                             ↑ Autocomplete suggests:
-// 'engagement' | 'user' | 'navigation' | 'error' | 'performance' | 'conversion'
+// built-in: 'engagement' | 'user' | 'navigation' | 'error' | 'performance' | 'conversion'
 
-// Custom categories (type-safe)
 export const appEvents = {
   aiGenerated: {
     name: 'ai_generated',
-    category: 'ai' as const,  // Custom category
-    properties: {} as {
-      model: string;
-    }
+    category: 'ai' as const,  // custom category
+    properties: {} as { model: string }
   }
 } as const;
 ```
 
-## Complex Property Types
+## Complex property types
 
-Define complex property structures with full type safety:
-
-### Nested Objects
+Properties are ordinary TypeScript types, so nested objects, arrays, and unions all work and stay checked at the call site.
 
 ```typescript
 export const appEvents = {
@@ -249,277 +174,65 @@ export const appEvents = {
     category: 'conversion',
     properties: {} as {
       orderId: string;
-      total: number;
       currency: 'USD' | 'EUR' | 'GBP';
-      items: Array<{
-        productId: string;
-        name: string;
-        price: number;
-        quantity: number;
-      }>;
+      items: Array<{ productId: string; quantity: number }>;
       shippingAddress: {
-        street: string;
         city: string;
         country: string;
       };
     }
-  }
-} as const;
-```
-
-### Arrays
-
-```typescript
-export const appEvents = {
-  productsViewed: {
-    name: 'products_viewed',
-    category: 'product', // Custom category
-    properties: {} as {
-      productIds: string[];
-      categories: Array<'electronics' | 'clothing' | 'food'>;
-    }
-  }
-} as const;
-```
-
-### Unions and Discriminated Unions
-
-```typescript
-export const appEvents = {
+  },
   paymentProcessed: {
     name: 'payment_processed',
     category: 'conversion',
     properties: {} as {
       method: 'card' | 'paypal' | 'crypto';
       amount: number;
-      // Different data based on payment method
-      cardDetails?: {
-        last4: string;
-        brand: string;
-      };
-      paypalEmail?: string;
-      cryptoAddress?: string;
+      cardDetails?: { last4: string; brand: string };
     }
   }
-} as const;
-```
-
-## Type Guards and Validation
-
-While TypeScript provides compile-time safety, you may want runtime validation:
-
-```typescript
-import { z } from 'zod';
-
-// Define Zod schema
-const userSignedUpSchema = z.object({
-  email: z.string().email(),
-  plan: z.enum(['free', 'pro', 'enterprise']),
-  referralSource: z.string().optional()
-});
-
-// Use with analytics
-function trackSignup(data: unknown) {
-  // Validate at runtime
-  const validated = userSignedUpSchema.parse(data);
-
-  // Now fully type-safe
-  analytics.track('user_signed_up', validated);
-}
-```
-
-## Extracting Types
-
-Extract types from your event definitions for reuse:
-
-```typescript
-export const appEvents = {
-  userSignedUp: {
-    name: 'user_signed_up',
-    properties: {} as {
-      email: string;
-      plan: 'free' | 'pro' | 'enterprise';
-    }
-  }
-} as const;
-
-// Extract the properties type
-type UserSignedUpProps = typeof appEvents.userSignedUp.properties;
-// Type: { email: string; plan: 'free' | 'pro' | 'enterprise' }
-
-// Use in functions
-function validateSignup(data: UserSignedUpProps) {
-  analytics.track('user_signed_up', data);
-}
-```
-
-## Conditional Types
-
-Create type-safe helper functions:
-
-```typescript
-type EventName = keyof typeof appEvents;
-type EventProperties<T extends EventName> = typeof appEvents[T]['properties'];
-
-// Type-safe tracking function
-function trackEvent<T extends EventName>(
-  event: T,
-  properties: EventProperties<T>
-) {
-  analytics.track(event, properties);
-}
-
-// Usage
-trackEvent('user_signed_up', {
-  email: 'user@example.com',
-  plan: 'pro'
-  // TypeScript knows exactly what properties are required!
-});
-```
-
-## Type-Safe Provider Configuration
-
-Providers can also be type-safe:
-
-```typescript
-import type { PostHogConfig } from 'trakoo/providers/client';
-
-const config: PostHogConfig = {
-  token: 'xxx',
-  api_host: 'https://app.posthog.com',
-  debug: true
-  // TypeScript validates all options!
-};
-
-const analytics = createClientAnalytics({
-  providers: [new PostHogClientProvider(config)]
-});
-```
-
-## Common Patterns
-
-### Shared Event Properties
-
-Create base interfaces for common properties:
-
-```typescript
-interface BaseEventProps {
-  timestamp?: number;
-  sessionId?: string;
-}
-
-export const appEvents = {
-  buttonClicked: {
-    name: 'button_clicked',
-    properties: {} as BaseEventProps & {
-      buttonId: string;
-      location: string;
-    }
-  }
-} as const;
-```
-
-### Event Builder Functions
-
-Create type-safe event builders:
-
-```typescript
-export const appEvents = {
-  userSignedUp: {
-    name: 'user_signed_up',
-    properties: {} as {
-      email: string;
-      plan: 'free' | 'pro' | 'enterprise';
-    }
-  }
-} as const;
-
-// Type-safe builder
-export function createUserSignedUpEvent(
-  email: string,
-  plan: 'free' | 'pro' | 'enterprise'
-) {
-  return {
-    email,
-    plan,
-    timestamp: Date.now()
-  };
-}
-
-// Usage
-analytics.track('user_signed_up', createUserSignedUpEvent(
-  'user@example.com',
-  'pro'
-));
-```
-
-## Best Practices
-
-### 1. Always Use `as const satisfies`
-
-```typescript
-// ✅ Good - preserves literal types
-export const appEvents = {
-  /* ... */
 } as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
-
-// ❌ Bad - loses type information
-export const appEvents = {
-  /* ... */
-};
 ```
 
-### 2. Define Specific Union Types
+## Extract types for reuse
+
+Because the definition is a typed value, you can pull a single event's property type out with `typeof` and reuse it in a helper, a form handler, or a shared function signature.
 
 ```typescript
-// ✅ Good - specific values
-properties: {} as {
-  plan: 'free' | 'pro' | 'enterprise';
-}
+type UserSignedUpProps = typeof appEvents.userSignedUp.properties;
+// { email: string; plan: 'free' | 'pro' | 'enterprise'; referralSource?: string }
 
-// ❌ Bad - too loose
-properties: {} as {
-  plan: string;
+function trackSignup(props: UserSignedUpProps) {
+  analytics.track('user_signed_up', props);
 }
 ```
 
-### 3. Mark Optional Properties
+## Best practices
+
+Always end your collection with `as const satisfies EventCollection<...>`. `as const` keeps the literal types; `satisfies` validates the shape. Drop either and the types widen back to `string`, taking your autocomplete with them.
 
 ```typescript
-// ✅ Good - clearly optional
-properties: {} as {
-  email: string;
-  referralSource?: string;  // Optional with ?
-}
+// Good — literal types preserved, shape validated
+export const appEvents = { /* ... */ } as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
 
-// ❌ Bad - unclear if required
-properties: {} as {
-  email: string;
-  referralSource: string | undefined;
-}
+// Avoid — types widen to string, autocomplete is lost
+export const appEvents = { /* ... */ };
 ```
 
-### 4. Export Event Types
+- Prefer specific unions over `string`. `plan: 'free' | 'pro' | 'enterprise'` catches typos that `plan: string` waves through.
+- Mark optional properties with `?` rather than `| undefined`, so callers can omit them entirely.
+- Export `type AppEvents = typeof appEvents` next to your definitions, and import it wherever you create an analytics instance.
 
-```typescript
-// lib/events.ts
-export const appEvents = { /* ... */ } as const;
-export type AppEvents = typeof appEvents;
-
-// Use elsewhere
-import type { AppEvents } from '@/lib/events';
-```
-
-## Next Steps
+## Next steps
 
 <CardGroup>
   <Card title="Events" href="/docs/core-concepts/events" icon="zap">
-    Learn more about defining events
+    How event definitions map to what providers receive.
   </Card>
-  <Card title="Framework Guides" href="/docs/guides/nextjs" icon="code">
-    See type-safe implementations in real frameworks
+  <Card title="Identifying Users" href="/docs/core-concepts/identifying-users" icon="user">
+    Type user traits and attach them to events.
   </Card>
-  <Card title="Provider Guides" href="/docs/providers" icon="plug">
-    Configure supported analytics providers
+  <Card title="Next.js Guide" href="/docs/guides/nextjs" icon="code">
+    See typed events wired into a real app.
   </Card>
 </CardGroup>

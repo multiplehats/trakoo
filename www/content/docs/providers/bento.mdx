@@ -1,50 +1,58 @@
 ---
-title: Bento Provider
-description: Email marketing and automation with event tracking
+title: Bento
+description: Route identified user lifecycle events to Bento for email marketing and automation.
 ---
 
-Bento is an email marketing and automation platform with built-in event tracking capabilities.
+Bento is an email marketing and automation platform with built-in event tracking, so behavior in your app can trigger campaigns and segment your audience.
+
+## When to use it
+
+Bento is built around identified users and their email addresses. Reach for it when analytics events should feed email:
+
+- Trigger campaigns from user behavior — onboarding, re-engagement, upgrade nudges.
+- Segment contacts by feature usage and lifecycle stage.
+- Track what a user does after they sign up.
+
+It is not a general-purpose analytics tool. Avoid Bento for:
+
+- Anonymous page views — the SDK requires an email for every event.
+- High-volume, unidentified event streams.
+- Real-time dashboards.
+
+Pair Bento with a web-analytics provider such as [PostHog](/docs/providers/posthog) or [Pirsch](/docs/providers/pirsch), and route only identified events to Bento.
+
+:::warning[Bento does not track anonymous page views]
+The Bento SDK requires an email address for every event, including page views. Events from visitors you haven't identified yet are skipped with a warning. Exclude `pageView` from Bento and let another provider handle anonymous traffic, so Bento only receives events that follow an `identify()` call carrying an email.
+:::
 
 ## Installation
 
+The client provider loads the Bento script from the CDN, so no package is needed in the browser. The server provider uses the Bento Node SDK.
+
 ```bash
-# Client-side: No installation needed (uses CDN)
-# Server-side:
+# Server-side only
 pnpm install @bentonow/bento-node-sdk
 ```
 
-## Important Limitations
+## Client-side usage
 
-**Bento does not support anonymous page views.** The Bento Node SDK requires an email address for all tracking events, including page views. This means:
+Route Bento to `identify` and `track`, and let PostHog cover page views and anonymous traffic. `exclude: ['pageView']` does the same job if you prefer to name the method you are dropping.
 
-- Page views from anonymous users (not yet identified) will be skipped with a warning
-- You should exclude `pageView` from Bento and use another provider (like PostHog or Pirsch) for anonymous page view tracking
-- Only use Bento for identified user events and custom tracking after calling `identify()`
-
-**Recommended Configuration:** Always exclude `pageView` from Bento by default and explicitly enable it only if you're certain all visitors will be identified before page views are tracked.
-
-## Client-Side Usage
-
-**Recommended setup (with page views disabled):**
-
-```typescript
+```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
-import { BentoClientProvider } from 'trakoo/providers/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
+import {
+  BentoClientProvider,
+  PostHogClientProvider
+} from 'trakoo/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
-    // Use PostHog for page views and anonymous tracking
-    new PostHogClientProvider({
-      token: 'your-posthog-key',
-      api_host: 'https://app.posthog.com'
-    }),
-    // Use Bento only for identified user events (pageView excluded by default)
+    new PostHogClientProvider({ token: import.meta.env.VITE_POSTHOG_KEY }),
     {
       provider: new BentoClientProvider({
-        siteUuid: 'your-bento-site-uuid'
+        siteUuid: import.meta.env.VITE_BENTO_SITE_UUID
       }),
-      exclude: ['pageView']
+      methods: ['identify', 'track']
     }
   ]
 });
@@ -52,36 +60,23 @@ const analytics = createClientAnalytics({
 await analytics.initialize();
 ```
 
-**Advanced: Enable page views only if all users are identified:**
+## Server-side usage
 
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    // Only use this if you identify ALL users before any page views
-    new BentoClientProvider({
-      siteUuid: 'your-bento-site-uuid'
-    })
-  ]
-});
-```
+The same routing applies on the server. Here Pirsch handles page views while Bento receives identified events only.
 
-## Server-Side Usage
-
-**Recommended setup (with page views disabled):**
-
-```typescript
+```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import { BentoServerProvider } from 'trakoo/providers/server';
-import { PirschServerProvider } from 'trakoo/providers/server';
+import {
+  BentoServerProvider,
+  PirschServerProvider
+} from 'trakoo/providers/server';
 
 const serverAnalytics = createServerAnalytics({
   providers: [
-    // Use Pirsch for page views
     new PirschServerProvider({
       hostname: 'example.com',
       clientSecret: process.env.PIRSCH_ACCESS_KEY!
     }),
-    // Use Bento only for identified user events (pageView excluded by default)
     {
       provider: new BentoServerProvider({
         siteUuid: process.env.BENTO_SITE_UUID!,
@@ -96,46 +91,49 @@ const serverAnalytics = createServerAnalytics({
 });
 ```
 
-**Advanced: Enable page views only if all users are identified:**
+## Configuration
 
-```typescript
-const serverAnalytics = createServerAnalytics({
-  providers: [
-    // Only use this if you identify ALL users before any page views
-    new BentoServerProvider({
-      siteUuid: process.env.BENTO_SITE_UUID!,
-      authentication: {
-        publishableKey: process.env.BENTO_PUBLISHABLE_KEY!,
-        secretKey: process.env.BENTO_SECRET_KEY!
-      }
-    })
-  ]
-});
-```
+`BentoClientProvider`:
 
-## Typical Use Cases
+<TypeTable
+  type={{
+    siteUuid: {
+      type: 'string',
+      required: true,
+      description: 'Your Bento site UUID, used to load the tracking script.'
+    }
+  }}
+/>
 
-Bento works best for:
+`BentoServerProvider`:
 
-- **Email marketing automation** - Trigger email campaigns based on user behavior
-- **User onboarding flows** - Track identified user journeys and send targeted onboarding emails
-- **Product-led growth** - Segment users based on feature usage and engagement
-- **Customer lifecycle tracking** - Monitor user activity after they sign up
+<TypeTable
+  type={{
+    siteUuid: {
+      type: 'string',
+      required: true,
+      description: 'Your Bento site UUID.'
+    },
+    'authentication.publishableKey': {
+      type: 'string',
+      required: true,
+      description: 'Bento publishable key.'
+    },
+    'authentication.secretKey': {
+      type: 'string',
+      required: true,
+      description: 'Bento secret key. Keep it server-side only.'
+    }
+  }}
+/>
 
-**Not recommended for:**
-- Anonymous page view tracking (use PostHog, Pirsch, or other analytics providers)
-- High-volume event tracking without user identification
-- Real-time analytics dashboards
+## Delivery behavior
 
-## Additional Notes
-
-- Events may take 1-3 minutes to appear in Bento (batch API)
-- User context is automatically extracted from `identify()` calls
-- Always call `identify()` with a valid email before tracking events
-- Use provider routing with `exclude: ['pageView']` to prevent anonymous page view warnings
+- Bento batches events, so they can take one to three minutes to appear.
+- User context comes from your `identify()` call, so always identify with a valid email before tracking events.
 
 ## Resources
 
-- [Bento Documentation](https://docs.bentonow.com/)
-- [Bento SDK on GitHub](https://github.com/bentonow/bento-node-sdk)
-- [Provider Routing Guide](/docs/core-concepts/providers#provider-routing)
+- [Bento documentation](https://docs.bentonow.com/)
+- [Bento Node SDK](https://github.com/bentonow/bento-node-sdk)
+- [Routing events to providers](/docs/providers#routing)

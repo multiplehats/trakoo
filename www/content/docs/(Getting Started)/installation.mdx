@@ -55,6 +55,7 @@ Use `trakoo/providers/client` in browser bundles and `trakoo/providers/server` i
 | Provider | Client support | Server support | Extra install |
 |----------|----------------|----------------|---------------|
 | PostHog | Yes | Yes | `posthog-js posthog-node` |
+| OpenPanel | Yes | Yes | `@openpanel/web @openpanel/sdk` |
 | Bento | Yes, CDN script | Yes | `@bentonow/bento-node-sdk` for server |
 | Pirsch | Yes, CDN script | Yes | No extra package |
 | EmitKit | No | Yes | `@emitkit/js` |
@@ -66,6 +67,13 @@ Use `trakoo/providers/client` in browser bundles and `trakoo/providers/server` i
 
 ```bash
 pnpm install posthog-js posthog-node
+```
+
+</Tab>
+<Tab title="OpenPanel">
+
+```bash
+pnpm install @openpanel/web @openpanel/sdk
 ```
 
 </Tab>
@@ -117,6 +125,7 @@ Keep browser tokens public and server keys private.
 ```bash title=".env.local"
 VITE_POSTHOG_KEY=your-posthog-project-key
 VITE_POSTHOG_HOST=https://app.posthog.com
+VITE_OPENPANEL_CLIENT_ID=your-openpanel-client-id
 VITE_BENTO_SITE_UUID=your-bento-site-uuid
 VITE_VISITORS_TOKEN=your-visitors-token
 ```
@@ -127,9 +136,12 @@ VITE_VISITORS_TOKEN=your-visitors-token
 ```bash title=".env.local"
 NEXT_PUBLIC_POSTHOG_KEY=your-posthog-project-key
 NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
+NEXT_PUBLIC_OPENPANEL_CLIENT_ID=your-openpanel-client-id
 NEXT_PUBLIC_BENTO_SITE_UUID=your-bento-site-uuid
 NEXT_PUBLIC_VISITORS_TOKEN=your-visitors-token
 
+OPENPANEL_CLIENT_ID=your-openpanel-client-id
+OPENPANEL_CLIENT_SECRET=your-openpanel-client-secret
 POSTHOG_API_KEY=your-posthog-server-key
 BENTO_SITE_UUID=your-bento-site-uuid
 BENTO_PUBLISHABLE_KEY=your-bento-publishable-key
@@ -144,9 +156,12 @@ PIRSCH_ACCESS_KEY=pa_xxx
 ```bash title=".env"
 PUBLIC_POSTHOG_KEY=your-posthog-project-key
 PUBLIC_POSTHOG_HOST=https://app.posthog.com
+PUBLIC_OPENPANEL_CLIENT_ID=your-openpanel-client-id
 PUBLIC_BENTO_SITE_UUID=your-bento-site-uuid
 PUBLIC_VISITORS_TOKEN=your-visitors-token
 
+OPENPANEL_CLIENT_ID=your-openpanel-client-id
+OPENPANEL_CLIENT_SECRET=your-openpanel-client-secret
 POSTHOG_API_KEY=your-posthog-server-key
 BENTO_SITE_UUID=your-bento-site-uuid
 BENTO_PUBLISHABLE_KEY=your-bento-publishable-key

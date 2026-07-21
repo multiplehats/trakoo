@@ -1,5 +1,5 @@
-import { defineConfig } from "vite";
 import { resolve } from "node:path";
+import { defineConfig } from "vite";
 import dts from "vite-plugin-dts";
 
 // https://vitejs.dev/config/
@@ -18,7 +18,12 @@ export default defineConfig(({ mode }) => {
 				formats: ["es"],
 			},
 			rollupOptions: {
-				external: ["posthog-node", "posthog-js"],
+				external: [
+					"@openpanel/sdk",
+					"@openpanel/web",
+					"posthog-node",
+					"posthog-js",
+				],
 			},
 			ssr: false,
 		},

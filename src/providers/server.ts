@@ -5,6 +5,10 @@ export { PostHogServerProvider } from "./posthog/server.js";
 // PostHog server types only
 export type { PostHogOptions } from "posthog-node";
 
+// OpenPanel server provider
+export { OpenPanelServerProvider } from "./openpanel/server.js";
+export type { OpenPanelServerConfig } from "./openpanel/server.js";
+
 // Bento server provider
 export { BentoServerProvider } from "./bento/server.js";
 export type {

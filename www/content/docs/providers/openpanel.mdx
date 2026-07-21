@@ -1,0 +1,235 @@
+---
+title: OpenPanel
+description: Open-source web and product analytics for browser and server events.
+---
+
+[OpenPanel](https://openpanel.dev) combines web analytics and product analytics with support for custom events, user profiles, and optional session replay.
+
+## When to use it
+
+- You want open-source product analytics that work in the browser and on the server.
+- You need web analytics, custom events, profiles, and optional session replay in one provider.
+- You want to self-host OpenPanel or send events to OpenPanel Cloud.
+
+## Installation
+
+Install trakoo alongside the OpenPanel SDKs you need: `@openpanel/web` for the client and `@openpanel/sdk` for the server.
+
+```bash
+pnpm install trakoo @openpanel/web @openpanel/sdk
+```
+
+## Client-side usage
+
+Use `OpenPanelClientProvider` from `trakoo/providers/client`. Browser code needs only the public OpenPanel client ID.
+
+```typescript title="lib/analytics.ts"
+import { createClientAnalytics } from 'trakoo/client';
+import { OpenPanelClientProvider } from 'trakoo/providers/client';
+
+export const analytics = createClientAnalytics({
+  providers: [
+    new OpenPanelClientProvider({
+      clientId: import.meta.env.VITE_OPENPANEL_CLIENT_ID
+    })
+  ]
+});
+
+await analytics.track('signup_button_clicked', {
+  location: 'header',
+  variant: 'primary'
+});
+
+analytics.pageView({ section: 'pricing' });
+```
+
+The provider uses explicit trakoo calls by default. OpenPanel's automatic screen views, outgoing-link tracking, data-attribute tracking, and session replay remain disabled unless you enable their corresponding SDK options:
+
+```typescript title="lib/analytics.ts"
+new OpenPanelClientProvider({
+  clientId: import.meta.env.VITE_OPENPANEL_CLIENT_ID,
+  trackScreenViews: true,
+  trackOutgoingLinks: true,
+  trackAttributes: true,
+  sessionReplay: {
+    enabled: true,
+    maskAllInputs: true,
+    maskAllText: true
+  }
+})
+```
+
+:::warning[Keep secrets server-side]
+Never put an OpenPanel client secret in browser code. `OpenPanelClientProvider` intentionally does not accept `clientSecret`.
+:::
+
+## Server-side usage
+
+Use `OpenPanelServerProvider` from `trakoo/providers/server`. Server analytics is stateless, so pass user context with each attributed event.
+
+```typescript title="lib/server-analytics.ts"
+import { createServerAnalytics } from 'trakoo/server';
+import { OpenPanelServerProvider } from 'trakoo/providers/server';
+
+export const serverAnalytics = createServerAnalytics({
+  providers: [
+    new OpenPanelServerProvider({
+      clientId: process.env.OPENPANEL_CLIENT_ID!,
+      clientSecret: process.env.OPENPANEL_CLIENT_SECRET!
+    })
+  ]
+});
+
+await serverAnalytics.track('invoice_paid', {
+  invoiceId: 'inv_123',
+  amount: 4900
+}, {
+  userId: 'user_123',
+  user: {
+    email: 'jane@example.com',
+    traits: { plan: 'pro' }
+  }
+});
+
+serverAnalytics.shutdown();
+```
+
+The provider clears OpenPanel's local identity state after server-side `identify()` and on `shutdown()`, so it never reuses the identity from another request.
+
+## Identifying users
+
+Client identification persists until `analytics.reset()`. OpenPanel's standard `firstName`, `lastName`, `email`, and `avatar` traits are sent as profile fields. Other traits are stored as custom profile properties.
+
+```typescript title="lib/analytics.ts"
+analytics.identify('user_123', {
+  firstName: 'Jane',
+  lastName: 'Doe',
+  email: 'jane@example.com',
+  avatar: 'https://example.com/jane.png',
+  plan: 'pro'
+});
+```
+
+On the server, `identify()` updates the profile but does not persist that identity for later events. Continue to pass the profile ID on each tracked server event.
+
+```typescript title="lib/server-analytics.ts"
+await serverAnalytics.identify('user_123', {
+  email: 'jane@example.com',
+  plan: 'enterprise'
+});
+```
+
+Calling server-side `identify()` without traits still sends a profile payload with only the `profileId`.
+
+## Configuration
+
+Client options:
+
+<TypeTable
+  type={{
+    clientId: {
+      type: 'string',
+      required: true,
+      description: 'OpenPanel project client ID.'
+    },
+    apiUrl: {
+      type: 'string',
+      description: 'API URL for OpenPanel Cloud or a self-hosted instance.'
+    },
+    trackScreenViews: {
+      type: 'boolean',
+      default: 'false',
+      description: 'Automatically track browser navigation.'
+    },
+    trackOutgoingLinks: {
+      type: 'boolean',
+      default: 'false',
+      description: 'Automatically track external link clicks.'
+    },
+    trackAttributes: {
+      type: 'boolean',
+      default: 'false',
+      description: 'Enable OpenPanel data-attribute tracking.'
+    },
+    sessionReplay: {
+      type: 'object',
+      description: 'Configure optional OpenPanel session replay.'
+    },
+    filter: {
+      type: 'function',
+      description: 'Filter OpenPanel payloads before sending.'
+    },
+    debug: {
+      type: 'boolean',
+      default: 'false',
+      description: 'Enable provider and SDK debug logging.'
+    },
+    enabled: {
+      type: 'boolean',
+      default: 'true',
+      description: 'Set to false to disable the provider without removing it.'
+    }
+  }}
+/>
+
+Server options:
+
+<TypeTable
+  type={{
+    clientId: {
+      type: 'string',
+      required: true,
+      description: 'OpenPanel project client ID.'
+    },
+    clientSecret: {
+      type: 'string',
+      required: true,
+      description: 'Secret for authenticated server events.'
+    },
+    apiUrl: {
+      type: 'string',
+      description: 'API URL for OpenPanel Cloud or a self-hosted instance.'
+    },
+    filter: {
+      type: 'function',
+      description: 'Filter OpenPanel payloads before sending.'
+    },
+    debug: {
+      type: 'boolean',
+      default: 'false',
+      description: 'Enable provider and SDK debug logging.'
+    },
+    enabled: {
+      type: 'boolean',
+      default: 'true',
+      description: 'Set to false to disable the provider without removing it.'
+    }
+  }}
+/>
+
+## Method mapping
+
+| trakoo method | OpenPanel behavior |
+|---------------|--------------------|
+| `track()` | Sends the event name, properties, and trakoo context |
+| `identify()` | Creates or updates an OpenPanel profile |
+| `pageView()` | Sends OpenPanel's `screen_view` event |
+| `pageLeave()` | No-op; OpenPanel has no dedicated page-leave method |
+| `reset()` | Clears the browser or provider-local identity |
+
+## Resources
+
+<CardGroup>
+  <Card title="OpenPanel docs" href="https://openpanel.dev/docs" icon="book-open">
+    Official OpenPanel guides and API reference.
+  </Card>
+  <Card title="OpenPanel Web SDK" href="https://openpanel.dev/docs/sdks/web" icon="code">
+    Browser SDK options that the client provider forwards.
+  </Card>
+  <Card title="OpenPanel JavaScript SDK" href="https://openpanel.dev/docs/sdks/javascript" icon="server">
+    Server SDK configuration for backend tracking.
+  </Card>
+  <Card title="Routing" href="/docs/providers#routing" icon="route">
+    Send specific methods and events to OpenPanel.
+  </Card>
+</CardGroup>

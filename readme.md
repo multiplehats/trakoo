@@ -30,6 +30,7 @@ The library includes built-in support for popular analytics services, with more 
 | Provider | Type | Documentation |
 |----------|------|---------------|
 | **PostHog** | Product Analytics | [View Docs](https://stacksee-analytics.vercel.app/docs/providers/posthog) |
+| **OpenPanel** | Web & Product Analytics | [View Docs](https://stacksee-analytics.vercel.app/docs/providers/openpanel) |
 | **Bento** | Email Marketing & Events | [View Docs](https://stacksee-analytics.vercel.app/docs/providers/bento) |
 | **Pirsch** | Privacy-Focused Web Analytics | [View Docs](https://stacksee-analytics.vercel.app/docs/providers/pirsch) |
 
@@ -57,6 +58,9 @@ pnpm install trakoo
 
 # For PostHog support
 pnpm install posthog-js posthog-node
+
+# For OpenPanel support
+pnpm install @openpanel/web @openpanel/sdk
 
 # For Bento support (server-side only)
 pnpm install @bentonow/bento-node-sdk

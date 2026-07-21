@@ -11,6 +11,9 @@ Providers translate trakoo events into the APIs of the services you already use.
   <ProviderCard title="PostHog" href="/docs/providers/posthog" domain="posthog.com">
     Client and server product analytics, feature flags, and session replay
   </ProviderCard>
+  <ProviderCard title="OpenPanel" href="/docs/providers/openpanel" domain="openpanel.dev">
+    Client and server web and product analytics with optional session replay
+  </ProviderCard>
   <ProviderCard title="Bento" href="/docs/providers/bento" domain="bentonow.com">
     Client and server lifecycle/email automation for identified users
   </ProviderCard>
@@ -33,6 +36,7 @@ Providers translate trakoo events into the APIs of the services you already use.
 | Provider | Client import | Server import | Best for |
 |----------|---------------|---------------|----------|
 | PostHog | `PostHogClientProvider` | `PostHogServerProvider` | Product analytics across browser and backend |
+| OpenPanel | `OpenPanelClientProvider` | `OpenPanelServerProvider` | Open-source web and product analytics |
 | Bento | `BentoClientProvider` | `BentoServerProvider` | Identified lifecycle events and email automation |
 | Pirsch | `PirschClientProvider` | `PirschServerProvider` | Privacy-friendly page views and lightweight events |
 | EmitKit | — | `EmitKitServerProvider` | Notifications and activity channels |

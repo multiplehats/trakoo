@@ -12,18 +12,27 @@ const { constructorSpy, sdk } = vi.hoisted(() => ({
 	},
 }));
 
-vi.mock("@openpanel/web", () => ({
-	OpenPanel: class {
-		identify = sdk.identify;
-		track = sdk.track;
-		screenView = sdk.screenView;
-		clear = sdk.clear;
-
-		constructor(config: unknown) {
-			constructorSpy(config);
+vi.mock("@openpanel/web", () => {
+	class OpenPanelBase {
+		track(name: string, properties?: Record<string, unknown>) {
+			return sdk.track(name, properties);
 		}
-	},
-}));
+	}
+
+	return {
+		OpenPanelBase,
+		OpenPanel: class extends OpenPanelBase {
+			identify = sdk.identify;
+			screenView = sdk.screenView;
+			clear = sdk.clear;
+
+			constructor(config: unknown) {
+				super();
+				constructorSpy(config);
+			}
+		},
+	};
+});
 
 describe("OpenPanelClientProvider", () => {
 	beforeEach(() => {

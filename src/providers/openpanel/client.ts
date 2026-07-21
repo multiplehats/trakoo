@@ -28,6 +28,7 @@ export type OpenPanelClientConfig = Omit<
 export class OpenPanelClientProvider extends BaseAnalyticsProvider {
 	name = "OpenPanel-Client";
 	private client?: OpenPanelWebClient;
+	private trackEvent?: OpenPanelWebClient["track"];
 	private config: OpenPanelClientConfig;
 	private initialized = false;
 	private initPromise?: Promise<void>;
@@ -58,7 +59,7 @@ export class OpenPanelClientProvider extends BaseAnalyticsProvider {
 		}
 
 		try {
-			const { OpenPanel } = await import("@openpanel/web");
+			const { OpenPanel, OpenPanelBase } = await import("@openpanel/web");
 			const runtimeConfig = this.config as OpenPanelClientConfig &
 				Partial<
 					Pick<
@@ -93,6 +94,8 @@ export class OpenPanelClientProvider extends BaseAnalyticsProvider {
 				...options,
 				debug: this.config.debug ?? false,
 			});
+			// The web override replaces a caller-supplied __path with its last screen view.
+			this.trackEvent = OpenPanelBase.prototype.track.bind(this.client);
 			this.initialized = true;
 			this.flushPendingActions();
 			this.log("Initialized successfully");
@@ -144,9 +147,9 @@ export class OpenPanelClientProvider extends BaseAnalyticsProvider {
 	async track(event: BaseEvent, context?: EventContext): Promise<void> {
 		if (!this.isEnabled()) return;
 		if (!this.initialized && this.initPromise) await this.initPromise;
-		if (!this.initialized || !this.client) return;
+		if (!this.initialized || !this.trackEvent) return;
 
-		await this.client.track(
+		await this.trackEvent(
 			event.action,
 			buildTrackedEventProperties(event, context),
 		);

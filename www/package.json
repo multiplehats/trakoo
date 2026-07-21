@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "build": "blume build",
+    "check:branding": "node scripts/check-branding.mjs",
     "dev": "blume dev",
     "start": "blume preview",
     "preview": "blume preview"

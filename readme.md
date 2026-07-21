@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./.github/assets/trakoo-logo.png" alt="trakoo" width="620">
+</p>
+
 # trakoo
 
 A highly typed, zero-dependency, provider-agnostic analytics library for TypeScript applications. Works seamlessly on both client and server sides with full type safety for your custom events.

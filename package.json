@@ -1,6 +1,6 @@
 {
 	"name": "@stacksee/analytics",
-	"version": "0.14.5",
+	"version": "0.14.6",
 	"description": "A highly typed, provider-agnostic analytics library for TypeScript applications",
 	"type": "module",
 	"exports": {
@@ -68,7 +68,7 @@
 	"license": "ISC",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/stackseehq/analytics.git"
+		"url": "git+https://github.com/multiplehats/trakoo.git"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "1.9.4",

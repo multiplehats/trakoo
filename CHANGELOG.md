@@ -1,5 +1,15 @@
 # trakoo
 
+## 0.1.0
+
+### Minor Changes
+
+- Add OpenPanel client and server providers with event tracking, user identification, page views, and safe server-side identity isolation. ([#27](https://github.com/multiplehats/trakoo/pull/27))
+
+### Patch Changes
+
+- Preserve page-path metadata on OpenPanel client events tracked before a page view. ([#27](https://github.com/multiplehats/trakoo/pull/27))
+
 ## 0.14.5
 
 ### Patch Changes

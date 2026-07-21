@@ -92,6 +92,8 @@
 	"optionalDependencies": {
 		"@bentonow/bento-node-sdk": "^0.2.1",
 		"@emitkit/js": "^2.1.0",
+		"@openpanel/sdk": "^1.3.1",
+		"@openpanel/web": "^1.4.1",
 		"posthog-js": "^1.268.2",
 		"posthog-node": "^5.9.0"
 	},

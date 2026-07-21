@@ -6,6 +6,7 @@ export default defineMeta({
 	pages: [
 		"index",
 		"posthog",
+		"openpanel",
 		"bento",
 		"pirsch",
 		"emitkit",

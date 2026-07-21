@@ -72,7 +72,6 @@ Categories help organize events into logical groups:
 ```
 
 **Predefined categories:**
-- `product` - Product-related events (viewed, added to cart)
 - `user` - User lifecycle events (signup, login, profile updates)
 - `navigation` - Page views and navigation
 - `conversion` - Conversion events and goals
@@ -97,6 +96,8 @@ export const appEvents = {
   }
 } as const;
 ```
+
+`product`, `billing`, `ai`, and other domain-specific categories are valid custom categories.
 
 ### 3. Properties
 

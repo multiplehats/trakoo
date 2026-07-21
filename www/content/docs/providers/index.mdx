@@ -1,167 +1,174 @@
 ---
 title: Providers
-description: Choose and configure analytics providers for your application
+description: Choose official providers, understand support by environment, and route events intentionally.
 ---
 
-Providers are plugins that send your events to analytics services. trakoo includes official support for popular services and makes it easy to add custom providers.
-
-## Available Providers
+Providers translate trakoo events into the APIs of the services you already use. You can start with one provider, add another later, or route specific methods and event names to the tools that should receive them.
 
 <CardGroup>
   <ProviderCard title="PostHog" href="/docs/providers/posthog" domain="posthog.com">
-    Open-source product analytics with feature flags and session replay
+    Client and server product analytics, feature flags, and session replay
   </ProviderCard>
   <ProviderCard title="Bento" href="/docs/providers/bento" domain="bentonow.com">
-    Email marketing and automation platform with event tracking
+    Client and server lifecycle/email automation for identified users
   </ProviderCard>
   <ProviderCard title="Pirsch" href="/docs/providers/pirsch" domain="pirsch.io">
-    Privacy-focused, cookie-free web analytics
+    Client and server privacy-friendly web analytics
   </ProviderCard>
   <ProviderCard title="EmitKit" href="/docs/providers/emitkit" domain="emitkit.com">
-    Event notifications and activity feeds with rich metadata
+    Server-only event notifications with channel routing
   </ProviderCard>
   <ProviderCard title="Visitors" href="/docs/providers/visitors" domain="visitors.now">
-    Lightweight analytics with Stripe revenue attribution
+    Client-only analytics with optional Stripe revenue attribution
   </ProviderCard>
-  <ProviderCard title="Proxy Provider" href="/docs/providers/proxy" domain="trakoo.dev">
-    Route events through your server to bypass ad-blockers
+  <ProviderCard title="Proxy" href="/docs/providers/proxy" domain="trakoo.dev">
+    Browser queue + server ingest helpers for first-party event delivery
   </ProviderCard>
 </CardGroup>
 
-## Using Multiple Providers
+## Support matrix
 
-Combine providers to leverage different capabilities:
+| Provider | Client import | Server import | Best for |
+|----------|---------------|---------------|----------|
+| PostHog | `PostHogClientProvider` | `PostHogServerProvider` | Product analytics across browser and backend |
+| Bento | `BentoClientProvider` | `BentoServerProvider` | Identified lifecycle events and email automation |
+| Pirsch | `PirschClientProvider` | `PirschServerProvider` | Privacy-friendly page views and lightweight events |
+| EmitKit | — | `EmitKitServerProvider` | Notifications and activity channels |
+| Visitors | `VisitorsClientProvider` | — | Lightweight web analytics and revenue attribution |
+| Proxy | `ProxyProvider` | `ingestProxyEvents`, `createProxyHandler` | Sending browser events through your own API |
+
+Use client providers from `trakoo/providers/client` and server providers from `trakoo/providers/server`.
+
+## One event, multiple destinations
 
 ```typescript
 import { createClientAnalytics } from 'trakoo/client';
 import {
+  BentoClientProvider,
   PostHogClientProvider,
-  BentoClientProvider
+  VisitorsClientProvider
 } from 'trakoo/providers/client';
 
 const analytics = createClientAnalytics({
   providers: [
-    // PostHog for product analytics and feature flags
     new PostHogClientProvider({
       token: import.meta.env.VITE_POSTHOG_KEY
     }),
-
-    // Bento for email marketing automation
-    new BentoClientProvider({
-      siteUuid: import.meta.env.VITE_BENTO_SITE_UUID
+    {
+      provider: new BentoClientProvider({
+        siteUuid: import.meta.env.VITE_BENTO_SITE_UUID
+      }),
+      methods: ['identify', 'track']
+    },
+    new VisitorsClientProvider({
+      token: import.meta.env.VITE_VISITORS_TOKEN,
+      persist: true
     })
   ]
 });
 
-// Events sent to all providers
 analytics.track('user_signed_up', {
-  email: 'user@example.com',
+  email: 'ada@example.com',
   plan: 'pro'
 });
 ```
 
-## Environment-Specific Imports
+The application emits one typed event. trakoo fans it out to each enabled provider.
 
-Always use the correct import path to avoid bundling issues:
+## Route providers by method or event
 
-<Tabs>
-<Tab title="Client-Side">
-
-```typescript
-// ✅ Correct - only browser-compatible code
-import { PostHogClientProvider } from 'trakoo/providers/client';
-
-// ❌ Wrong - may bundle Node.js dependencies
-import { PostHogClientProvider } from 'trakoo/providers';
-```
-
-</Tab>
-<Tab title="Server-Side">
-
-```typescript
-// ✅ Correct - only Node.js code
-import { PostHogServerProvider } from 'trakoo/providers/server';
-
-// ❌ Wrong - may bundle browser code
-import { PostHogServerProvider } from 'trakoo/providers';
-```
-
-</Tab>
-</Tabs>
-
-## Configuration Best Practices
-
-### 1. Use Environment Variables
-
-```typescript
-new PostHogClientProvider({
-  token: import.meta.env.VITE_POSTHOG_KEY,  // Vite
-  // OR
-  token: process.env.NEXT_PUBLIC_POSTHOG_KEY  // Next.js
-})
-```
-
-### 2. Enable Debug in Development
-
-```typescript
-new PostHogClientProvider({
-  token: 'xxx',
-  debug: import.meta.env.DEV  // or process.env.NODE_ENV === 'development'
-})
-```
-
-### 3. Conditional Providers
-
-```typescript
-const providers = [
-  new PostHogClientProvider({ token: 'xxx' })
-];
-
-// Only add Bento in production
-if (import.meta.env.PROD) {
-  providers.push(new BentoClientProvider({ siteUuid: 'xxx' }));
-}
-
-const analytics = createClientAnalytics({ providers });
-```
-
-### 4. Graceful Degradation
+Some providers should not receive every call. Bento is usually better for identified user lifecycle events than anonymous page views. EmitKit is usually better for selected events than high-volume click streams.
 
 ```typescript
 const analytics = createClientAnalytics({
   providers: [
-    new PostHogClientProvider({
-      token: 'xxx',
-      enabled: !!import.meta.env.VITE_POSTHOG_KEY  // Disable if no key
+    new PostHogClientProvider({ token: import.meta.env.VITE_POSTHOG_KEY }),
+    {
+      provider: new BentoClientProvider({
+        siteUuid: import.meta.env.VITE_BENTO_SITE_UUID
+      }),
+      methods: ['identify', 'track'],
+      eventPatterns: ['user_*', 'checkout_*']
+    }
+  ]
+});
+```
+
+Routing options are part of the shared provider config:
+
+| Option | Effect |
+|--------|--------|
+| `methods` | Only call these provider methods |
+| `exclude` | Call every method except these |
+| `events` | Only track these exact event names |
+| `excludeEvents` | Track every event except these names |
+| `eventPatterns` | Track events matching glob-style patterns such as `newsletter_*` |
+
+`methods` wins over `exclude` when both are set. `events`, `eventPatterns`, and `excludeEvents` are mutually exclusive; the runtime logs a warning and uses the highest-priority option.
+
+## Browser-to-server delivery
+
+Use the proxy when browser events should go through your domain before reaching server providers.
+
+```typescript title="lib/analytics.ts"
+import { createClientAnalytics } from 'trakoo/client';
+import { ProxyProvider } from 'trakoo/providers/client';
+
+export const analytics = createClientAnalytics({
+  providers: [
+    new ProxyProvider({
+      endpoint: '/api/events',
+      batch: { size: 10, interval: 2000 }
     })
   ]
 });
 ```
 
-## Custom Providers
+```typescript title="app/api/events/route.ts"
+import { createServerAnalytics } from 'trakoo/server';
+import {
+  EmitKitServerProvider,
+  createProxyHandler
+} from 'trakoo/providers/server';
 
-Want to integrate with a different analytics service? Create a custom provider:
+const serverAnalytics = createServerAnalytics({
+  providers: [
+    new EmitKitServerProvider({
+      apiKey: process.env.EMITKIT_API_KEY!,
+      channelName: 'product-events'
+    })
+  ]
+});
+
+export const POST = createProxyHandler(serverAnalytics);
+```
+
+## Build your own provider
+
+If a service is not built in, implement the `AnalyticsProvider` interface or extend `BaseAnalyticsProvider`.
 
 ```typescript
-import { BaseAnalyticsProvider, BaseEvent, EventContext } from 'trakoo';
+import {
+  BaseAnalyticsProvider,
+  type BaseEvent,
+  type EventContext
+} from 'trakoo/client';
 
 export class CustomProvider extends BaseAnalyticsProvider {
   name = 'CustomProvider';
 
-  async initialize(): Promise<void> {
-    // Initialize your SDK
+  initialize() {}
+
+  track(event: BaseEvent, context?: EventContext) {
+    console.log(event.action, event.properties, context);
   }
 
-  track(event: BaseEvent, context?: EventContext): void {
-    // Send event to your service
-  }
+  identify(userId: string, traits?: Record<string, unknown>) {}
 
-  identify(userId: string, traits?: Record<string, unknown>): void {
-    // Identify user
-  }
+  pageView(properties?: Record<string, unknown>, context?: EventContext) {}
 
-  // ... implement other required methods
+  reset() {}
 }
 ```
 
-[Learn more about creating custom providers →](/docs/providers/custom)
+[Learn more about custom providers →](/docs/providers/custom)

@@ -20,7 +20,7 @@ export interface ServerAnalyticsConfig {
  * @example
  * ```typescript
  * import { createServerAnalytics } from 'trakoo/server';
- * import { PostHogServerProvider } from 'trakoo/providers/posthog';
+ * import { PostHogServerProvider } from 'trakoo/providers/server';
  * import { AppEvents } from './events';
  *
  * const analytics = createServerAnalytics<typeof AppEvents>({

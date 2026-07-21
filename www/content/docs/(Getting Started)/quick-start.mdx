@@ -1,66 +1,32 @@
 ---
 title: Quick Start
-description: Get started with trakoo in 5 minutes
+description: Install trakoo, choose providers, define typed events, and send your first analytics call.
 ---
 
-This guide will get you tracking analytics events in under 5 minutes.
+This path gets you to a working, typed analytics setup with a real provider. It uses PostHog in the first example because it supports both browser and server tracking, but the same event definitions work with every provider.
 
-## Installation
-
-<Steps>
-<Step>
-
-### Install the Core Library
+## 1. Install
 
 ```bash
-pnpm install trakoo
+pnpm install trakoo posthog-js posthog-node
 ```
 
-</Step>
+Use npm, yarn, or bun if that is what your project uses. See [Installation](/docs/installation) for provider-specific packages.
 
-<Step>
-
-### Install Provider SDKs
-
-Choose which analytics services you want to use:
-
-<Tabs>
-<Tab title="PostHog">
-
-```bash
-pnpm install posthog-js posthog-node
-```
-
-</Tab>
-<Tab title="Bento">
-
-```bash
-# Client-side: No installation needed (uses CDN)
-# Server-side:
-pnpm install @bentonow/bento-node-sdk
-```
-
-</Tab>
-<Tab title="Pirsch">
-
-```bash
-pnpm install pirsch-sdk
-```
-
-</Tab>
-</Tabs>
-
-</Step>
-</Steps>
-
-## Define Your Events
-
-Create a file to define your application events with full type safety:
+## 2. Define events once
 
 ```typescript title="lib/events.ts"
 import type { CreateEventDefinition, EventCollection } from 'trakoo';
 
 export const appEvents = {
+  buttonClicked: {
+    name: 'button_clicked',
+    category: 'engagement',
+    properties: {} as {
+      buttonId: string;
+      location: 'hero' | 'nav' | 'pricing';
+    }
+  },
   userSignedUp: {
     name: 'user_signed_up',
     category: 'user',
@@ -69,39 +35,15 @@ export const appEvents = {
       plan: 'free' | 'pro' | 'enterprise';
       referralSource?: string;
     }
-  },
-
-  buttonClicked: {
-    name: 'button_clicked',
-    category: 'engagement',
-    properties: {} as {
-      buttonId: string;
-      location: string;
-    }
-  },
-
-  featureUsed: {
-    name: 'feature_used',
-    category: 'engagement',
-    properties: {} as {
-      featureName: string;
-      userId: string;
-    }
   }
 } as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
 
-// Export types for use in your app
 export type AppEvents = typeof appEvents;
 ```
 
-## Client-Side Setup
+The object keys are for organizing your code. The `name` values are the event names you pass to `track()`.
 
-### Initialize Analytics
-
-Create your analytics instance with your chosen providers:
-
-<Tabs>
-<Tab title="PostHog">
+## 3. Create browser analytics
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
@@ -111,103 +53,57 @@ import type { AppEvents } from './events';
 export const analytics = createClientAnalytics<AppEvents>({
   providers: [
     new PostHogClientProvider({
-      token: 'your-posthog-api-key',
-      api_host: 'https://app.posthog.com'
+      token: import.meta.env.VITE_POSTHOG_KEY,
+      api_host: import.meta.env.VITE_POSTHOG_HOST
     })
   ],
   debug: import.meta.env.DEV
 });
 ```
 
-</Tab>
-<Tab title="Bento">
+`createClientAnalytics()` auto-initializes in the background. You can still call `await analytics.initialize()` yourself if your framework has a dedicated bootstrap point.
 
-```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from 'trakoo/client';
-import { BentoClientProvider } from 'trakoo/providers/client';
-import type { AppEvents } from './events';
+## 4. Track in your UI
 
-export const analytics = createClientAnalytics<AppEvents>({
-  providers: [
-    // Bento doesn't support anonymous page views - exclude by default
-    {
-      provider: new BentoClientProvider({
-        siteUuid: 'your-bento-site-uuid'
-      }),
-      exclude: ['pageView']
-    }
-  ],
-  debug: import.meta.env.DEV
-});
-```
-
-</Tab>
-<Tab title="Pirsch">
-
-```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from 'trakoo/client';
-import { PirschClientProvider } from 'trakoo/providers/client';
-import type { AppEvents } from './events';
-
-export const analytics = createClientAnalytics<AppEvents>({
-  providers: [
-    new PirschClientProvider({
-      identificationCode: 'your-pirsch-identification-code',
-      hostname: 'example.com'
-    })
-  ],
-  debug: import.meta.env.DEV
-});
-```
-
-</Tab>
-</Tabs>
-
-### Track Events
-
-Import and use your analytics instance anywhere in your app:
-
-```typescript title="components/SignupButton.tsx"
+```tsx title="components/SignupButton.tsx"
 import { analytics } from '@/lib/analytics';
 
 export function SignupButton() {
-  const handleClick = () => {
-    // Full type safety - autocomplete works!
-    analytics.track('button_clicked', {
-      buttonId: 'signup-cta',
-      location: 'hero'
-    });
-  };
-
-  return <button onClick={handleClick}>Sign Up</button>;
+  return (
+    <button
+      onClick={() => {
+        analytics.track('button_clicked', {
+          buttonId: 'signup-cta',
+          location: 'hero'
+        });
+      }}
+    >
+      Sign up
+    </button>
+  );
 }
 ```
 
-### Identify Users
+If you type `button_clickd` or forget `location`, TypeScript reports it before the event ships.
 
-Call `identify()` when users log in to attach user context to all events:
+## 5. Identify users when you know them
 
 ```typescript
-// After successful login
-analytics.identify('user-123', {
-  email: 'user@example.com',
-  plan: 'pro',
-  name: 'John Doe'
+analytics.identify('user_123', {
+  email: 'ada@example.com',
+  plan: 'pro'
 });
 
-// All subsequent events automatically include this context
-analytics.track('feature_used', {
-  featureName: 'export',
-  userId: 'user-123'
+analytics.track('user_signed_up', {
+  email: 'ada@example.com',
+  plan: 'pro',
+  referralSource: 'homepage'
 });
 ```
 
-## Server-Side Setup
+The browser analytics instance is stateful: after `identify()`, later events include the current user context until you call `reset()`.
 
-### Initialize Server Analytics
-
-<Tabs>
-<Tab title="PostHog">
+## 6. Add server analytics for critical events
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
@@ -220,134 +116,77 @@ export const serverAnalytics = createServerAnalytics<AppEvents>({
       apiKey: process.env.POSTHOG_API_KEY!,
       host: process.env.POSTHOG_HOST
     })
-  ],
-  debug: process.env.NODE_ENV === 'development'
+  ]
 });
 ```
 
-</Tab>
-<Tab title="Bento">
-
-```typescript title="lib/server-analytics.ts"
-import { createServerAnalytics } from 'trakoo/server';
-import { BentoServerProvider } from 'trakoo/providers/server';
-import type { AppEvents } from './events';
-
-export const serverAnalytics = createServerAnalytics<AppEvents>({
-  providers: [
-    // Bento doesn't support anonymous page views - exclude by default
-    {
-      provider: new BentoServerProvider({
-        siteUuid: process.env.BENTO_SITE_UUID!,
-        authentication: {
-          publishableKey: process.env.BENTO_PUBLISHABLE_KEY!,
-          secretKey: process.env.BENTO_SECRET_KEY!
-        }
-      }),
-      exclude: ['pageView']
-    }
-  ],
-  debug: process.env.NODE_ENV === 'development'
-});
-```
-
-</Tab>
-<Tab title="Pirsch">
-
-```typescript title="lib/server-analytics.ts"
-import { createServerAnalytics } from 'trakoo/server';
-import { PirschServerProvider } from 'trakoo/providers/server';
-import type { AppEvents } from './events';
-
-export const serverAnalytics = createServerAnalytics<AppEvents>({
-  providers: [
-    new PirschServerProvider({
-      hostname: process.env.PIRSCH_HOSTNAME!,
-      clientSecret: process.env.PIRSCH_ACCESS_KEY!
-    })
-  ],
-  debug: process.env.NODE_ENV === 'development'
-});
-```
-
-</Tab>
-</Tabs>
-
-### Track Server Events
-
-```typescript title="app/api/users/route.ts"
+```typescript title="app/api/signup/route.ts"
 import { serverAnalytics } from '@/lib/server-analytics';
 
-export async function POST(req: Request) {
-  const body = await req.json();
+export async function POST(request: Request) {
+  const user = await createUser(await request.json());
 
-  // Track with user context
   await serverAnalytics.track('user_signed_up', {
-    email: body.email,
-    plan: body.plan,
-    referralSource: 'landing-page'
+    email: user.email,
+    plan: user.plan
   }, {
-    userId: body.userId,
+    userId: user.id,
     user: {
-      email: body.email,
-      traits: {
-        plan: body.plan
-      }
+      email: user.email,
+      traits: { plan: user.plan }
     }
   });
 
-  // Important: Always shutdown in serverless environments
   await serverAnalytics.shutdown();
 
-  return new Response('OK');
+  return Response.json({ ok: true });
 }
 ```
 
-## Using Multiple Providers
+Server analytics is stateless: pass user context with each event. In serverless environments, call `shutdown()` before the function exits so providers can flush.
 
-You can use multiple analytics services simultaneously:
+## Switch or combine providers
 
-```typescript title="lib/analytics.ts"
-import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider, BentoClientProvider } from 'trakoo/providers/client';
+One setup can send events to several services:
+
+```typescript
+import {
+  BentoClientProvider,
+  PostHogClientProvider,
+  VisitorsClientProvider
+} from 'trakoo/providers/client';
 
 export const analytics = createClientAnalytics<AppEvents>({
   providers: [
-    // Product analytics with PostHog (all events)
-    new PostHogClientProvider({
-      token: import.meta.env.VITE_POSTHOG_KEY!
-    }),
-
-    // Email marketing with Bento (exclude anonymous page views)
+    new PostHogClientProvider({ token: import.meta.env.VITE_POSTHOG_KEY }),
     {
       provider: new BentoClientProvider({
-        siteUuid: import.meta.env.VITE_BENTO_SITE_UUID!
+        siteUuid: import.meta.env.VITE_BENTO_SITE_UUID
       }),
-      exclude: ['pageView']
-    }
+      methods: ['identify', 'track']
+    },
+    new VisitorsClientProvider({
+      token: import.meta.env.VITE_VISITORS_TOKEN
+    })
   ]
-});
-
-// One call, all providers receive the event
-analytics.track('user_signed_up', {
-  email: 'user@example.com',
-  plan: 'pro'
 });
 ```
 
-## Next Steps
+Provider routing lets you keep each service focused on the events it can handle well.
+
+## Next steps
 
 <CardGroup>
-  <Card title="Core Concepts" href="/docs/core-concepts" icon="book">
-    Understand events, providers, and user context
+  <Card title="Providers" href="/docs/providers" icon="plug">
+    Review official providers, required SDKs, and client/server support.
   </Card>
-  <Card title="Provider Guides" href="/docs/providers" icon="plug">
-    Detailed setup for each analytics provider
-  </Card>
-  <Card title="Framework Guides" href="/docs/guides/nextjs" icon="code">
-    Integration guides for Next.js, SvelteKit, and more
+  <Card title="Provider Routing" href="/docs/core-concepts/providers#provider-routing" icon="route">
+    Route methods and events to specific providers.
   </Card>
   <Card title="Client vs Server" href="/docs/core-concepts/client-vs-server" icon="server">
-    Choose the right tracking environment for each event
+    Decide where each kind of event belongs.
+  </Card>
+  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield">
+    Understand the generic types behind the autocomplete.
   </Card>
 </CardGroup>

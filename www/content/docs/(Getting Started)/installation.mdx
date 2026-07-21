@@ -1,93 +1,24 @@
 ---
 title: Installation
-description: Install trakoo and your analytics providers
+description: Install trakoo and the SDK packages required by each provider.
 ---
 
-Get trakoo installed and ready to track events in under 2 minutes.
+Install the core package first, then add only the provider SDKs your app uses.
 
-## Quick Install
-
-<Steps>
-<Step>
-
-### Install the Core Library
-
-```bash
-npm install trakoo
-```
-
-The core library is zero-dependency and handles all the analytics logic.
-
-</Step>
-
-<Step>
-
-### Install Provider SDKs
-
-Choose which analytics services you want to use and install their SDKs:
+## Core package
 
 <Tabs>
-<Tab title="PostHog">
-
-```bash
-npm install posthog-js posthog-node
-```
-
-PostHog provides product analytics, feature flags, and session replay.
-
-</Tab>
-<Tab title="Bento">
-
-```bash
-# Client-side: No installation needed (uses CDN)
-
-# Server-side only:
-npm install @bentonow/bento-node-sdk
-```
-
-Bento provides email marketing and automation with event tracking.
-
-</Tab>
-<Tab title="Pirsch">
-
-```bash
-npm install pirsch-sdk
-```
-
-Pirsch provides privacy-focused, cookie-free web analytics.
-
-</Tab>
-<Tab title="Multiple">
-
-```bash
-# Install SDKs for all providers you want to use
-npm install posthog-js posthog-node @bentonow/bento-node-sdk pirsch-sdk
-```
-
-You can use multiple providers simultaneously!
-
-</Tab>
-</Tabs>
-
-</Step>
-</Steps>
-
-## Package Manager Options
-
-Choose your preferred package manager:
-
-<Tabs>
-<Tab title="npm">
-
-```bash
-npm install trakoo
-```
-
-</Tab>
 <Tab title="pnpm">
 
 ```bash
 pnpm install trakoo
+```
+
+</Tab>
+<Tab title="npm">
+
+```bash
+npm install trakoo
 ```
 
 </Tab>
@@ -107,259 +38,143 @@ bun add trakoo
 </Tab>
 </Tabs>
 
-## What Gets Installed
-
-### Core Library (`trakoo`)
-
-- **Size**: ~10KB gzipped
-- **Dependencies**: Zero
-- **Exports**: Client, server, and shared types
-- **Tree-shakeable**: Only bundle what you use
-
-### Provider SDKs
-
-Provider SDKs are separate packages maintained by each analytics service:
-
-| Provider | Client SDK | Server SDK | Size |
-|----------|-----------|------------|------|
-| **PostHog** | `posthog-js` | `posthog-node` | ~50KB / ~200KB |
-| **Bento** | CDN (auto-loaded) | `@bentonow/bento-node-sdk` | ~20KB / ~150KB |
-| **Pirsch** | `pirsch-sdk` | `pirsch-sdk` | ~15KB |
-
-## Verify Installation
-
-Check that everything is installed correctly:
-
-```bash
-npm list trakoo
-```
-
-You should see:
-
-```
-your-project@1.0.0
-└── trakoo@x.x.x
-```
-
-## TypeScript Support
-
-trakoo is written in TypeScript and includes full type definitions.
-
-**No additional setup required!**
+trakoo’s public API is split by environment:
 
 ```typescript
-// Types work automatically
 import { createClientAnalytics } from 'trakoo/client';
-//       ↑ Full autocomplete and type checking
+import { createServerAnalytics } from 'trakoo/server';
+
+import { PostHogClientProvider } from 'trakoo/providers/client';
+import { PostHogServerProvider } from 'trakoo/providers/server';
 ```
 
-## Environment Setup
+Use `trakoo/providers/client` in browser bundles and `trakoo/providers/server` in server-only code.
 
-### Client-Side Environment Variables
+## Provider SDKs
 
-Create environment variables for your API keys:
+| Provider | Client support | Server support | Extra install |
+|----------|----------------|----------------|---------------|
+| PostHog | Yes | Yes | `posthog-js posthog-node` |
+| Bento | Yes, CDN script | Yes | `@bentonow/bento-node-sdk` for server |
+| Pirsch | Yes, CDN script | Yes | No extra package |
+| EmitKit | No | Yes | `@emitkit/js` |
+| Visitors | Yes, CDN script | No | No extra package |
+| Proxy | Yes | Server ingest helpers | No extra package |
+
+<Tabs>
+<Tab title="PostHog">
+
+```bash
+pnpm install posthog-js posthog-node
+```
+
+</Tab>
+<Tab title="Bento">
+
+```bash
+pnpm install @bentonow/bento-node-sdk
+```
+
+The browser provider loads Bento from its CDN. Install the SDK only when using `BentoServerProvider`.
+
+</Tab>
+<Tab title="Pirsch">
+
+```bash
+# No extra package required
+```
+
+trakoo’s Pirsch providers call Pirsch directly or load the browser script at runtime.
+
+</Tab>
+<Tab title="EmitKit">
+
+```bash
+pnpm install @emitkit/js
+```
+
+EmitKit is server-side only. Use the [Proxy Provider](/docs/providers/proxy) if you need browser events to reach EmitKit.
+
+</Tab>
+<Tab title="Visitors">
+
+```bash
+# No extra package required
+```
+
+`VisitorsClientProvider` loads `https://cdn.visitors.now/v.js` at runtime.
+
+</Tab>
+</Tabs>
+
+## Environment variables
+
+Keep browser tokens public and server keys private.
 
 <Tabs>
 <Tab title="Vite">
 
 ```bash title=".env.local"
-VITE_POSTHOG_KEY=your-posthog-api-key
+VITE_POSTHOG_KEY=your-posthog-project-key
+VITE_POSTHOG_HOST=https://app.posthog.com
 VITE_BENTO_SITE_UUID=your-bento-site-uuid
-VITE_PIRSCH_IDENTIFICATION_CODE=your-pirsch-code
-```
-
-Access with `import.meta.env`:
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({
-      token: import.meta.env.VITE_POSTHOG_KEY
-    })
-  ]
-});
+VITE_VISITORS_TOKEN=your-visitors-token
 ```
 
 </Tab>
 <Tab title="Next.js">
 
 ```bash title=".env.local"
-NEXT_PUBLIC_POSTHOG_KEY=your-posthog-api-key
+NEXT_PUBLIC_POSTHOG_KEY=your-posthog-project-key
+NEXT_PUBLIC_POSTHOG_HOST=https://app.posthog.com
 NEXT_PUBLIC_BENTO_SITE_UUID=your-bento-site-uuid
-NEXT_PUBLIC_PIRSCH_CODE=your-pirsch-code
-```
+NEXT_PUBLIC_VISITORS_TOKEN=your-visitors-token
 
-Access with `process.env`:
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({
-      token: process.env.NEXT_PUBLIC_POSTHOG_KEY
-    })
-  ]
-});
+POSTHOG_API_KEY=your-posthog-server-key
+BENTO_SITE_UUID=your-bento-site-uuid
+BENTO_PUBLISHABLE_KEY=your-bento-publishable-key
+BENTO_SECRET_KEY=your-bento-secret-key
+EMITKIT_API_KEY=emitkit_xxx
+PIRSCH_ACCESS_KEY=pa_xxx
 ```
 
 </Tab>
 <Tab title="SvelteKit">
 
 ```bash title=".env"
-PUBLIC_POSTHOG_KEY=your-posthog-api-key
+PUBLIC_POSTHOG_KEY=your-posthog-project-key
+PUBLIC_POSTHOG_HOST=https://app.posthog.com
 PUBLIC_BENTO_SITE_UUID=your-bento-site-uuid
-PUBLIC_PIRSCH_CODE=your-pirsch-code
-```
+PUBLIC_VISITORS_TOKEN=your-visitors-token
 
-Access with `$env`:
-
-```typescript
-import { PUBLIC_POSTHOG_KEY } from '$env/static/public';
-
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({
-      token: PUBLIC_POSTHOG_KEY
-    })
-  ]
-});
-```
-
-</Tab>
-<Tab title="Create React App">
-
-```bash title=".env.local"
-REACT_APP_POSTHOG_KEY=your-posthog-api-key
-REACT_APP_BENTO_SITE_UUID=your-bento-site-uuid
-REACT_APP_PIRSCH_CODE=your-pirsch-code
-```
-
-Access with `process.env`:
-
-```typescript
-const analytics = createClientAnalytics({
-  providers: [
-    new PostHogClientProvider({
-      token: process.env.REACT_APP_POSTHOG_KEY
-    })
-  ]
-});
+POSTHOG_API_KEY=your-posthog-server-key
+BENTO_SITE_UUID=your-bento-site-uuid
+BENTO_PUBLISHABLE_KEY=your-bento-publishable-key
+BENTO_SECRET_KEY=your-bento-secret-key
+EMITKIT_API_KEY=emitkit_xxx
+PIRSCH_ACCESS_KEY=pa_xxx
 ```
 
 </Tab>
 </Tabs>
 
-### Server-Side Environment Variables
+## Verify imports
 
-For server-side tracking, use non-public environment variables:
-
-```bash title=".env.local"
-# Server-only - NOT prefixed with PUBLIC_/NEXT_PUBLIC_/etc
-POSTHOG_API_KEY=your-posthog-api-key
-BENTO_SECRET_KEY=your-bento-secret-key
-PIRSCH_ACCESS_KEY=your-pirsch-access-key
-```
+Create a small file and let TypeScript confirm the package resolves:
 
 ```typescript
-// Server-side code only
-const serverAnalytics = createServerAnalytics({
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
+
+const analytics = createClientAnalytics({
   providers: [
-    new PostHogServerProvider({
-      apiKey: process.env.POSTHOG_API_KEY
+    new PostHogClientProvider({
+      token: 'test'
     })
   ]
 });
+
+analytics.track('test_event', {});
 ```
 
-:::warning
-**Never expose server API keys to the client!**
-
-- Client vars: `VITE_*`, `NEXT_PUBLIC_*`, `PUBLIC_*`, `REACT_APP_*`
-- Server vars: No prefix (e.g., `POSTHOG_API_KEY`)
-:::
-
-## Common Issues
-
-### Module Not Found
-
-If you see `Cannot find module 'trakoo/client'`:
-
-1. **Check your package.json**: Ensure `trakoo` is installed
-2. **Clear node_modules**: Run `rm -rf node_modules && npm install`
-3. **Check import path**: Use `/client` or `/server`, not the root package
-
-```typescript
-// ✅ Correct
-import { createClientAnalytics } from 'trakoo/client';
-
-// ❌ Wrong
-import { createClientAnalytics } from 'trakoo';
-```
-
-### TypeScript Errors
-
-If you see TypeScript errors about missing types:
-
-1. **Update TypeScript**: Ensure you're using TypeScript 4.7+
-2. **Check tsconfig.json**: Enable `moduleResolution: "bundler"` or `"node16"`
-
-```json title="tsconfig.json"
-{
-  "compilerOptions": {
-    "moduleResolution": "bundler",  // or "node16"
-    "esModuleInterop": true,
-    "skipLibCheck": false
-  }
-}
-```
-
-### Provider SDK Errors
-
-If provider SDKs fail to load:
-
-1. **Check SDK installation**: Run `npm list posthog-js` (or other SDK)
-2. **Install peer dependencies**: Some SDKs have peer dependencies
-3. **Check SDK compatibility**: Ensure SDK versions are compatible
-
-```bash
-# Example: PostHog SDK not found
-npm install posthog-js posthog-node
-
-# Example: Bento SDK not found
-npm install @bentonow/bento-node-sdk
-```
-
-## Upgrading
-
-To upgrade to the latest version:
-
-```bash
-npm install trakoo@latest
-```
-
-Check the [changelog](https://github.com/stacksee/stacksee-analytics/releases) for breaking changes.
-
-## Uninstalling
-
-To completely remove trakoo:
-
-```bash
-# Remove core library
-npm uninstall trakoo
-
-# Remove provider SDKs
-npm uninstall posthog-js posthog-node @bentonow/bento-node-sdk pirsch-sdk
-```
-
-## Next Steps
-
-<CardGroup>
-  <Card title="Your First Event" href="/docs/your-first-event" icon="rocket">
-    Track your first analytics event in under 2 minutes
-  </Card>
-  <Card title="Core Concepts" href="/docs/core-concepts/events" icon="book">
-    Learn about events, providers, and type safety
-  </Card>
-  <Card title="Framework Guides" href="/docs/guides/nextjs" icon="code">
-    Integration guides for Next.js, SvelteKit, and more
-  </Card>
-</CardGroup>
+If your project compiles, continue to the [Quick Start](/docs/quick-start).

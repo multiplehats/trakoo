@@ -164,7 +164,7 @@ import { analytics } from '@/lib/analytics';
 
 export function SignupButton() {
   const handleClick = () => {
-    analytics.track('buttonClicked', {
+    analytics.track('button_clicked', {
       buttonId: 'signup-cta',
       location: 'hero'
     });
@@ -216,7 +216,7 @@ export async function createUser(formData: FormData) {
   });
 
   // Track signup
-  await serverAnalytics.track('userSignedUp', {
+  await serverAnalytics.track('user_signed_up', {
     email,
     plan
   }, {
@@ -249,7 +249,7 @@ export async function POST(request: Request) {
   });
 
   // Track event
-  await serverAnalytics.track('userSignedUp', {
+  await serverAnalytics.track('user_signed_up', {
     email: body.email,
     plan: body.plan
   }, {
@@ -362,7 +362,7 @@ import { getUserContext } from '@/lib/get-user-context';
 export async function updateProfile(formData: FormData) {
   const userContext = await getUserContext();
 
-  await serverAnalytics.track('profileUpdated', {
+  await serverAnalytics.track('profile_updated', {
     fields: Array.from(formData.keys())
   }, userContext);
 
@@ -384,7 +384,7 @@ export async function middleware(request: NextRequest) {
   if (request.nextUrl.pathname.startsWith('/api/')) {
     const user = await getUserFromRequest(request);
 
-    await serverAnalytics.track('apiRequest', {
+    await serverAnalytics.track('api_request', {
       path: request.nextUrl.pathname,
       method: request.method
     }, user ? {
@@ -438,7 +438,7 @@ export async function signup(formData: FormData) {
   const user = await db.user.create({ data: { email } });
 
   // Track signup
-  await serverAnalytics.track('userSignedUp', {
+  await serverAnalytics.track('user_signed_up', {
     email,
     plan: 'free'
   }, {
@@ -468,7 +468,7 @@ export function SignupForm() {
     e.preventDefault();
 
     // Track client-side
-    analytics.track('formSubmitted', {
+    analytics.track('form_submitted', {
       formId: 'signup',
       formType: 'signup'
     });
@@ -503,7 +503,7 @@ import { serverAnalytics } from '@/lib/server-analytics';
 export const runtime = 'edge';
 
 export async function GET(request: NextRequest) {
-  await serverAnalytics.track('edgeFunction', {
+  await serverAnalytics.track('edge_function', {
     path: request.nextUrl.pathname
   });
 
@@ -528,7 +528,7 @@ export async function GET(request: NextRequest) {
 
   // Track in background without blocking response
   waitUntil(
-    serverAnalytics.track('dataFetched', {
+    serverAnalytics.track('data_fetched', {
       count: data.length
     }).then(() => serverAnalytics.shutdown())
   );
@@ -551,7 +551,7 @@ export async function middleware(request: NextRequest) {
 
   if (!token && request.nextUrl.pathname.startsWith('/dashboard')) {
     // Track unauthorized access
-    await serverAnalytics.track('unauthorizedAccess', {
+    await serverAnalytics.track('unauthorized_access', {
       path: request.nextUrl.pathname
     });
 
@@ -580,7 +580,7 @@ export default function Error({
   reset: () => void;
 }) {
   useEffect(() => {
-    analytics.track('errorOccurred', {
+    analytics.track('error_occurred', {
       message: error.message,
       digest: error.digest || 'unknown'
     });

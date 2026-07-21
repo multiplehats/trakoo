@@ -222,7 +222,7 @@ import type { EventCategory } from 'trakoo';
 // Predefined categories (fully typed)
 const category: EventCategory = 'user';
 //                             ↑ Autocomplete suggests:
-// 'product' | 'user' | 'navigation' | 'conversion' | 'engagement' | 'error' | 'performance'
+// 'engagement' | 'user' | 'navigation' | 'error' | 'performance' | 'conversion'
 
 // Custom categories (type-safe)
 export const appEvents = {
@@ -273,7 +273,7 @@ export const appEvents = {
 export const appEvents = {
   productsViewed: {
     name: 'products_viewed',
-    category: 'product',
+    category: 'product', // Custom category
     properties: {} as {
       productIds: string[];
       categories: Array<'electronics' | 'clothing' | 'food'>;

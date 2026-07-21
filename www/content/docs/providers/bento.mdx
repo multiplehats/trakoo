@@ -36,8 +36,8 @@ const analytics = createClientAnalytics({
   providers: [
     // Use PostHog for page views and anonymous tracking
     new PostHogClientProvider({
-      apiKey: 'your-posthog-key',
-      host: 'https://app.posthog.com'
+      token: 'your-posthog-key',
+      api_host: 'https://app.posthog.com'
     }),
     // Use Bento only for identified user events (pageView excluded by default)
     {
@@ -78,7 +78,8 @@ const serverAnalytics = createServerAnalytics({
   providers: [
     // Use Pirsch for page views
     new PirschServerProvider({
-      accessToken: process.env.PIRSCH_ACCESS_TOKEN!
+      hostname: 'example.com',
+      clientSecret: process.env.PIRSCH_ACCESS_KEY!
     }),
     // Use Bento only for identified user events (pageView excluded by default)
     {

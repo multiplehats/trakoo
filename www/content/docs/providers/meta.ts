@@ -7,6 +7,7 @@ export default defineMeta({
 		"posthog",
 		"bento",
 		"pirsch",
+		"emitkit",
 		"visitors",
 		"proxy",
 		"custom",

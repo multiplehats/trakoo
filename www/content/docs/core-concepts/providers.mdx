@@ -128,13 +128,12 @@ interface AnalyticsProvider {
   pageView(properties?: Record<string, unknown>, context?: EventContext): Promise<void> | void;
 
   // Track page leave
-  pageLeave(properties?: Record<string, unknown>, context?: EventContext): Promise<void> | void;
+  pageLeave?(properties?: Record<string, unknown>, context?: EventContext): Promise<void> | void;
 
   // Reset user session (logout)
   reset(): Promise<void> | void;
 
-  // Cleanup (server-side only)
-  shutdown?(): Promise<void>;
+  // Some server providers also expose shutdown(); ServerAnalytics calls it when present.
 }
 ```
 
@@ -413,7 +412,7 @@ const analytics = createClientAnalytics({
 ```typescript
 const analytics = createClientAnalytics({
   providers: [
-    new ProxyClientProvider({
+    new ProxyProvider({
       endpoint: '/api/analytics'  // Bypass ad-blockers
     })
   ]
@@ -458,7 +457,7 @@ Always import providers from the correct path to avoid bundling issues:
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
 
-// ❌ Wrong - may bundle Node.js code
+// ❌ Wrong - no provider aggregate export
 import { PostHogClientProvider } from 'trakoo/providers';
 ```
 
@@ -470,7 +469,7 @@ import { PostHogClientProvider } from 'trakoo/providers';
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
 
-// ❌ Wrong - may bundle browser code
+// ❌ Wrong - no provider aggregate export
 import { PostHogServerProvider } from 'trakoo/providers';
 ```
 

@@ -136,7 +136,7 @@ export const analytics = createClientAnalytics<AppEvents>({
   import { analytics } from '$lib/analytics';
 
   function handleClick() {
-    analytics.track('buttonClicked', {
+    analytics.track('button_clicked', {
       buttonId: 'signup-cta',
       location: 'hero'
     });
@@ -182,7 +182,7 @@ export const load: PageServerLoad = async ({ params }) => {
   const post = await db.getPost(params.slug);
 
   // Track page view
-  await serverAnalytics.track('pageViewed', {
+  await serverAnalytics.track('page_viewed', {
     path: `/blog/${params.slug}`,
     title: post.title
   });
@@ -218,7 +218,7 @@ export const actions: Actions = {
     });
 
     // Track signup
-    await serverAnalytics.track('userSignedUp', {
+    await serverAnalytics.track('user_signed_up', {
       email,
       plan
     }, {
@@ -253,7 +253,7 @@ export const POST: RequestHandler = async ({ request }) => {
   });
 
   // Track event
-  await serverAnalytics.track('userSignedUp', {
+  await serverAnalytics.track('user_signed_up', {
     email: body.email,
     plan: body.plan
   }, {
@@ -348,7 +348,7 @@ import type { PageServerLoad, Actions } from './$types';
 export const load: PageServerLoad = async (event) => {
   const userContext = getUserContext(event);
 
-  await serverAnalytics.track('profileViewed', {}, userContext);
+  await serverAnalytics.track('profile_viewed', {}, userContext);
   await serverAnalytics.shutdown();
 
   return {
@@ -361,7 +361,7 @@ export const actions: Actions = {
     const data = await event.request.formData();
     const userContext = getUserContext(event);
 
-    await serverAnalytics.track('profileUpdated', {
+    await serverAnalytics.track('profile_updated', {
       fields: Array.from(data.keys())
     }, userContext);
 
@@ -392,7 +392,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   if (event.url.pathname.startsWith('/api/')) {
     const userContext = getUserContext(event);
 
-    await serverAnalytics.track('apiRequest', {
+    await serverAnalytics.track('api_request', {
       path: event.url.pathname,
       method: event.request.method
     }, userContext);
@@ -421,7 +421,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   action="?/signup"
   use:enhance={() => {
     // Track form submission client-side
-    analytics.track('formSubmitted', {
+    analytics.track('form_submitted', {
       formId: 'signup',
       formType: 'signup'
     });
@@ -468,7 +468,7 @@ export const actions: Actions = {
     const user = await db.user.create({ data: { email } });
 
     // Track server-side
-    await serverAnalytics.track('userSignedUp', {
+    await serverAnalytics.track('user_signed_up', {
       email,
       plan: 'free'
     }, {
@@ -502,7 +502,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   // Protect dashboard routes
   if (event.url.pathname.startsWith('/dashboard') && !event.locals.user) {
     // Track unauthorized access
-    await serverAnalytics.track('unauthorizedAccess', {
+    await serverAnalytics.track('unauthorized_access', {
       path: event.url.pathname
     });
 
@@ -524,7 +524,7 @@ export const handle: Handle = async ({ event, resolve }) => {
   import { analytics } from '$lib/analytics';
 
   onMount(() => {
-    analytics.track('errorOccurred', {
+    analytics.track('error_occurred', {
       message: $page.error?.message || 'Unknown error',
       status: $page.status
     });
@@ -544,7 +544,7 @@ import type { LayoutServerLoad } from './$types';
 export const load: LayoutServerLoad = async ({ locals, url }) => {
   // Track if user is logged in
   if (locals.user) {
-    await serverAnalytics.track('pageView', {
+    await serverAnalytics.track('page_view', {
       path: url.pathname,
       title: 'App'
     }, {
@@ -580,7 +580,7 @@ export const config = {
 };
 
 export const GET: RequestHandler = async () => {
-  await serverAnalytics.track('edgeFunction', {
+  await serverAnalytics.track('edge_function', {
     runtime: 'edge'
   });
 
@@ -603,7 +603,7 @@ import type { RequestHandler } from './$types';
 export const GET: RequestHandler = async () => {
   const data = await fetchData();
 
-  await serverAnalytics.track('dataFetched', {
+  await serverAnalytics.track('data_fetched', {
     count: data.length
   });
 

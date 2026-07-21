@@ -307,8 +307,9 @@ Always use environment-specific imports:
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
 
-// ❌ Wrong - may bundle Node.js dependencies
+// ❌ Wrong - the root package exports shared types only
 import { createClientAnalytics } from 'trakoo';
+// ❌ Wrong - there is no provider aggregate export
 import { PostHogClientProvider } from 'trakoo/providers';
 ```
 
@@ -320,8 +321,9 @@ import { PostHogClientProvider } from 'trakoo/providers';
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
 
-// ❌ Wrong - may bundle browser code
+// ❌ Wrong - the root package exports shared types only
 import { createServerAnalytics } from 'trakoo';
+// ❌ Wrong - there is no provider aggregate export
 import { PostHogServerProvider } from 'trakoo/providers';
 ```
 

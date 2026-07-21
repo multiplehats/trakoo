@@ -22,14 +22,14 @@ export interface ClientAnalyticsConfig {
  * @example
  * ```typescript
  * import { createClientAnalytics } from 'trakoo/client';
- * import { PostHogClientProvider } from 'trakoo/providers/posthog';
+ * import { PostHogClientProvider } from 'trakoo/providers/client';
  * import { AppEvents } from './events';
  *
  * const analytics = createClientAnalytics<typeof AppEvents>({
  *   providers: [
  *     new PostHogClientProvider({
- *       apiKey: 'your-api-key',
- *       host: 'https://app.posthog.com'
+ *       token: 'your-api-key',
+ *       api_host: 'https://app.posthog.com'
  *     })
  *   ],
  *   debug: true,

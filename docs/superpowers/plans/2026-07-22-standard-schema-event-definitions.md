@@ -93,6 +93,8 @@ expectTypeOf<EventOutputMap<typeof events>["button_clicked"]>()
 	.toEqualTypeOf<ClickProperties>();
 expectTypeOf<EventInputMap<typeof events>["session_started"]>()
 	.toEqualTypeOf<undefined>();
+expectTypeOf<(typeof events)["buttonClicked"]["category"]>()
+	.toEqualTypeOf<"engagement">();
 
 // @ts-expect-error primitive
 typed<string>();
@@ -242,12 +244,19 @@ export type EventOutputMap<R extends EventRegistry<EventDefinitions>> = {
 Then define readable exported tuple helpers:
 
 ```typescript
-type ClientTrackArgs<R, N> = EventInputMap<R>[N] extends undefined
+export type ClientTrackArgs<
+	R extends EventRegistry<EventDefinitions>,
+	N extends EventName<R>,
+> = EventInputMap<R>[N] extends undefined
 	? [eventName: N]
 	: [eventName: N, properties: EventInputMap<R>[N]];
 
-type ServerTrackArgs<R, N, O> = EventInputMap<R>[N] extends undefined
-	? [eventName: N] | [eventName: N, properties: undefined, options: O]
+export type ServerTrackArgs<
+	R extends EventRegistry<EventDefinitions>,
+	N extends EventName<R>,
+	O,
+> = EventInputMap<R>[N] extends undefined
+	? [eventName: N] | [eventName: N, options: O]
 	: [eventName: N, properties: EventInputMap<R>[N], options?: O];
 ```
 
@@ -301,6 +310,23 @@ object checks, propertyless normalization/rejection, default drop, opt-in throw,
 and absence of input/payload fields on errors. Use a deferred async validator to
 prove resolution does not occur before validation finishes.
 
+For a transformed fixture, statically assert that a successful resolution keeps
+the selected output:
+
+```typescript
+const resolved = await resolveEvent(
+	events,
+	"purchase_completed",
+	{ amount: "49" },
+	true,
+	undefined,
+	false,
+);
+expectTypeOf(resolved?.properties).toEqualTypeOf<
+	{ amount: number } | undefined
+>();
+```
+
 - [ ] **Step 2: Confirm failure**
 
 ```bash
@@ -341,22 +367,30 @@ the validator exception as `cause` because it may retain input.
 - [ ] **Step 4: Implement `resolveEvent()`**
 
 ```typescript
-export interface ResolvedEvent {
-	readonly name: string;
+export interface ResolvedEvent<
+	R extends EventRegistry<EventDefinitions>,
+	N extends EventName<R>,
+> {
+	readonly name: N;
 	readonly category: EventCategory;
-	readonly properties: Record<string, unknown>;
+	readonly properties: EventOutputMap<R>[N];
 }
 
-export async function resolveEvent(
-	registry: EventRegistry<EventDefinitions>,
-	eventName: string,
+export async function resolveEvent<
+	R extends EventRegistry<EventDefinitions>,
+	N extends EventName<R>,
+>(
+	registry: R,
+	eventName: N,
 	input: unknown,
+	inputProvided: boolean,
 	validation: ValidationConfig | undefined,
 	debug: boolean,
-): Promise<ResolvedEvent | undefined>;
+): Promise<ResolvedEvent<R, N> | undefined>;
 ```
 
-Lookup, handle propertyless/type/schema definitions, await validation, and
+Lookup, use `inputProvided` to distinguish omission from explicit `undefined`,
+handle propertyless/type/schema definitions, await validation, and
 accept only non-null non-array object output. Invoke `onError` once; contain
 sync throws and rejected thenables; return `undefined` for drop or throw the
 normalized error for strict mode. Debug fallback logs only `{ code, eventName,
@@ -421,6 +455,22 @@ Change `UserContext<TTraits>` and `EventContext<TTraits>` constraints from
 when passing traits or ordinary-interface event properties to the provider
 transport API.
 
+Make `BaseEvent` generic so successful schema output remains selected until that
+transport boundary:
+
+```typescript
+export interface BaseEvent<
+	TProperties extends object = Record<string, unknown>,
+> {
+	category: EventCategory;
+	action: string;
+	timestamp?: number;
+	userId?: string;
+	sessionId?: string;
+	properties?: TProperties;
+}
+```
+
 - [ ] **Step 4: Refactor `BrowserAnalytics`**
 
 ```typescript
@@ -435,9 +485,14 @@ export class BrowserAnalytics<
 ```
 
 Store registry, validation config, debug, and `enabled !== false`. Short-circuit
-before initialization when disabled; call `resolveEvent`; return on drop; build
-`BaseEvent` from resolved name/category/properties. Remove category derivation.
-Preserve browser/session context and provider routing.
+before initialization when disabled. Pass `args.length > 1` as
+`inputProvided` so a JavaScript call such as `track("session_started",
+undefined)` is rejected rather than treated as omission. Call `resolveEvent`;
+return on drop; build
+`BaseEvent<EventOutputMap<TRegistry>[TName]>` from resolved
+name/category/properties. Remove category derivation. Preserve browser/session
+context and provider routing, widening to the provider's existing `BaseEvent`
+transport type only in the call that invokes each provider.
 
 - [ ] **Step 5: Replace the client factory and exports**
 
@@ -494,7 +549,9 @@ schema transformations, disabled mode, drop/throw, and these propertyless forms:
 
 ```typescript
 await analytics.track("session_started");
-await analytics.track("session_started", undefined, { userId: "user_123" });
+await analytics.track("session_started", { userId: "user_123" });
+// @ts-expect-error no undefined properties placeholder
+await analytics.track("session_started", undefined);
 // @ts-expect-error properties are forbidden
 await analytics.track("session_started", { unexpected: true });
 ```
@@ -502,6 +559,9 @@ await analytics.track("session_started", { unexpected: true });
 Add the routing registry to all server sections of
 `test/provider-routing.test.ts`. Give proxy tests a registry containing each
 replayed track name and assert an unknown raw name follows validation policy.
+Create the server instance with `userTraits: typed<UserTraits>()` and verify raw
+proxy `identify` traits and enriched user context cross only the JSON boundary
+cast while the public server API remains strictly typed.
 
 - [ ] **Step 2: Confirm failure**
 
@@ -538,10 +598,19 @@ export class ServerAnalytics<
 
 Store registry/validation/debug/enabled. Short-circuit when disabled, retain the
 initialized check, resolve before context construction, use definition category,
-and remove category derivation. Widen ordinary-interface output only where the
-shared provider transport requires `Record<string, unknown>`. For propertyless
-events, only omitted or `undefined` properties are valid; options occupy
-argument three.
+and remove category derivation. Construct
+`BaseEvent<EventOutputMap<TRegistry>[TName]>`, widening ordinary-interface output
+only in the call to the shared provider transport. For propertyless events, omit
+the properties slot and accept server options directly in argument two. Reject
+an explicit `undefined` second argument at runtime. To parse the overload, look
+up the runtime definition: for `noProperties()`, treat an object in argument two
+as options and set `inputProvided` to `false`. If argument two is present but is
+`undefined`, null, an array, a non-object value, or contains keys outside
+`userId`, `sessionId`, `context`, and `user`, route `invalid_properties` through
+the shared failure policy. For other definitions, use argument two as input,
+argument three as options, and set `inputProvided` from `args.length > 1`.
+Unknown definitions still flow into `resolveEvent()` and its configured failure
+policy.
 
 - [ ] **Step 4: Replace server factory inference**
 
@@ -568,7 +637,11 @@ await analytics.track(
 ```
 
 Do not add an untyped public tracking method; runtime lookup/validation must
-still reject or drop unknown proxy events.
+still reject or drop unknown proxy events. Parameterize `ingestProxyEvents()`
+and `createProxyHandler()` by both registry and inferred traits. Keep contained
+casts at the JSON boundary for `event.traits as TUserTraits` and enriched
+`EventContext<TUserTraits>`; do not widen `ServerAnalytics.identify()` or its
+context types to make raw proxy data compile.
 
 - [ ] **Step 6: Verify and commit**
 
@@ -591,8 +664,10 @@ Expected: all code tests, typecheck, and lint PASS before commit.
 - Modify: `src/index.ts`, `src/client/index.ts`, `src/server/index.ts`
 - Modify: `test/client.test.ts`, `test/server.test.ts`
 - Create: `test/standard-schema-integration.test.ts`
+- Create: `test/type-diagnostics.test.ts`
+- Create: `test/fixtures/invalid-event-usage.ts`
 - Create: `scripts/verify-package.mjs`
-- Modify: `package.json`
+- Modify: `package.json`, `tsconfig.json`
 
 **Interfaces:**
 - Consumes: completed registry-bound adapters.
@@ -625,10 +700,21 @@ provider properties `{ orderId: "order_1", amount: 49 }`. Export tests assert
 root helpers/error are present and old event helpers/client singleton functions
 are absent.
 
+Add a deliberately invalid standalone consumer fixture with a misspelled event
+name and incorrect properties. In `test/type-diagnostics.test.ts`, run the
+pinned workspace compiler with `--pretty false`, assert it fails, assert the
+output names the invalid call and expected public event/property types, keep the
+diagnostic below 30 lines, and assert internal helpers such as
+`PropertiesForName` and `DefinitionForName` do not appear. Use `pnpm.cmd` on
+Windows and `pnpm` elsewhere. Add this one fixture path to `tsconfig.json`'s
+`exclude` list so the intentional errors do not break the normal project
+typecheck; the diagnostic test compiles it explicitly with equivalent strict,
+Bundler-resolution flags.
+
 - [ ] **Step 2: Confirm stale public API failure**
 
 ```bash
-pnpm vitest run test/standard-schema-integration.test.ts test/client.test.ts test/server.test.ts
+pnpm vitest run test/standard-schema-integration.test.ts test/type-diagnostics.test.ts test/client.test.ts test/server.test.ts
 pnpm build
 ```
 
@@ -647,11 +733,10 @@ EventMapFromCollection
 EventDefinition
 ExtractEventName
 ExtractEventProperties
-AnyEventName
-AnyEventProperties
 ```
 
-Retain transport/provider types. Export `defineEvents`, `typed`,
+Retain transport/provider types, including the low-level `AnyEventName` and
+`AnyEventProperties` aliases. Export `defineEvents`, `typed`,
 `noProperties`, maps, configs, and `AnalyticsValidationError` from appropriate
 entry points. Root runtime imports must remain environment-neutral.
 
@@ -663,20 +748,18 @@ Implement `scripts/verify-package.mjs` with this complete flow:
 ```javascript
 import { execFileSync } from "node:child_process";
 import {
-	mkdirSync,
 	mkdtempSync,
 	readFileSync,
 	rmSync,
 	writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const contextDirectory = join(root, ".context");
-mkdirSync(contextDirectory, { recursive: true });
 const consumerDirectory = mkdtempSync(
-	join(contextDirectory, "package-consumer-"),
+	join(tmpdir(), "trakoo-package-consumer-"),
 );
 let tarballPath;
 
@@ -754,13 +837,75 @@ try {
 	if (!installedManifest.dependencies?.["@standard-schema/spec"]) {
 		throw new Error("packed trakoo is missing @standard-schema/spec dependency");
 	}
+
+	const concreteValidators = ["zod", "valibot", "arktype"];
+	for (const field of [
+		"dependencies",
+		"optionalDependencies",
+		"peerDependencies",
+	]) {
+		for (const packageName of concreteValidators) {
+			if (installedManifest[field]?.[packageName]) {
+				throw new Error(`packed trakoo declares concrete validator ${packageName}`);
+			}
+		}
+	}
+
+	const rootBundle = readFileSync(
+		join(consumerDirectory, "node_modules/trakoo/dist/index.js"),
+		"utf8",
+	);
+	for (const prohibitedImport of [
+		...concreteValidators,
+		"posthog-js",
+		"posthog-node",
+		"@openpanel/sdk",
+		"@openpanel/web",
+	]) {
+		if (rootBundle.includes(prohibitedImport)) {
+			throw new Error(`root bundle includes ${prohibitedImport}`);
+		}
+	}
+
+	// Prove root event helpers load without optional provider packages present.
+	run("npm", ["prune", "--omit=optional"], consumerDirectory);
+	writeFileSync(
+		join(consumerDirectory, "consumer.ts"),
+		String.raw`
+import { defineEvents, typed } from "trakoo";
+
+defineEvents({
+	checked: {
+		name: "checked",
+		category: "test",
+		properties: typed<{ value: string }>(),
+	},
+});
+`,
+	);
+	run(
+		process.execPath,
+		[
+			resolve(root, "node_modules/typescript/bin/tsc"),
+			"--project",
+			join(consumerDirectory, "tsconfig.json"),
+		],
+		consumerDirectory,
+	);
+	run(
+		process.execPath,
+		["--input-type=module", "--eval", 'await import("trakoo")'],
+		consumerDirectory,
+	);
 } finally {
 	if (tarballPath) rmSync(tarballPath, { force: true });
 	rmSync(consumerDirectory, { recursive: true, force: true });
 }
 ```
 
-Do not install Zod in this fixture; it verifies the validator-free package path.
+Do not install Zod in this fixture. The initial install verifies the full client
+declaration path; pruning optional provider dependencies and smoke-importing the
+root separately verifies the environment-neutral, validator-free root path.
 
 - [ ] **Step 5: Verify and commit**
 
@@ -770,7 +915,7 @@ pnpm typecheck
 pnpm lint
 pnpm build
 pnpm verify:package
-git add package.json src/core/events/index.ts src/core/events/types.ts src/index.ts src/client/index.ts src/server/index.ts test/client.test.ts test/server.test.ts test/standard-schema-integration.test.ts scripts/verify-package.mjs
+git add package.json tsconfig.json src/core/events/index.ts src/core/events/types.ts src/index.ts src/client/index.ts src/server/index.ts test/client.test.ts test/server.test.ts test/standard-schema-integration.test.ts test/type-diagnostics.test.ts test/fixtures/invalid-event-usage.ts scripts/verify-package.mjs
 git commit -m "feat: publish the Standard Schema event API"
 ```
 
@@ -938,8 +1083,11 @@ Create `.changeset/standard-schema-events.md`:
 "trakoo": major
 ---
 
-Replace type-asserted event collections with runtime `defineEvents()` registries based on Standard Schema. Add direct validator interoperability, validator-free `typed<T>()` events, propertyless events, inferred client/server factories, normalized validation failures, and validated provider outputs. This removes the legacy event helper types and client singleton convenience API; see the Standard Schema migration guide.
+Replace type-asserted event collections with runtime `defineEvents()` registries based on Standard Schema. Add direct validator interoperability, validator-free `typed<T>()` events, propertyless events, inferred client/server factories, normalized validation failures, and validated provider outputs. This removes the legacy event helper types and client singleton convenience API; see the [Standard Schema migration guide](https://trakoo.co/docs/guides/standard-schema-migration).
 ```
+
+The Changesets release workflow carries this linked note into `CHANGELOG.md`;
+do not hand-edit generated changelog content before the release is published.
 
 - [ ] **Step 5: Run stale API checks**
 

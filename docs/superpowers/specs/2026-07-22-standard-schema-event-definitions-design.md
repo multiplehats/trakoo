@@ -116,11 +116,16 @@ analytics.track("session_started");
 
 `noProperties()` is a branded Standard Typed-compatible marker whose input is
 omitted and whose normalized provider output is an empty object. It gives the
-corresponding event a one-argument `track()` call. Supplying a second argument
-is a compile-time error; JavaScript or type-bypassing callers that supply one
+corresponding client event a one-argument `track()` call. Server callers may
+pass `ServerTrackOptions` directly as argument two; they never pass an
+`undefined` properties placeholder. Client callers that supply argument two,
+server callers that supply `undefined` explicitly, and JavaScript or
+type-bypassing calls that target a propertyless event through a properties slot
 receive `invalid_properties` under the configured validation-failure policy.
-This special case avoids `typed<{}>()`, whose TypeScript meaning is broader than
-an exact empty property object.
+Adapters must pass explicit argument-presence metadata to validation so omitted
+input is distinguishable from supplied `undefined`. This special case avoids
+`typed<{}>()`, whose TypeScript meaning is broader than an exact empty property
+object.
 
 ### Registry behavior
 
@@ -368,8 +373,10 @@ Custom user traits, when used, write their shape exactly once inside the
 optional `userTraits: typed<T>()` marker. Neither client nor server factory
 requires explicit generic arguments.
 
-Propertyless events use `noProperties()` and omit the second `track()` argument;
-they do not require an empty generic or empty object literal.
+Propertyless events use `noProperties()` and omit the properties argument; they
+do not require an empty generic, empty object literal, or `undefined`
+placeholder. The server-only options object moves into argument two for these
+events.
 
 Public declarations and TypeScript diagnostics should expose small named helper
 types instead of deeply nested conditional or mapped types wherever possible.
@@ -436,8 +443,9 @@ failure policy.
 - Schema output types drive the internal provider event properties.
 - Schema transformations require no manual input/output annotations.
 - Type-only definitions infer `T` for both input and output.
-- Propertyless definitions infer a one-argument `track()` call and reject a
-  supplied properties argument.
+- Propertyless definitions infer a one-argument client `track()` call and a
+  server call with optional options in argument two, while rejecting a supplied
+  properties argument or `undefined` placeholder.
 - Unknown names and incorrect properties fail typechecking on both client and
   server.
 - Factory calls require no event generic.

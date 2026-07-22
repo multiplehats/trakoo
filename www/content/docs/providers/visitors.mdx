@@ -22,6 +22,7 @@ No npm package required. `VisitorsClientProvider` loads the tracking script from
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { VisitorsClientProvider } from 'trakoo/providers/client';
+import { appEvents } from '@/lib/events';
 
 export const visitorsProvider = new VisitorsClientProvider({
   token: process.env.NEXT_PUBLIC_VISITORS_TOKEN!,
@@ -29,6 +30,7 @@ export const visitorsProvider = new VisitorsClientProvider({
 });
 
 export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [visitorsProvider]
 });
 

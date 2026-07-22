@@ -42,32 +42,32 @@ POSTHOG_API_KEY=your-posthog-api-key
 
 ## Define your events
 
-Describe every event once, in a file both the client and server import. This is the single source of truth that gives you autocomplete and type checking on every `track()` call.
+Describe every event once, in a file both the client and server import. This runtime registry is the single source of truth that gives you autocomplete and type checking on every `track()` call.
 
 ```typescript title="lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from 'trakoo';
+import { defineEvents, typed } from 'trakoo';
 
-export const appEvents = {
+export const appEvents = defineEvents({
   buttonClicked: {
     name: 'button_clicked',
     category: 'engagement',
-    properties: {} as {
+    properties: typed<{
       buttonId: string;
       location: 'hero' | 'nav' | 'pricing';
-    }
+    }>()
   },
   userSignedUp: {
     name: 'user_signed_up',
     category: 'user',
-    properties: {} as {
+    properties: typed<{
       email: string;
       plan: 'free' | 'pro' | 'enterprise';
-    }
+    }>()
   }
-} as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
-
-export type AppEvents = typeof appEvents;
+});
 ```
+
+`typed<T>()` keeps this primary setup validator-free. To validate or transform properties at runtime, pass any Standard Schema-compatible validator instead; see [Runtime validation](/docs/guides/standard-schema-migration#runtime-validation).
 
 ## Client analytics
 
@@ -76,9 +76,10 @@ Create the browser instance from `trakoo/client`. It's stateful: it initializes 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const analytics = createClientAnalytics<AppEvents>({
+export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new PostHogClientProvider({
       token: process.env.NEXT_PUBLIC_POSTHOG_KEY!,
@@ -196,9 +197,10 @@ Use `trakoo/server` for events you cannot afford to lose to an ad-blocker — si
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const serverAnalytics = createServerAnalytics<AppEvents>({
+export const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new PostHogServerProvider({
       apiKey: process.env.POSTHOG_API_KEY!,

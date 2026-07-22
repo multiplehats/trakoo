@@ -3,5 +3,5 @@ import { defineMeta } from "blume";
 export default defineMeta({
 	title: "Framework Guides",
 	icon: "code",
-	pages: ["index", "nextjs", "sveltekit"],
+	pages: ["index", "standard-schema-migration", "nextjs", "sveltekit"],
 });

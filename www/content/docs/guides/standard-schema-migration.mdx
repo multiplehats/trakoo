@@ -1,0 +1,176 @@
+---
+title: Standard Schema migration
+description: Migrate legacy typed event collections to trakoo's runtime event registry.
+---
+
+This release replaces compile-time-only event collections with a registry that trakoo can inspect at runtime. Factories infer their event names and properties from that registry, so applications no longer pass event generics or export event collection types.
+
+## What changed
+
+Before, an event collection relied on type assertions and an explicit factory generic:
+
+```typescript
+export const appEvents = {
+  buttonClicked: {
+    name: "button_clicked",
+    category: "engagement",
+    properties: {} as { buttonId: string },
+  },
+} as const satisfies EventCollection<
+  Record<string, CreateEventDefinition<string>>
+>;
+
+const analytics = createClientAnalytics<typeof appEvents>({ providers });
+```
+
+After, define a runtime registry and pass its value to the factory:
+
+```typescript
+export const appEvents = defineEvents({
+  buttonClicked: {
+    name: "button_clicked",
+    category: "engagement",
+    properties: typed<{ buttonId: string }>(),
+  },
+});
+
+const analytics = createClientAnalytics({
+  events: appEvents,
+  providers,
+});
+```
+
+The obsolete event collection helper types and generic-only factory signatures have been removed. Import `defineEvents()`, `typed()`, and `noProperties()` from the root `trakoo` entry point; keep importing factories and providers from their client or server subpaths.
+
+## Type-only migration
+
+Before, property shapes were asserted onto empty objects:
+
+```typescript
+export const appEvents = {
+  buttonClicked: {
+    name: "button_clicked",
+    category: "engagement",
+    properties: {} as {
+      buttonId: string;
+      location: string;
+    },
+  },
+};
+```
+
+After, `typed<T>()` records the same compile-time shape without installing a validator:
+
+```typescript
+import { defineEvents, typed } from "trakoo";
+
+export const appEvents = defineEvents({
+  buttonClicked: {
+    name: "button_clicked",
+    category: "engagement",
+    properties: typed<{
+      buttonId: string;
+      location: string;
+    }>(),
+  },
+});
+```
+
+`typed<T>()` does not perform runtime validation. For an event with no properties, use `noProperties()` and call `track()` without a properties argument.
+
+## Runtime validation
+
+Before, a type assertion checked callers during compilation but accepted unchecked JavaScript values at runtime:
+
+```typescript
+properties: {} as {
+  orderId: string;
+  amount: number;
+}
+```
+
+After, use a Standard Schema-compatible validator directly:
+
+```typescript
+import { defineEvents } from "trakoo";
+import { z } from "zod";
+
+export const appEvents = defineEvents({
+  purchaseCompleted: {
+    name: "purchase_completed",
+    category: "conversion",
+    properties: z.object({
+      orderId: z.string(),
+      amount: z.number().positive(),
+    }),
+  },
+});
+```
+
+The schema supplies the input accepted by `track()` and the validated output delivered to every provider. Standard Schema is an interface, not a required validator dependency; compatible Zod, Valibot, ArkType, and other validators work without a trakoo adapter.
+
+## Validation failures
+
+Before, the generic-only factory had no runtime registry to apply a common policy to unknown events or invalid properties:
+
+```typescript
+const analytics = createClientAnalytics<typeof appEvents>({ providers });
+```
+
+After, client and server analytics drop validation failures by default and can report sanitized metadata:
+
+```typescript
+const analytics = createClientAnalytics({
+  events: appEvents,
+  providers: [provider],
+  validation: {
+    onFailure: "drop",
+    onError(error) {
+      // Send sanitized metadata to application observability.
+    },
+  },
+});
+```
+
+Opt into strict behavior when a test or workflow should reject invalid analytics:
+
+```typescript
+const analytics = createServerAnalytics({
+  events: appEvents,
+  providers: [provider],
+  validation: { onFailure: "throw" },
+});
+```
+
+`AnalyticsValidationError` contains the event name, a stable error code, and normalized issue paths and messages. It never retains the submitted properties object. Validation failures are resolved before routing, so providers receive either the same normalized output or no event. Initialization and provider-delivery failures keep their existing behavior.
+
+## Client singleton migration
+
+Before, application code could use the module-level client singleton and convenience functions:
+
+```typescript
+import { createAnalytics, track } from "trakoo/client";
+
+createAnalytics({ providers });
+track("button_clicked", { buttonId: "signup" });
+```
+
+After, the application owns and exports one registry-bound instance:
+
+```typescript title="lib/analytics.ts"
+import { createClientAnalytics } from "trakoo/client";
+import { appEvents } from "./events";
+
+export const analytics = createClientAnalytics({
+  events: appEvents,
+  providers,
+});
+```
+
+```typescript
+import { analytics } from "./analytics";
+
+analytics.track("button_clicked", { buttonId: "signup" });
+```
+
+The compatibility alias, singleton getter and reset hook, and module-level tracking helpers have been removed. Import the owned instance wherever the application tracks events.

@@ -27,9 +27,10 @@ Add `ProxyProvider` to your client analytics and point it at the endpoint that w
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { ProxyProvider } from 'trakoo/providers/client';
-import type { AppEvents } from './events';
+import { appEvents } from '@/lib/events';
 
-export const analytics = createClientAnalytics<AppEvents>({
+export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new ProxyProvider({
       endpoint: '/api/events',
@@ -43,7 +44,7 @@ analytics.track('button_clicked', { buttonId: 'signup-cta' });
 
 ## Server-side usage
 
-Your endpoint receives the batched events and replays them through server analytics. You have two options.
+Your endpoint receives the batched events and replays them through server analytics. Import the same `appEvents` registry on both sides so the ingesting server applies the same event lookup and validation as the client. Propertyless events stay propertyless during replay: the server recognizes their normalized empty payload and uses the propertyless server call shape without an `undefined` placeholder. You have two options.
 
 Let trakoo own the whole route with `createProxyHandler`:
 
@@ -53,8 +54,10 @@ import {
   EmitKitServerProvider,
   createProxyHandler
 } from 'trakoo/providers/server';
+import { appEvents } from '@/lib/events';
 
 const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new EmitKitServerProvider({
       apiKey: process.env.EMITKIT_API_KEY!,
@@ -74,8 +77,10 @@ import {
   PirschServerProvider,
   ingestProxyEvents
 } from 'trakoo/providers/server';
+import { appEvents } from '@/lib/events';
 
 const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new PirschServerProvider({
       hostname: 'example.com',

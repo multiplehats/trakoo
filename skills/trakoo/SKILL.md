@@ -66,14 +66,14 @@ import { createClientAnalytics } from "trakoo/client";
 import { PostHogClientProvider } from "trakoo/providers/client";
 import { appEvents } from "./events";
 
-interface UserTraits {
-	email?: string;
-	plan?: "free" | "pro";
+interface BrowserUserTraits {
+	email: string;
+	plan: "free" | "pro";
 }
 
 export const analytics = createClientAnalytics({
 	events: appEvents,
-	userTraits: typed<UserTraits>(),
+	userTraits: typed<BrowserUserTraits>(),
 	providers: [
 		new PostHogClientProvider({
 			// Browser-public PostHog project key (phc_...), never a personal API key.
@@ -84,7 +84,7 @@ export const analytics = createClientAnalytics({
 
 const analyticsReady = analytics.initialize();
 
-export async function identifyUser(userId: string, traits: UserTraits) {
+export async function identifyUser(userId: string, traits: BrowserUserTraits) {
 	await analyticsReady;
 	analytics.identify(userId, traits);
 }
@@ -100,6 +100,7 @@ const restoredSession = await restoreSession();
 if (restoredSession.user) {
 	await identifyUser(restoredSession.user.id, {
 		email: restoredSession.user.email,
+		plan: restoredSession.user.plan,
 	});
 }
 
@@ -116,14 +117,14 @@ import { createServerAnalytics } from "trakoo/server";
 import { PostHogServerProvider } from "trakoo/providers/server";
 import { appEvents } from "./events";
 
-interface UserTraits {
+interface ServerUserTraits {
 	plan: "free" | "pro";
 }
 
 function createRequestAnalytics() {
 	return createServerAnalytics({
 		events: appEvents,
-		userTraits: typed<UserTraits>(),
+		userTraits: typed<ServerUserTraits>(),
 		providers: [
 			new PostHogServerProvider({
 				// PostHog project capture key (phc_...), not a personal API key.

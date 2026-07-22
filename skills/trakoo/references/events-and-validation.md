@@ -103,24 +103,29 @@ import { createClientAnalytics } from "trakoo/client";
 import { createServerAnalytics } from "trakoo/server";
 import { appEvents } from "./events";
 
-interface UserTraits {
+interface BrowserUserTraits {
+	email: string;
+	plan: "free" | "pro";
+}
+
+interface ServerUserTraits {
 	plan: "free" | "pro";
 }
 
 const analytics = createClientAnalytics({
 	events: appEvents,
-	userTraits: typed<UserTraits>(),
+	userTraits: typed<BrowserUserTraits>(),
 	providers: clientProviders,
 });
 
 const serverAnalytics = createServerAnalytics({
 	events: appEvents,
-	userTraits: typed<UserTraits>(),
+	userTraits: typed<ServerUserTraits>(),
 	providers: serverProviders,
 });
 ```
 
-The optional `userTraits` marker types `identify()` and the `user.traits` member of server user context. It is type-only and is neither validated nor sent to providers as configuration. On the server, keep identity fields at the top level of `user` and wrap the typed application values inside `user.traits`, as shown above.
+Use separate browser and server trait contracts. The browser marker must declare every object-literal field sent to `identify()`, including canonical identity values such as `email` and application values such as `plan`. The server marker describes only the custom values nested under `user.traits`; keep identity fields such as `email` at the top level of `user`. The optional `userTraits` marker is type-only and is neither validated nor sent to providers as configuration.
 
 ## Validation timing
 

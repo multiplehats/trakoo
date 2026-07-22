@@ -16,7 +16,7 @@ const skillFiles = [
 ];
 
 const codeBlocks = (content: string) =>
-	[...content.matchAll(/```(?:ts|typescript)\n([\s\S]*?)```/g)]
+	[...content.matchAll(/```(?:ts|tsx|typescript)\n([\s\S]*?)```/g)]
 		.map((match) => match[1])
 		.join("\n");
 
@@ -73,7 +73,7 @@ describe("Trakoo Agent Skill", () => {
 		expect(browser).toMatch(/import \{ appEvents \} from "\.\/events"/);
 		expect(browser).toMatch(/createClientAnalytics\(\{\s*events: appEvents,/);
 		expect(browser).not.toMatch(/createClientAnalytics</);
-		expect(browser).toContain("userTraits: typed<UserTraits>()");
+		expect(browser).toContain("userTraits: typed<BrowserUserTraits>()");
 		expect(server).toMatch(/import \{ appEvents \} from "\.\/events"/);
 		expect(server).toMatch(/createServerAnalytics\(\{\s*events: appEvents,/);
 		expect(server).not.toMatch(/createServerAnalytics</);
@@ -351,6 +351,39 @@ describe("Trakoo Agent Skill", () => {
 		);
 	});
 
+	it("uses distinct browser and server trait contracts", () => {
+		const skill = read("skills/trakoo/SKILL.md");
+		const events = read("skills/trakoo/references/events-and-validation.md");
+		const browser = skill.match(
+			/## Browser module\n\n```ts\n([\s\S]*?)```/,
+		)?.[1];
+		const server = skill.match(
+			/## Server module and critical event\n\n```ts\n([\s\S]*?)```/,
+		)?.[1];
+
+		expect(browser).toMatch(
+			/interface BrowserUserTraits \{\s*email: string;\s*plan: "free" \| "pro";\s*\}/,
+		);
+		expect(browser).toContain("userTraits: typed<BrowserUserTraits>()");
+		expect(browser).toMatch(
+			/identifyUser\(userId: string, traits: BrowserUserTraits\)/,
+		);
+		expect(skill).toMatch(
+			/await identifyUser\([\s\S]*email: restoredSession\.user\.email,[\s\S]*plan: restoredSession\.user\.plan,/,
+		);
+		expect(server).toMatch(
+			/interface ServerUserTraits \{\s*plan: "free" \| "pro";\s*\}/,
+		);
+		expect(server).toContain("userTraits: typed<ServerUserTraits>()");
+		expect(server).not.toMatch(/interface ServerUserTraits \{[^}]*email:/);
+		expect(events).toMatch(
+			/interface BrowserUserTraits \{[\s\S]*email: string;[\s\S]*plan: "free" \| "pro";[\s\S]*\}[\s\S]*interface ServerUserTraits \{[\s\S]*plan: "free" \| "pro";[\s\S]*\}/,
+		);
+		expect(events).toMatch(
+			/browser marker[\s\S]*every object-literal field[\s\S]*`identify\(\)`/i,
+		);
+	});
+
 	it("keeps critical server analytics owned by the request invocation", () => {
 		const skill = read("skills/trakoo/SKILL.md");
 		const serverExample = skill.match(
@@ -472,6 +505,35 @@ describe("Trakoo Agent Skill", () => {
 		expect(tanstack).toContain("new URL(href, window.location.origin)");
 		expect(tanstack).toContain('router.subscribe("onResolved"');
 		expect(tanstack).toContain("unsubscribe()");
+	});
+
+	it("mounts TanStack page tracking through an isomorphic root integration", () => {
+		const frameworks = read("skills/trakoo/references/frameworks.md");
+		const tanstack = frameworks.match(
+			/## TanStack Start\n\n([\s\S]*?)\n\n## Astro/,
+		)?.[1];
+		const code = codeBlocks(tanstack ?? "");
+
+		expect(tanstack).toContain("PageViewTracker.tsx");
+		expect(tanstack).not.toContain("PageViewTracker.client.tsx");
+		expect(tanstack).toContain(
+			'import { createClientOnlyFn } from "@tanstack/react-start"',
+		);
+		expect(code).toMatch(
+			/createClientOnlyFn\(\(router:[\s\S]*await import\("\.\/analytics\.client"\)/,
+		);
+		expect(code).toMatch(
+			/function PageViewTracker\(\)[\s\S]*useEffect\(\(\) => startPageViews\(router\), \[router\]\)[\s\S]*return null/,
+		);
+		expect(tanstack).toMatch(
+			/isomorphic[\s\S]*root route[\s\S]*must not[\s\S]*`\*\.client\.tsx`/i,
+		);
+		expect(tanstack).toMatch(
+			/import \{ PageViewTracker \} from "\.\/PageViewTracker"[\s\S]*function RootComponent\(\)[\s\S]*<PageViewTracker \/>/,
+		);
+		expect(tanstack).toMatch(
+			/confirm[\s\S]*installed[\s\S]*`createClientOnlyFn`[\s\S]*production build/i,
+		);
 	});
 
 	it("awaits browser readiness before TanStack and Astro page views", () => {

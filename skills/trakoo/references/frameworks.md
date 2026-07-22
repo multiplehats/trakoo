@@ -109,48 +109,82 @@ export const trackPurchase = createServerFn({ method: "POST" })
 
 With Vite, expose only browser-safe identifiers through `VITE_*`. Read unprefixed deployment environment values inside `.handler()`, middleware `.server()`, server-route handlers, or other per-request callbacks. Edge runtimes may expose deployment bindings differently from Node's `process.env`; use the installed adapter's per-request binding API.
 
-Choose one page-view owner. The following router-owned approach requires the client `PostHogClientProvider` to use `capture_pageview: false` before the manual initial/navigation stream. If provider auto-capture owns page views, omit this stream. Export the retained client initialization promise as `analyticsReady`, and await it before emitting or recording the initial URL. Normalize initial and router URLs identically so relative and absolute hrefs deduplicate:
+Choose one page-view owner. The following router-owned approach requires the client `PostHogClientProvider` to use `capture_pageview: false` before the manual initial/navigation stream. If provider auto-capture owns page views, omit this stream. Export the retained client initialization promise as `analyticsReady`, and await it before emitting or recording the initial URL. Normalize initial and router URLs identically so relative and absolute hrefs deduplicate.
 
-```ts
-import { analytics, analyticsReady } from "./analytics.client";
+The route-mounted tracker is isomorphic because a root route participates in SSR. It must not be named `*.client.tsx` or carry the client-only side-effect marker. Instead, keep `analytics.client.ts` import-protected and put its dynamic import plus all browser-only setup behind TanStack Start's compiler-recognized `createClientOnlyFn` boundary:
 
-let lastPageUrl: string | undefined;
-let unsubscribe: (() => void) | undefined;
-let disposed = false;
+```tsx
+// PageViewTracker.tsx — isomorphic and safe to import from an SSR root route
+import { createClientOnlyFn } from "@tanstack/react-start";
+import { useRouter } from "@tanstack/react-router";
+import { useEffect } from "react";
 
-function emitPageView(href: string) {
-	const parsed = new URL(href, window.location.origin);
-	parsed.hash = "";
-	const url = parsed.href;
+const startPageViews = createClientOnlyFn((router: ReturnType<typeof useRouter>) => {
+	let lastPageUrl: string | undefined;
+	let unsubscribe: (() => void) | undefined;
+	let disposed = false;
 
-	if (url === lastPageUrl) return;
-	lastPageUrl = url;
+	async function start() {
+		const { analytics, analyticsReady } = await import("./analytics.client");
 
-	analytics.pageView({
-		path: `${parsed.pathname}${parsed.search}`,
-		url,
-	});
-}
+		function emitPageView(href: string) {
+			const parsed = new URL(href, window.location.origin);
+			parsed.hash = "";
+			const url = parsed.href;
 
-async function startPageViews() {
-	await analyticsReady;
-	if (disposed) return;
+			if (url === lastPageUrl) return;
+			lastPageUrl = url;
 
-	emitPageView(window.location.href);
-	unsubscribe = router.subscribe("onResolved", ({ toLocation }) => {
-		emitPageView(toLocation.href);
-	});
-}
+			analytics.pageView({
+				path: `${parsed.pathname}${parsed.search}`,
+				url,
+			});
+		}
 
-void startPageViews();
+		await analyticsReady;
+		if (disposed) return;
 
-function stopPageViews() {
-	disposed = true;
-	unsubscribe?.();
+		emitPageView(window.location.href);
+		unsubscribe = router.subscribe("onResolved", ({ toLocation }) => {
+			emitPageView(toLocation.href);
+		});
+	}
+
+	void start();
+
+	return () => {
+		disposed = true;
+		unsubscribe?.();
+	};
+});
+
+export function PageViewTracker() {
+	const router = useRouter();
+	useEffect(() => startPageViews(router), [router]);
+	return null;
 }
 ```
 
-Use the framework's lifecycle to call `stopPageViews()` when the owner is disposed; it prevents a pending initialization from installing the subscription and calls `unsubscribe()` after installation. Apply the same one-owner decision to page-leave tracking; disable provider auto-capture before manually emitting page leaves.
+Mount that isomorphic component once in the long-lived root route:
+
+```tsx
+// routes/__root.tsx
+import { Outlet, createRootRoute } from "@tanstack/react-router";
+import { PageViewTracker } from "./PageViewTracker";
+
+export const Route = createRootRoute({ component: RootComponent });
+
+function RootComponent() {
+	return (
+		<>
+			<Outlet />
+			<PageViewTracker />
+		</>
+	);
+}
+```
+
+The effect cleanup marks a pending initialization as disposed before it can install the subscription, and calls `unsubscribe()` after installation. Apply the same one-owner decision to page-leave tracking; disable provider auto-capture before manually emitting page leaves. Confirm the consuming project's installed TanStack Start version exports `createClientOnlyFn` with this signature, then run its type checker and production build; those checks catch unsupported APIs and import-protection violations.
 
 ## Astro
 

@@ -32,9 +32,10 @@ work.
 ## Public Event API
 
 The root `trakoo` entry point will export the environment-neutral runtime
-helpers `defineEvents()` and `typed()`. It will continue to export the shared
-event types. Importing these helpers must remain browser-safe and must not pull
-in client providers, server providers, or any validation library.
+helpers `defineEvents()`, `typed()`, and `noProperties()`. It will continue to
+export the shared event types. Importing these helpers must remain browser-safe
+and must not pull in client providers, server providers, or any validation
+library.
 
 ### Schema-backed events
 
@@ -86,11 +87,40 @@ export const appEvents = defineEvents({
 
 `typed<T>()` returns a small Standard Typed-compatible value whose input and
 output types are both `T`. It does not implement `validate`, allocate a runtime
-schema, or perform runtime validation. `T` must be an object property shape.
+schema, or perform runtime validation. It returns a trakoo-branded
+`TypeMarker<T>` so APIs that specifically require a type-only marker cannot
+accidentally accept a validating Standard Schema. The property-shape constraint
+must accept ordinary object interfaces while rejecting primitives, arrays, and
+functions; it must not require a string index signature.
 
 The single `typed<T>()` generic is the only explicit type annotation required
 for type-only events. It is unavoidable because no concrete schema exists from
 which TypeScript could infer the property shape.
+
+### Propertyless events
+
+Events with no properties use a dedicated sentinel rather than an empty object
+type:
+
+```typescript
+export const appEvents = defineEvents({
+  sessionStarted: {
+    name: "session_started",
+    category: "user",
+    properties: noProperties(),
+  },
+});
+
+analytics.track("session_started");
+```
+
+`noProperties()` is a branded Standard Typed-compatible marker whose input is
+omitted and whose normalized provider output is an empty object. It gives the
+corresponding event a one-argument `track()` call. Supplying a second argument
+is a compile-time error; JavaScript or type-bypassing callers that supply one
+receive `invalid_properties` under the configured validation-failure policy.
+This special case avoids `typed<{}>()`, whose TypeScript meaning is broader than
+an exact empty property object.
 
 ### Registry behavior
 
@@ -102,7 +132,8 @@ providers.
 
 - preserve literal event names using const generic inference;
 - require every `properties` value to satisfy Standard Typed;
-- require inferred input and output values to be object property shapes;
+- require inferred input and output values to be object property shapes, except
+  for the omitted input represented by the branded `noProperties()` sentinel;
 - preserve category literals without `as const` or `satisfies` at the call site;
 - build or retain enough runtime information for lookup by emitted name; and
 - throw a clear initialization error when two definitions use the same emitted
@@ -139,6 +170,20 @@ The event registry is required. The factories no longer accept an event
 collection through an explicit generic, and typed instances do not fall back to
 arbitrary event names.
 
+`createClientAnalytics()` returns a fresh instance bound to the supplied
+registry. It must never reuse or cast an instance created with one registry as
+an instance for another registry. The existing module-level singleton and its
+untyped `getAnalytics()`, `track()`, `identify()`, `pageView()`, `pageLeave()`,
+`reset()`, and `flush()` convenience functions, the `createAnalytics`
+compatibility alias, and the singleton reset hook are removed. Applications own
+and export the typed instance returned by the factory.
+
+The public type architecture uses named `EventInputMap<TRegistry>` and
+`EventOutputMap<TRegistry>` helpers. Analytics is parameterized by the registry;
+`track<N>()` accepts the selected input-map value, while successful event
+construction uses the selected output-map value. Only the provider boundary
+widens properties to the shared `Record<string, unknown>` transport shape.
+
 Custom user traits also move out of factory generics so event inference is not
 lost. Applications that type traits provide an optional Standard Typed marker:
 
@@ -155,10 +200,11 @@ const analytics = createClientAnalytics({
 });
 ```
 
-The marker types `identify()` and server event user context but is not sent to
-providers or used for runtime validation. When omitted, user traits retain the
-existing open record default. This keeps both factory calls free of explicit
-generics.
+The `userTraits` option accepts only trakoo's branded `TypeMarker<T>`, not an
+arbitrary Standard Typed or Standard Schema value. The marker types
+`identify()` and server event user context but is not sent to providers or used
+for runtime validation. When omitted, user traits retain the existing open
+record default. This keeps both factory calls free of explicit generics.
 
 After inference, normal use contains no trakoo-specific generics:
 
@@ -186,9 +232,14 @@ Every `track()` call follows the same core sequence on client and server:
 5. If validation succeeds, require the returned value to be a non-null,
    non-array object.
 6. Construct the base event using the definition's name, category, and validated
-   output. A type-only definition uses the original input as its output.
+   output. A `typed<T>()` definition uses the original input as its output, while
+   `noProperties()` normalizes its omitted input to an empty object.
 7. Apply existing provider method and event routing.
 8. Send the same normalized output to every selected provider.
+
+`track()` consistently returns `Promise<void>` for type-only, propertyless,
+synchronously validated, and asynchronously validated events. Provider delivery
+never begins until any schema validation has completed.
 
 Validation happens before any provider receives an event. A failed event is
 never partially delivered. Existing provider isolation remains unchanged: one
@@ -287,6 +338,11 @@ validate their property values.
 Use `@standard-schema/spec` as the canonical source of public Standard Typed and
 Standard Schema TypeScript contracts. Imports from that package must be
 type-only so no schema implementation is added to trakoo's runtime bundle.
+Because emitted trakoo declarations reference these contracts, add
+`@standard-schema/spec` to regular `dependencies` with a compatible v1 range.
+It is a declaration-resolution dependency even though trakoo emits no runtime
+import for it. Verification must install and typecheck the packed tarball in a
+clean consumer fixture.
 
 Users do not need Zod, Valibot, or another validator unless they choose runtime
 validation. These packages must not become trakoo dependencies or peer
@@ -311,6 +367,9 @@ Type-only events write their property shape exactly once inside `typed<T>()`.
 Custom user traits, when used, write their shape exactly once inside the
 optional `userTraits: typed<T>()` marker. Neither client nor server factory
 requires explicit generic arguments.
+
+Propertyless events use `noProperties()` and omit the second `track()` argument;
+they do not require an empty generic or empty object literal.
 
 Public declarations and TypeScript diagnostics should expose small named helper
 types instead of deeply nested conditional or mapped types wherever possible.
@@ -355,10 +414,13 @@ const analytics = createClientAnalytics({
 });
 ```
 
-The obsolete `CreateEventDefinition`, `EventCollection`, extraction helpers,
-and generic-only factory signatures should be removed rather than maintaining
-two competing definition systems. Shared low-level event/provider types that
-remain useful are retained.
+Remove the obsolete `CreateEventDefinition`, `EventCollection`,
+`ExtractEventNames`, `ExtractEventPropertiesFromCollection`,
+`EventMapFromCollection`, `EventDefinition`, `ExtractEventName`, and
+`ExtractEventProperties` helpers rather than maintaining two competing
+definition systems. Also remove the generic-only factory signatures, the client
+singleton, and its untyped module-level convenience functions. Shared low-level
+event/provider transport types that remain useful are retained.
 
 All README examples, core-concept pages, provider guides, and framework guides
 must migrate together. A focused migration page will show type-only and
@@ -374,6 +436,8 @@ failure policy.
 - Schema output types drive the internal provider event properties.
 - Schema transformations require no manual input/output annotations.
 - Type-only definitions infer `T` for both input and output.
+- Propertyless definitions infer a one-argument `track()` call and reject a
+  supplied properties argument.
 - Unknown names and incorrect properties fail typechecking on both client and
   server.
 - Factory calls require no event generic.
@@ -381,6 +445,8 @@ failure policy.
   context without factory generics.
 - Representative invalid calls produce short, actionable diagnostics.
 - Built declaration files do not require a concrete validator package.
+- A clean consumer fixture resolves the published Standard Schema types through
+  trakoo's regular dependency.
 
 ### Runtime coverage
 
@@ -396,6 +462,8 @@ failure policy.
 - Duplicate emitted names fail clearly.
 - Unknown runtime names follow the configured failure policy.
 - Primitive, null, and array outputs fail as `invalid_output`.
+- Propertyless events normalize to an empty provider properties object and
+  reject supplied runtime properties.
 - Disabled analytics bypasses lookup, validation, callbacks, and delivery.
 - Provider routing and per-provider failure isolation continue to work after
   validation.

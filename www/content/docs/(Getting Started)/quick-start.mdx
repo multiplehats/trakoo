@@ -1,9 +1,9 @@
 ---
 title: Quick Start
-description: Install trakoo, define typed events, see them locally, then send them to a real provider — client and server.
+description: Install trakoo, define a typed event registry, and send events from client and server instances.
 ---
 
-This guide takes you from an empty project to typed events flowing to a real analytics provider. You'll start with a local console provider so you can see the event object immediately — no vendor account required — then swap in PostHog and add server-side tracking. The event definitions never change along the way.
+This guide starts with a local console provider, then switches to PostHog and adds server tracking. The same registry drives every instance.
 
 ## 1. Install
 
@@ -11,41 +11,44 @@ This guide takes you from an empty project to typed events flowing to a real ana
 pnpm install trakoo
 ```
 
-Use npm, yarn, or bun if that's what your project uses. Provider SDKs come later, per provider — see [Installation](/docs/installation) for the full matrix.
+See [Installation](/docs/installation) for npm, yarn, bun, and the provider SDK matrix.
 
 ## 2. Define your events
 
-Describe every event your app emits in one place. The object keys organize your code; the `name` values are what `track()` sends to providers.
+The object keys organize your source. The `name` values are the wire names accepted by `track()` and sent to providers.
 
 ```typescript title="lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from 'trakoo';
+import { defineEvents, noProperties, typed } from 'trakoo';
 
-export const appEvents = {
+export const appEvents = defineEvents({
   buttonClicked: {
     name: 'button_clicked',
     category: 'engagement',
-    properties: {} as {
+    properties: typed<{
       buttonId: string;
       location: 'hero' | 'nav' | 'pricing';
-    }
+    }>()
   },
   userSignedUp: {
     name: 'user_signed_up',
     category: 'user',
-    properties: {} as {
+    properties: typed<{
       email: string;
       plan: 'free' | 'pro' | 'enterprise';
       referralSource?: string;
-    }
+    }>()
+  },
+  sessionStarted: {
+    name: 'session_started',
+    category: 'user',
+    properties: noProperties()
   }
-} as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
-
-export type AppEvents = typeof appEvents;
+});
 ```
 
-## 3. See it work locally
+`typed<T>()` is the primary, validator-free API. `noProperties()` makes the properties argument illegal, so the last event is tracked as `analytics.track('session_started')`.
 
-Before wiring a vendor, point trakoo at a small console provider. You'll see the exact event object in your terminal or browser console — a fast way to confirm your setup and understand the shape of a tracked event.
+## 3. See it work locally
 
 ```typescript title="lib/analytics.ts"
 import {
@@ -54,7 +57,7 @@ import {
   type BaseEvent,
   type EventContext
 } from 'trakoo/client';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
 class ConsoleProvider extends BaseAnalyticsProvider {
   name = 'ConsoleProvider';
@@ -70,25 +73,24 @@ class ConsoleProvider extends BaseAnalyticsProvider {
   }
 
   pageView(properties?: Record<string, unknown>) {
-    console.log('page view', { properties });
+    console.log('page view', properties);
   }
 
-  reset() {
-    console.log('reset');
-  }
+  reset() {}
 }
 
-export const analytics = createClientAnalytics<AppEvents>({
+export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [new ConsoleProvider({ debug: true })],
   debug: import.meta.env.DEV
 });
 ```
 
-`createClientAnalytics()` initializes in the background. Your app can call `analytics.track()` right away.
+Each factory call creates a fresh instance. This module owns the instance; components import it from your module rather than relying on a trakoo singleton or global helper. Client initialization begins in the background, and `track()` waits for it when necessary.
 
 ## 4. Track from your UI
 
-Call `track()` wherever the action happens. If you mistype `button_clickd` or forget `location`, TypeScript flags it before the event ships.
+If you mistype the wire name or omit `location`, TypeScript flags the call.
 
 <Tabs>
 <Tab title="React">
@@ -147,21 +149,9 @@ document.querySelector('#signup')?.addEventListener('click', () => {
 </Tab>
 </Tabs>
 
-With the console provider, the click logs an event like this:
-
-```typescript
-{
-  event: {
-    category: 'engagement',
-    action: 'button_clicked',
-    properties: { buttonId: 'signup-cta', location: 'hero' }
-  }
-}
-```
+The console provider receives an event whose `action` is `button_clicked` and whose `properties` match the value you passed.
 
 ## 5. Connect a real provider
-
-Swap the console provider for a real one. This example uses [PostHog](/docs/providers/posthog) because it supports both browser and server tracking, but the same event definitions work with every provider.
 
 ```bash
 pnpm install posthog-js
@@ -170,9 +160,10 @@ pnpm install posthog-js
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const analytics = createClientAnalytics<AppEvents>({
+export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new PostHogClientProvider({
       token: import.meta.env.VITE_POSTHOG_KEY,
@@ -183,11 +174,11 @@ export const analytics = createClientAnalytics<AppEvents>({
 });
 ```
 
-Your components don't change — they still call `analytics.track('button_clicked', …)`.
+Your components do not change.
 
-## 6. Identify your users
+## 6. Identify users
 
-Client analytics is stateful. Call `identify()` once — usually after login — and later events carry the current user until you call `reset()`.
+Client analytics is stateful. `identify()` sets the current user until `reset()`.
 
 ```typescript
 analytics.identify('user_123', {
@@ -202,18 +193,17 @@ analytics.track('user_signed_up', {
 });
 ```
 
-See [Identifying Users](/docs/core-concepts/identifying-users) for traits, typing, and logout.
+See [Identifying Users](/docs/core-concepts/identifying-users) to type custom traits.
 
 ## 7. Track critical events on the server
-
-Some events — payments, signups, anything you must not lose to an ad-blocker — belong on the server. Server analytics is stateless: pass user context with each call, and flush before the process exits.
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const serverAnalytics = createServerAnalytics<AppEvents>({
+export const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new PostHogServerProvider({ apiKey: process.env.POSTHOG_API_KEY! })
   ]
@@ -226,27 +216,49 @@ import { serverAnalytics } from '@/lib/server-analytics';
 export async function POST(request: Request) {
   const user = await createUser(await request.json());
 
-  await serverAnalytics.track('user_signed_up', {
-    email: user.email,
-    plan: user.plan
-  }, {
-    userId: user.id,
-    user: { email: user.email, traits: { plan: user.plan } }
-  });
+  try {
+    await serverAnalytics.track('user_signed_up', {
+      email: user.email,
+      plan: user.plan
+    }, {
+      userId: user.id,
+      user: { email: user.email, traits: { plan: user.plan } }
+    });
 
-  await serverAnalytics.shutdown();
-
-  return Response.json({ ok: true });
+    return Response.json({ ok: true });
+  } finally {
+    await serverAnalytics.shutdown();
+  }
 }
 ```
 
-:::warning[Always flush on the server]
-In serverless environments, call `shutdown()` before the function returns so providers can send queued events. See [Client vs Server](/docs/core-concepts/client-vs-server) for the full picture.
+:::warning[Flush on the server]
+In serverless environments, call `shutdown()` before the function exits so providers can send queued events.
 :::
 
-## Send to more than one provider
+## Runtime validation is optional
 
-A single instance can fan out to several services. Route each provider to only the calls it should receive:
+`typed<T>()` does not validate individual fields at runtime. For untrusted input, pass a Standard Schema-compatible validator directly. Standard Schema is an interface, not a required validation runtime; libraries such as Zod implement it.
+
+```typescript
+import { defineEvents } from 'trakoo';
+import { z } from 'zod';
+
+export const checkoutEvents = defineEvents({
+  orderCompleted: {
+    name: 'order_completed',
+    category: 'conversion',
+    properties: z.object({
+      orderId: z.string(),
+      amount: z.coerce.number().positive()
+    })
+  }
+});
+```
+
+The schema input controls accepted call-site values; its validated output is what providers receive. Read [Events](/docs/core-concepts/events#runtime-validation) for failure policy and ordering details.
+
+## Send to more than one provider
 
 ```typescript
 import {
@@ -255,7 +267,8 @@ import {
   VisitorsClientProvider
 } from 'trakoo/providers/client';
 
-export const analytics = createClientAnalytics<AppEvents>({
+export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new PostHogClientProvider({ token: import.meta.env.VITE_POSTHOG_KEY }),
     {
@@ -272,16 +285,13 @@ export const analytics = createClientAnalytics<AppEvents>({
 ## Next steps
 
 <CardGroup>
-  <Card title="Providers" href="/docs/providers" icon="plug">
-    Set up PostHog, Bento, Pirsch, EmitKit, Visitors, or the Proxy.
+  <Card title="Events" href="/docs/core-concepts/events" icon="zap">
+    Learn compile-time definitions, runtime validation, and failure policy.
   </Card>
-  <Card title="Routing" href="/docs/providers#routing" icon="route">
-    Send specific methods and events to specific providers.
+  <Card title="Providers" href="/docs/providers" icon="plug">
+    Set up each official provider and routing rules.
   </Card>
   <Card title="Client vs Server" href="/docs/core-concepts/client-vs-server" icon="server">
-    Decide where each kind of event belongs.
-  </Card>
-  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield-check">
-    Understand the types behind the autocomplete.
+    Choose the right lifetime and delivery pattern.
   </Card>
 </CardGroup>

@@ -71,15 +71,16 @@ await serverAnalytics.track('project_created', {
 await serverAnalytics.shutdown();
 ```
 
-Each request stands alone, so a single server instance can safely handle many users. There's no `reset()` — there's nothing stored to clear.
+Each call stands alone, so a server instance can safely handle many users. There's no persisted user state to reset.
 
 ## Type your traits
 
-Pass a traits type as the second generic argument to type-check `identify()` alongside your events.
+Pass a `typed<T>()` trait marker to type-check `identify()` alongside your events.
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
-import type { AppEvents } from './events';
+import { typed } from 'trakoo';
+import { appEvents } from './events';
 
 interface UserTraits {
   email: string;
@@ -89,7 +90,9 @@ interface UserTraits {
   role?: 'admin' | 'member' | 'viewer';
 }
 
-export const analytics = createClientAnalytics<AppEvents, UserTraits>({
+export const analytics = createClientAnalytics({
+  events: appEvents,
+  userTraits: typed<UserTraits>(),
   providers: [/* ... */]
 });
 
@@ -107,16 +110,24 @@ analytics.identify('user_123', {
 **Use a stable user ID.** Pick an identifier that never changes — a database ID or UUID — and use the same format everywhere. Emails and session IDs change, which fragments a user's history across identities.
 
 ```typescript
-analytics.identify('550e8400-e29b-41d4-a716-446655440000', { email: 'ada@example.com' }); // Good
+analytics.identify('550e8400-e29b-41d4-a716-446655440000', {
+  email: 'ada@example.com',
+  name: 'Ada Lovelace',
+  plan: 'pro'
+}); // Good
 analytics.identify('ada@example.com', { /* ... */ }); // Avoid — email can change
 ```
 
 **Keep traits current.** Re-identify with the same ID when a user's data changes; providers merge the update.
 
 ```typescript
-async function handleUpgrade(userId: string, plan: string) {
-  await upgradePlan(userId, plan);
-  analytics.identify(userId, { plan });
+async function handleUpgrade(user: User, plan: UserTraits['plan']) {
+  await upgradePlan(user.id, plan);
+  analytics.identify(user.id, {
+    email: user.email,
+    name: user.name,
+    plan
+  });
 }
 ```
 
@@ -186,7 +197,11 @@ export async function POST(req: Request) {
 Turn on `debug` to log identification and the context attached to each event.
 
 ```typescript
-const analytics = createClientAnalytics({ providers: [/* ... */], debug: true });
+const analytics = createClientAnalytics({
+  events: appEvents,
+  providers: [/* ... */],
+  debug: true
+});
 
 analytics.identify('user_123', { email: 'ada@example.com', plan: 'pro' });
 // [Analytics] User identified: user_123 { email: 'ada@example.com', plan: 'pro' }

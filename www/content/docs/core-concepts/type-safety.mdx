@@ -1,124 +1,103 @@
 ---
 title: Type Safety
-description: Define your events once and get autocomplete, compile-time checks, and inferred property types across client and server.
+description: Infer event inputs, validated outputs, and user traits from one runtime registry.
 ---
 
-trakoo is built around one typed event definition. Define your events once, pass the type to your analytics instance, and every `track()` and `identify()` call is checked against it. Misspelled event names, missing properties, and wrong values fail at compile time instead of silently shipping bad data.
+trakoo binds each analytics instance to an event registry. Passing that registry value to a factory gives `track()` exact wire names and the correct properties for each name, without event generics or manual collection types.
 
-## Why type safety matters
+## Why it matters
 
-Analytics bugs are quiet. A typo in an event name or a property doesn't throw — it records the wrong thing, and you find out weeks later when a funnel comes up empty.
-
-```typescript
-// Avoid: no types, so nothing catches these mistakes
-analytics.track('user_signedup', {  // wrong event name
-  emai: 'user@example.com',          // wrong property
-  plan: 'premium'                    // not a valid plan
-});
-```
-
-With a typed instance, each of those is a compile error before the event ships:
+Analytics mistakes are quiet: a typo can create a second event or an unusable property and remain unnoticed until a report is wrong. A registry-bound instance catches them while you write code.
 
 ```typescript
-// Good: every argument is checked against your event definition
 analytics.track('user_signed_up', {
-  email: 'user@example.com',
+  email: 'ada@example.com',
   plan: 'pro'
 });
 
-// TypeScript flags:
-// - 'user_signedup' is not a known event name
-// - 'emai' does not exist on this event's properties
-// - 'premium' is not assignable to 'free' | 'pro' | 'enterprise'
+// TypeScript rejects:
+// - 'user_signedup' because it is not a registry wire name
+// - 'emai' because it is not a property
+// - 'premium' because it is outside the plan union
 ```
 
-## The event definition
-
-Everything starts with one typed collection of events. The `as const satisfies` combination is what makes the checks work.
+## Define the registry
 
 ```typescript title="lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from 'trakoo';
+import { defineEvents, noProperties, typed } from 'trakoo';
 
-export const appEvents = {
+export const appEvents = defineEvents({
   userSignedUp: {
     name: 'user_signed_up',
     category: 'user',
-    properties: {} as {
+    properties: typed<{
       email: string;
       plan: 'free' | 'pro' | 'enterprise';
       referralSource?: string;
-    }
+    }>()
+  },
+  sessionStarted: {
+    name: 'session_started',
+    category: 'user',
+    properties: noProperties()
   }
-} as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
-
-export type AppEvents = typeof appEvents;
+});
 ```
 
-Three pieces do the work.
+`defineEvents()` preserves the name and category literals while checking every definition. `typed<T>()` declares a validator-free object shape. `noProperties()` declares an event whose call has no properties argument.
 
-### `as const`
+No const assertion, collection interface, or exported event generic is required.
 
-Without it, TypeScript widens each literal to its base type — `name` becomes `string`, and `'user'` becomes `string`. `as const` locks every value to its literal type, so trakoo can offer `'user_signed_up'` as an autocomplete suggestion instead of "any string".
-
-```typescript
-const a = { name: 'user_signed_up' };           // name: string
-const b = { name: 'user_signed_up' } as const;  // name: 'user_signed_up'
-```
-
-### `satisfies EventCollection<...>`
-
-`satisfies` checks that your object matches the expected shape without changing its inferred type. You get validation — a malformed event is a compile error — while keeping the exact literal types from `as const`.
-
-### `properties: {} as { ... }`
-
-Event properties are a type, not a runtime value. `{} as { ... }` hands trakoo the property shape to check `track()` calls against, without allocating a real object at runtime.
-
-```typescript
-properties: {} as {
-  email: string;            // required
-  plan: 'free' | 'pro';     // union — only these values
-  referralSource?: string;  // optional
-}
-```
-
-## Autocomplete everywhere
-
-Pass your event type to the analytics instance and every call is driven by it.
+## Infer at the factory
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const analytics = createClientAnalytics<AppEvents>({
+export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [/* ... */]
 });
 ```
 
-The same generic applies on the server:
+The server factory infers from the same value:
 
-```typescript
+```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const serverAnalytics = createServerAnalytics<AppEvents>({
+export const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [/* ... */]
 });
 ```
 
-From there, your editor completes event names, then the property object for whichever event you picked, then the allowed values for each union property. Each event carries its own property type, so `track('user_signed_up', …)` and `track('button_clicked', …)` expect different shapes.
+Both factories return fresh, independent instances. The application owns the returned instance and can export it from its own module for call sites to import.
+
+## Per-event call signatures
+
+The registry produces a different tuple for each wire name:
 
 ```typescript
 analytics.track('user_signed_up', {
-  email: 'ada@example.com'
-  // compile error: property 'plan' is missing
+  email: 'ada@example.com',
+  plan: 'pro'
 });
+
+analytics.track('session_started');
 ```
 
-## Type your user traits
+The first call requires properties. The second rejects a properties argument. On the server, property-bearing events accept an optional third options argument, while propertyless events accept options directly as the second argument.
 
-`createClientAnalytics` takes a second generic for user traits. It types `identify()` the same way the first generic types `track()`.
+## Type user traits
+
+Traits use the same validator-free marker:
 
 ```typescript
+import { typed } from 'trakoo';
+import { createClientAnalytics } from 'trakoo/client';
+import { appEvents } from './events';
+
 interface UserTraits {
   email: string;
   name: string;
@@ -127,7 +106,9 @@ interface UserTraits {
   role?: 'admin' | 'member' | 'viewer';
 }
 
-const analytics = createClientAnalytics<AppEvents, UserTraits>({
+const analytics = createClientAnalytics({
+  events: appEvents,
+  userTraits: typed<UserTraits>(),
   providers: [/* ... */]
 });
 
@@ -136,43 +117,21 @@ analytics.identify('user_123', {
   name: 'Ada Lovelace',
   plan: 'pro',
   role: 'admin'
-  // wrong: true  // compile error — 'wrong' is not a UserTrait
 });
 ```
 
-:::note
-Traits are covered end to end in [Identifying Users](/docs/core-concepts/identifying-users).
-:::
-
-## Event categories
-
-Every event has a `category`. trakoo ships a set of common ones through the `EventCategory` type, and you can add your own with `as const`.
-
-```typescript
-import type { EventCategory } from 'trakoo';
-
-const category: EventCategory = 'user';
-// built-in: 'engagement' | 'user' | 'navigation' | 'error' | 'performance' | 'conversion'
-
-export const appEvents = {
-  aiGenerated: {
-    name: 'ai_generated',
-    category: 'ai' as const,  // custom category
-    properties: {} as { model: string }
-  }
-} as const;
-```
+`userTraits` changes trait typing only. The event registry is still inferred from `events`.
 
 ## Complex property types
 
-Properties are ordinary TypeScript types, so nested objects, arrays, and unions all work and stay checked at the call site.
+Nested objects, array-valued fields, optional fields, and unions work naturally inside the top-level object shape:
 
 ```typescript
-export const appEvents = {
+const commerceEvents = defineEvents({
   purchaseCompleted: {
     name: 'purchase_completed',
     category: 'conversion',
-    properties: {} as {
+    properties: typed<{
       orderId: string;
       currency: 'USD' | 'EUR' | 'GBP';
       items: Array<{ productId: string; quantity: number }>;
@@ -180,59 +139,107 @@ export const appEvents = {
         city: string;
         country: string;
       };
-    }
+    }>()
   },
   paymentProcessed: {
     name: 'payment_processed',
     category: 'conversion',
-    properties: {} as {
+    properties: typed<{
       method: 'card' | 'paypal' | 'crypto';
       amount: number;
       cardDetails?: { last4: string; brand: string };
-    }
+    }>()
   }
-} as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
+});
 ```
 
-## Extract types for reuse
+The top-level properties type itself must be a non-array, non-callable object shape.
 
-Because the definition is a typed value, you can pull a single event's property type out with `typeof` and reuse it in a helper, a form handler, or a shared function signature.
+## Input and provider-output types
+
+With `typed<T>()`, input and output are both `T`. A direct Standard Schema validator can have different input and output types because it parses or transforms data:
 
 ```typescript
-type UserSignedUpProps = typeof appEvents.userSignedUp.properties;
-// { email: string; plan: 'free' | 'pro' | 'enterprise'; referralSource?: string }
+import { defineEvents } from 'trakoo';
+import { z } from 'zod';
 
-function trackSignup(props: UserSignedUpProps) {
-  analytics.track('user_signed_up', props);
+const commerceEvents = defineEvents({
+  orderCompleted: {
+    name: 'order_completed',
+    category: 'conversion',
+    properties: z.object({
+      orderId: z.string(),
+      amount: z.coerce.number().positive()
+    })
+  }
+});
+```
+
+Standard Schema is an interface supported by validator libraries, not a required trakoo runtime. The schema input drives `track()` arguments; its validated output is what providers receive.
+
+Use the shared type maps when another function needs one side explicitly:
+
+```typescript
+import type { EventInputMap, EventOutputMap } from 'trakoo';
+
+type OrderInput = EventInputMap<typeof commerceEvents>['order_completed'];
+type OrderOutput = EventOutputMap<typeof commerceEvents>['order_completed'];
+
+function trackOrder(input: OrderInput) {
+  return commerceAnalytics.track('order_completed', input);
 }
 ```
 
-## Best practices
+`OrderInput` follows the schema input. `OrderOutput` is the parsed object delivered to providers.
 
-Always end your collection with `as const satisfies EventCollection<...>`. `as const` keeps the literal types; `satisfies` validates the shape. Drop either and the types widen back to `string`, taking your autocomplete with them.
+## Event categories
+
+The `EventCategory` shared type includes common categories while allowing domain-specific strings:
 
 ```typescript
-// Good — literal types preserved, shape validated
-export const appEvents = { /* ... */ } as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
+import { defineEvents, typed, type EventCategory } from 'trakoo';
 
-// Avoid — types widen to string, autocomplete is lost
-export const appEvents = { /* ... */ };
+const category: EventCategory = 'user';
+
+const aiEvents = defineEvents({
+  responseGenerated: {
+    name: 'ai_response_generated',
+    category: 'ai',
+    properties: typed<{ model: string }>()
+  }
+});
 ```
 
-- Prefer specific unions over `string`. `plan: 'free' | 'pro' | 'enterprise'` catches typos that `plan: string` waves through.
-- Mark optional properties with `?` rather than `| undefined`, so callers can omit them entirely.
-- Export `type AppEvents = typeof appEvents` next to your definitions, and import it wherever you create an analytics instance.
+## Compile time and runtime
+
+Compile-time checks protect typed call sites. At runtime:
+
+- `defineEvents()` provides the registry lookup.
+- `typed<T>()` checks only that a property-bearing event receives an object.
+- `noProperties()` rejects a supplied properties argument.
+- A direct Standard Schema validator validates and can transform individual fields.
+
+Validation failures drop by default or throw when configured. They do not retain the input payload. See [Events](/docs/core-concepts/events#validation-failure-policy) for the full policy.
+
+## Best practices
+
+- Prefer `typed<T>()` until runtime validation or transformation has a concrete purpose.
+- Use specific unions instead of broad `string` values when the domain is closed.
+- Mark optional properties with `?`.
+- Use `noProperties()` instead of an empty object type.
+- Pass the same registry value through `events` everywhere; do not add factory event generics.
+- Use `userTraits: typed<UserTraits>()` for custom traits.
 
 ## Next steps
 
 <CardGroup>
   <Card title="Events" href="/docs/core-concepts/events" icon="zap">
-    How event definitions map to what providers receive.
+    Learn runtime registry and validation behavior.
   </Card>
   <Card title="Identifying Users" href="/docs/core-concepts/identifying-users" icon="user">
-    Type user traits and attach them to events.
+    Attach typed user context to events.
   </Card>
-  <Card title="Next.js Guide" href="/docs/guides/nextjs" icon="code">
-    See typed events wired into a real app.
+  <Card title="Client vs Server" href="/docs/core-concepts/client-vs-server" icon="server">
+    Use the same registry in both environments.
   </Card>
 </CardGroup>

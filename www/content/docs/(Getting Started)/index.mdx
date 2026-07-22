@@ -9,7 +9,7 @@ sidebar:
 
 trakoo gives your TypeScript app a single, typed analytics API. You define the events your product emits, pick the providers you trust, and call `track()`. When your analytics stack changes, those call sites stay the same — you swap providers in one place, not across your codebase.
 
-It runs the same way in the browser and on the server, ships zero dependencies, and works on the edge.
+It runs in browsers, servers, and edge runtimes. The two environment-specific factories share the same event registry.
 
 ## Providers
 
@@ -41,23 +41,21 @@ Start with one provider and add more when you need them. Every provider is optio
 You describe your events once. That single definition becomes autocomplete, compile-time validation, and provider routing everywhere you track.
 
 ```typescript title="lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from 'trakoo';
+import { defineEvents, typed } from 'trakoo';
 
-export const appEvents = {
+export const appEvents = defineEvents({
   userSignedUp: {
     name: 'user_signed_up',
     category: 'user',
-    properties: {} as {
+    properties: typed<{
       email: string;
       plan: 'free' | 'pro' | 'enterprise';
-    }
+    }>()
   }
-} as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
-
-export type AppEvents = typeof appEvents;
+});
 ```
 
-Create an analytics instance with the providers you want, typed by those events:
+Create an application-owned analytics instance with the providers you want. Passing the registry value infers every event type:
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
@@ -65,15 +63,18 @@ import {
   PostHogClientProvider,
   VisitorsClientProvider
 } from 'trakoo/providers/client';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const analytics = createClientAnalytics<AppEvents>({
+export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new PostHogClientProvider({ token: import.meta.env.VITE_POSTHOG_KEY }),
     new VisitorsClientProvider({ token: import.meta.env.VITE_VISITORS_TOKEN })
   ]
 });
 ```
+
+The root `trakoo` import contains shared types and environment-neutral event helpers. Import factories and providers from their client or server subpaths.
 
 Then track from anywhere. TypeScript knows the valid event names and their required properties:
 

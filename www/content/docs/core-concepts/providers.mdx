@@ -9,6 +9,7 @@ A provider is a small adapter that translates a trakoo event into the API of a s
 
 ```typescript
 const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [new PostHogClientProvider({ token: 'xxx' })]
 });
 
@@ -24,6 +25,7 @@ An analytics instance can hold any number of providers. Each call fans out to al
 
 ```typescript
 const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new PostHogClientProvider({ token: 'xxx' }),     // product analytics
     new PirschClientProvider({ identificationCode: 'yyy' }), // privacy-friendly
@@ -73,10 +75,15 @@ Turn on `debug` to surface what would otherwise be swallowed:
 
 ```typescript
 const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [new PostHogClientProvider({ token: 'xxx', debug: true })],
   debug: true
 });
 ```
+
+Every factory call creates a fresh analytics instance, and provider constructors create provider instances owned by that configuration. trakoo does not keep a process-wide singleton. Create the instance in your application and import that owned instance at call sites.
+
+Event validation happens before fan-out. A validation failure follows the configured drop/throw policy and sends nothing to any provider. This policy does not change initialization or provider error handling: initialization failures and individual provider failures retain their existing behavior.
 
 ## Import from the right entry point
 

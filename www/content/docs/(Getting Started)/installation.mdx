@@ -41,6 +41,7 @@ bun add trakoo
 trakoo’s public API is split by environment:
 
 ```typescript
+import { defineEvents, noProperties, typed } from 'trakoo';
 import { createClientAnalytics } from 'trakoo/client';
 import { createServerAnalytics } from 'trakoo/server';
 
@@ -48,7 +49,7 @@ import { PostHogClientProvider } from 'trakoo/providers/client';
 import { PostHogServerProvider } from 'trakoo/providers/server';
 ```
 
-Use `trakoo/providers/client` in browser bundles and `trakoo/providers/server` in server-only code.
+The root `trakoo` entry point contains environment-neutral event helpers and shared types. Factories live on `trakoo/client` and `trakoo/server`. Use `trakoo/providers/client` in browser bundles and `trakoo/providers/server` in server-only code; there is no combined provider entry point.
 
 ## Provider SDKs
 
@@ -178,10 +179,20 @@ PIRSCH_ACCESS_KEY=pa_xxx
 Create a small file and let TypeScript confirm the package resolves:
 
 ```typescript
+import { defineEvents, noProperties } from 'trakoo';
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
 
+const events = defineEvents({
+  testEvent: {
+    name: 'test_event',
+    category: 'engagement',
+    properties: noProperties()
+  }
+});
+
 const analytics = createClientAnalytics({
+  events,
   providers: [
     new PostHogClientProvider({
       token: 'test'
@@ -189,7 +200,7 @@ const analytics = createClientAnalytics({
   ]
 });
 
-analytics.track('test_event', {});
+analytics.track('test_event');
 ```
 
 If your project compiles, continue to the [Quick Start](/docs/quick-start).

@@ -12,7 +12,7 @@ trakoo ships two entry points: `trakoo/client` for the browser and `trakoo/serve
 | State | Stateful — `identify()` persists | Stateless — pass context per call |
 | User context | Set once, applied to later events | Passed with every `track()` |
 | Logout | Call `reset()` | Nothing to reset |
-| Lifetime | One instance per session | One instance per request or worker |
+| Lifetime | Application-owned session instance | Application-owned request, worker, or process instance |
 | Delivery | Fire-and-forget | Await critical events |
 | Shutdown | Not required | Required in serverless |
 
@@ -40,14 +40,17 @@ Import from `trakoo/client` and create one instance for the session.
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const analytics = createClientAnalytics<AppEvents>({
+export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new PostHogClientProvider({ token: import.meta.env.VITE_POSTHOG_KEY })
   ]
 });
 ```
+
+The factory returns a fresh instance. trakoo has no global client singleton or module-level tracking helper; your application owns this instance and imports it where needed.
 
 ### Stateful user context
 
@@ -104,14 +107,17 @@ Import from `trakoo/server`. The server API is stateless, so create an instance 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const serverAnalytics = createServerAnalytics<AppEvents>({
+export const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new PostHogServerProvider({ apiKey: process.env.POSTHOG_API_KEY! })
   ]
 });
 ```
+
+Each call returns an independent instance bound to `appEvents`; choose its lifetime in application code. A long-running process may own one server instance because user context is supplied per event, while an isolated request or worker may create and shut down its own.
 
 ### Stateless user context
 
@@ -225,7 +231,7 @@ You get client context — where they clicked, how long they took — alongside 
 
 ## Import paths
 
-Use the environment-specific entry points. The root `trakoo` package exports shared types only, and there is no combined `trakoo/providers` export.
+Use the environment-specific entry points. The root `trakoo` package exports shared types plus environment-neutral helpers such as `defineEvents`, `typed`, and `noProperties`. Factories stay on `trakoo/client` and `trakoo/server`, and there is no combined `trakoo/providers` export.
 
 <Tabs>
 <Tab title="Client">
@@ -235,7 +241,7 @@ Use the environment-specific entry points. The root `trakoo` package exports sha
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
 
-// Avoid — the root package exports shared types only.
+// Avoid — factories are environment-specific.
 import { createClientAnalytics } from 'trakoo';
 // Avoid — there is no provider aggregate export.
 import { PostHogClientProvider } from 'trakoo/providers';
@@ -249,7 +255,7 @@ import { PostHogClientProvider } from 'trakoo/providers';
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
 
-// Avoid — the root package exports shared types only.
+// Avoid — factories are environment-specific.
 import { createServerAnalytics } from 'trakoo';
 // Avoid — there is no provider aggregate export.
 import { PostHogServerProvider } from 'trakoo/providers';
@@ -257,6 +263,20 @@ import { PostHogServerProvider } from 'trakoo/providers';
 
 </Tab>
 </Tabs>
+
+## Async validation and delivery order
+
+Schema validation may be asynchronous. If you start several `track()` calls concurrently, a later call whose validator finishes first can reach providers first. Concurrent calls are not delivery-ordered:
+
+```typescript
+// Both start immediately; provider delivery order is not guaranteed.
+await Promise.all([
+  serverAnalytics.track('first_event', firstInput),
+  serverAnalytics.track('second_event', secondInput)
+]);
+```
+
+When order matters, await each call before starting the next. Validation failures use their own configured policy; initialization failures and provider failures retain their existing behavior.
 
 ## Framework patterns
 

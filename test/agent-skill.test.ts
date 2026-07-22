@@ -64,4 +64,14 @@ describe("Trakoo Agent Skill", () => {
 		expect(frameworks).toContain("PUBLIC_");
 		expect(frameworks).toContain("VITE_");
 	});
+
+	it("documents skills CLI installation", () => {
+		const readme = read("readme.md");
+
+		expect(readme).toContain("## Agent Skill");
+		expect(readme).toContain(
+			"npx skills add multiplehats/trakoo --skill trakoo",
+		);
+		expect(readme).toContain("skills/trakoo/SKILL.md");
+	});
 });

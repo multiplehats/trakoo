@@ -15,6 +15,16 @@ A highly typed, zero-dependency, provider-agnostic analytics library for TypeScr
 - 🔌 [Providers](https://stacksee-analytics.vercel.app/docs/providers)
 - 💡 [Core Concepts](https://stacksee-analytics.vercel.app/docs/core-concepts)
 
+## Agent Skill
+
+Give your coding agent Trakoo-specific integration guidance for typed events, client/server boundaries, providers, and framework setup:
+
+```bash
+npx skills add multiplehats/trakoo --skill trakoo
+```
+
+The source is [`skills/trakoo/SKILL.md`](./skills/trakoo/SKILL.md) and follows the portable Agent Skills format used by skills.sh-compatible agents.
+
 ## Features
 
 - 🎯 **Type-safe events**: Define your own strongly typed events with full IntelliSense support

@@ -2,14 +2,16 @@ import { describe, it, expect } from "vitest";
 import * as Analytics from "@/client/index";
 
 describe("trakoo exports", () => {
-	it("should export client analytics functions", () => {
+	it("should export only the registry-bound client factory", () => {
 		expect(Analytics.createClientAnalytics).toBeDefined();
-		expect(Analytics.getAnalytics).toBeDefined();
-		expect(Analytics.track).toBeDefined();
-		expect(Analytics.identify).toBeDefined();
-		expect(Analytics.pageView).toBeDefined();
-		expect(Analytics.pageLeave).toBeDefined();
-		expect(Analytics.reset).toBeDefined();
+		expect(Analytics).not.toHaveProperty("createAnalytics");
+		expect(Analytics).not.toHaveProperty("getAnalytics");
+		expect(Analytics).not.toHaveProperty("track");
+		expect(Analytics).not.toHaveProperty("identify");
+		expect(Analytics).not.toHaveProperty("pageView");
+		expect(Analytics).not.toHaveProperty("pageLeave");
+		expect(Analytics).not.toHaveProperty("reset");
+		expect(Analytics).not.toHaveProperty("flush");
 	});
 
 	it("should export provider classes (client only)", () => {

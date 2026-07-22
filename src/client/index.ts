@@ -1,13 +1,6 @@
 // Main client analytics
 export {
 	createClientAnalytics,
-	createAnalytics,
-	getAnalytics,
-	track,
-	identify,
-	pageView,
-	pageLeave,
-	reset,
 	type ClientAnalyticsConfig,
 } from "@/client.js";
 

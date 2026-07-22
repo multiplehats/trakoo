@@ -1,16 +1,34 @@
 import type {
-	AnalyticsConfig,
 	AnalyticsProvider,
 	BaseEvent,
-	EventCategory,
 	EventContext,
 	ProviderConfigOrProvider,
 	ProviderMethod,
 } from "@/core/events/types.js";
+import type {
+	ClientTrackArgs,
+	EventDefinitions,
+	EventName,
+	EventOutputMap,
+	EventRegistry,
+} from "@/core/events/registry.js";
+import {
+	resolveEvent,
+	type ValidationConfig,
+} from "@/core/events/validation.js";
 import { isBrowser } from "@/utils/environment";
 
-// Default event map type
-type DefaultEventMap = Record<string, Record<string, unknown>>;
+export interface BrowserAnalyticsConfig<
+	TRegistry extends EventRegistry<EventDefinitions>,
+	TUserTraits extends object = Record<string, unknown>,
+> {
+	readonly events: TRegistry;
+	readonly providers: ProviderConfigOrProvider[];
+	readonly validation?: ValidationConfig;
+	readonly debug?: boolean;
+	readonly enabled?: boolean;
+	readonly defaultContext?: Partial<EventContext<TUserTraits>>;
+}
 
 /**
  * Internal normalized provider configuration
@@ -24,8 +42,8 @@ interface NormalizedProviderConfig {
 }
 
 export class BrowserAnalytics<
-	TEventMap extends DefaultEventMap = DefaultEventMap,
-	TUserTraits extends Record<string, unknown> = Record<string, unknown>,
+	TRegistry extends EventRegistry<EventDefinitions>,
+	TUserTraits extends object = Record<string, unknown>,
 > {
 	private providerConfigs: NormalizedProviderConfig[] = [];
 	private context: EventContext<TUserTraits> = {};
@@ -34,6 +52,10 @@ export class BrowserAnalytics<
 	private userTraits?: TUserTraits;
 	private initialized = false;
 	private initializePromise?: Promise<void>;
+	private readonly registry: TRegistry;
+	private readonly validation?: ValidationConfig;
+	private readonly debug: boolean;
+	private readonly enabled: boolean;
 
 	/**
 	 * Creates a new BrowserAnalytics instance for client-side event tracking.
@@ -65,12 +87,16 @@ export class BrowserAnalytics<
 	 * await analytics.initialize();
 	 * ```
 	 */
-	constructor(config: AnalyticsConfig) {
+	constructor(config: BrowserAnalyticsConfig<TRegistry, TUserTraits>) {
+		this.registry = config.events;
+		this.validation = config.validation;
+		this.debug = config.debug === true;
+		this.enabled = config.enabled !== false;
 		this.providerConfigs = this.normalizeProviders(config.providers);
 
 		// Set default context
 		if (config.defaultContext) {
-			this.context = { ...config.defaultContext } as EventContext<TUserTraits>;
+			this.context = { ...config.defaultContext };
 		}
 
 		// Generate session ID
@@ -263,6 +289,7 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	async initialize(): Promise<void> {
+		if (!this.enabled) return;
 		if (!isBrowser()) return;
 
 		if (this.initialized) return;
@@ -374,6 +401,8 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	identify(userId: string, traits?: TUserTraits): void {
+		if (!this.enabled) return;
+
 		this.userId = userId;
 		this.userTraits = traits;
 
@@ -384,7 +413,10 @@ export class BrowserAnalytics<
 
 		for (const config of this.providerConfigs) {
 			if (this.shouldCallMethod(config, "identify")) {
-				config.provider.identify(userId, traits);
+				config.provider.identify(
+					userId,
+					traits as Record<string, unknown> | undefined,
+				);
 			}
 		}
 	}
@@ -464,17 +496,30 @@ export class BrowserAnalytics<
 	 * }
 	 * ```
 	 */
-	async track<TEventName extends keyof TEventMap & string>(
-		eventName: TEventName,
-		properties: TEventMap[TEventName],
+	async track<TName extends EventName<TRegistry>>(
+		...args: ClientTrackArgs<TRegistry, TName>
 	): Promise<void> {
+		if (!this.enabled) return;
+
 		// Ensure initialization but don't block the track call
 		await this.ensureInitialized();
 
-		const event: BaseEvent = {
-			action: eventName,
-			category: this.getCategoryFromEventName(eventName),
-			properties: properties as Record<string, unknown>,
+		const eventName = args[0];
+		const input = args.length > 1 ? (args as readonly unknown[])[1] : undefined;
+		const resolved = await resolveEvent(
+			this.registry,
+			eventName,
+			input,
+			args.length > 1,
+			this.validation,
+			this.debug,
+		);
+		if (!resolved) return;
+
+		const event: BaseEvent<EventOutputMap<TRegistry>[TName]> = {
+			action: resolved.name,
+			category: resolved.category,
+			properties: resolved.properties,
 			timestamp: Date.now(),
 			userId: this.userId,
 			sessionId: this.sessionId,
@@ -505,7 +550,10 @@ export class BrowserAnalytics<
 			)
 			.map(async (config) => {
 				try {
-					await config.provider.track(event, contextWithUser);
+					await config.provider.track(
+						event as BaseEvent,
+						contextWithUser as EventContext,
+					);
 				} catch (error) {
 					// Log error but don't throw - one provider failing shouldn't break others
 					console.error(
@@ -580,6 +628,8 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	pageView(properties?: Record<string, unknown>): void {
+		if (!this.enabled) return;
+
 		// Run initialization if needed, but don't block
 		this.ensureInitialized().catch((error) => {
 			console.error("[Analytics] Failed to initialize during pageView:", error);
@@ -596,7 +646,7 @@ export class BrowserAnalytics<
 
 		for (const config of this.providerConfigs) {
 			if (this.shouldCallMethod(config, "pageView")) {
-				config.provider.pageView(properties, this.context);
+				config.provider.pageView(properties, this.context as EventContext);
 			}
 		}
 	}
@@ -657,6 +707,8 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	pageLeave(properties?: Record<string, unknown>): void {
+		if (!this.enabled) return;
+
 		// Run initialization if needed, but don't block
 		this.ensureInitialized().catch((error) => {
 			console.error(
@@ -670,7 +722,7 @@ export class BrowserAnalytics<
 				this.shouldCallMethod(config, "pageLeave") &&
 				config.provider.pageLeave
 			) {
-				config.provider.pageLeave(properties, this.context);
+				config.provider.pageLeave(properties, this.context as EventContext);
 			}
 		}
 	}
@@ -728,6 +780,8 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	reset(): void {
+		if (!this.enabled) return;
+
 		this.userId = undefined;
 		this.userTraits = undefined;
 		this.sessionId = this.generateSessionId();
@@ -774,9 +828,14 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	async flush(useBeacon = false): Promise<void> {
+		if (!this.enabled) return;
+
 		const flushPromises = this.providerConfigs.map(async (config) => {
 			// Only call flush if the provider has the method
-			if (config.provider.flush && typeof config.provider.flush === "function") {
+			if (
+				config.provider.flush &&
+				typeof config.provider.flush === "function"
+			) {
 				try {
 					await config.provider.flush(useBeacon);
 				} catch (error) {
@@ -874,17 +933,6 @@ export class BrowserAnalytics<
 				...context.utm,
 			},
 		};
-	}
-
-	private getCategoryFromEventName(eventName: string): EventCategory {
-		// Extract category from event name pattern: category_action
-		const parts = eventName.split("_");
-		// Only use the first part as category if there's actually an underscore
-		if (parts.length > 1 && parts[0]) {
-			return parts[0];
-		}
-
-		return "engagement"; // Default fallback category
 	}
 
 	private generateSessionId(): string {

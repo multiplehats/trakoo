@@ -3,7 +3,8 @@
  */
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { MockAnalyticsProvider } from "./mock-provider";
-import { createClientAnalytics, resetAnalyticsInstance } from "@/client";
+import { createClientAnalytics } from "@/client";
+import { defineEvents, typed } from "@/core/events";
 import { createServerAnalytics } from "@/server";
 import type { BrowserAnalytics } from "@/adapters/client/browser-analytics";
 import type { ServerAnalytics } from "@/adapters/server/server-analytics";
@@ -17,14 +18,46 @@ Object.defineProperty(window, "location", {
 	writable: true,
 });
 
+const clientRoutingEvents = defineEvents({
+	testEvent: {
+		name: "test_event",
+		category: "engagement",
+		properties: typed<{ foo: string }>(),
+	},
+	newsletterSignup: {
+		name: "newsletter_signup",
+		category: "conversion",
+		properties: typed<{ email: string }>(),
+	},
+	newsletterUnsubscribe: {
+		name: "newsletter_unsubscribe",
+		category: "conversion",
+		properties: typed<{ email: string }>(),
+	},
+	userRegistered: {
+		name: "user_registered",
+		category: "user",
+		properties: typed<{ userId: string }>(),
+	},
+	pageViewed: {
+		name: "page_viewed",
+		category: "navigation",
+		properties: typed<{ path: string }>(),
+	},
+	buttonClicked: {
+		name: "button_clicked",
+		category: "engagement",
+		properties: typed<{ buttonId: string }>(),
+	},
+});
+
 describe("Provider Routing - Client", () => {
 	let provider1: MockAnalyticsProvider;
 	let provider2: MockAnalyticsProvider;
 	let provider3: MockAnalyticsProvider;
-	let analytics: BrowserAnalytics;
+	let analytics: BrowserAnalytics<typeof clientRoutingEvents>;
 
 	beforeEach(() => {
-		resetAnalyticsInstance();
 		provider1 = new MockAnalyticsProvider({ debug: false, enabled: true });
 		provider2 = new MockAnalyticsProvider({ debug: false, enabled: true });
 		provider3 = new MockAnalyticsProvider({ debug: false, enabled: true });
@@ -41,6 +74,7 @@ describe("Provider Routing - Client", () => {
 
 	it("should call all methods on simple provider (default behavior)", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [provider1],
 		});
 
@@ -61,6 +95,7 @@ describe("Provider Routing - Client", () => {
 
 	it("should only call specified methods with 'methods' option", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -89,6 +124,7 @@ describe("Provider Routing - Client", () => {
 
 	it("should skip specified methods with 'exclude' option", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -117,6 +153,7 @@ describe("Provider Routing - Client", () => {
 
 	it("should handle mixed provider configurations", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				// Simple provider - gets all methods
 				provider1,
@@ -170,6 +207,7 @@ describe("Provider Routing - Client", () => {
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -198,6 +236,7 @@ describe("Provider Routing - Client", () => {
 
 	it("should handle empty 'methods' array", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -220,6 +259,7 @@ describe("Provider Routing - Client", () => {
 
 	it("should handle empty 'exclude' array", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -383,10 +423,9 @@ describe("Event-Level Routing - Client", () => {
 	let provider1: MockAnalyticsProvider;
 	let provider2: MockAnalyticsProvider;
 	let provider3: MockAnalyticsProvider;
-	let analytics: BrowserAnalytics;
+	let analytics: BrowserAnalytics<typeof clientRoutingEvents>;
 
 	beforeEach(() => {
-		resetAnalyticsInstance();
 		provider1 = new MockAnalyticsProvider({ debug: false, enabled: true });
 		provider2 = new MockAnalyticsProvider({ debug: false, enabled: true });
 		provider3 = new MockAnalyticsProvider({ debug: false, enabled: true });
@@ -403,6 +442,7 @@ describe("Event-Level Routing - Client", () => {
 
 	it("should only track whitelisted events with 'events' option", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -425,6 +465,7 @@ describe("Event-Level Routing - Client", () => {
 
 	it("should exclude events with 'excludeEvents' option", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -448,6 +489,7 @@ describe("Event-Level Routing - Client", () => {
 
 	it("should match events with 'eventPatterns' glob patterns", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -458,7 +500,9 @@ describe("Event-Level Routing - Client", () => {
 
 		await analytics.initialize();
 		await analytics.track("newsletter_signup", { email: "test@example.com" });
-		await analytics.track("newsletter_unsubscribe", { email: "test@example.com" });
+		await analytics.track("newsletter_unsubscribe", {
+			email: "test@example.com",
+		});
 		await analytics.track("user_registered", { userId: "123" });
 		await analytics.track("page_viewed", { path: "/home" });
 		await analytics.track("button_clicked", { buttonId: "cta" });
@@ -466,12 +510,15 @@ describe("Event-Level Routing - Client", () => {
 		// Should match patterns
 		expect(provider1.calls.track).toHaveLength(3);
 		expect(provider1.calls.track[0].event.action).toBe("newsletter_signup");
-		expect(provider1.calls.track[1].event.action).toBe("newsletter_unsubscribe");
+		expect(provider1.calls.track[1].event.action).toBe(
+			"newsletter_unsubscribe",
+		);
 		expect(provider1.calls.track[2].event.action).toBe("user_registered");
 	});
 
 	it("should combine method and event routing", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -498,6 +545,7 @@ describe("Event-Level Routing - Client", () => {
 
 	it("should handle real-world use case: EmitKit for specific events", async () => {
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				// All events go to PostHog
 				provider1,
@@ -529,6 +577,7 @@ describe("Event-Level Routing - Client", () => {
 		const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 		analytics = createClientAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -633,7 +682,9 @@ describe("Event-Level Routing - Server", () => {
 
 		analytics.initialize();
 		await analytics.track("newsletter_signup", { email: "test@example.com" });
-		await analytics.track("newsletter_unsubscribe", { email: "test@example.com" });
+		await analytics.track("newsletter_unsubscribe", {
+			email: "test@example.com",
+		});
 		await analytics.track("user_registered", { userId: "123" });
 		await analytics.track("page_viewed", { path: "/home" });
 		await analytics.track("button_clicked", { buttonId: "cta" });
@@ -641,7 +692,9 @@ describe("Event-Level Routing - Server", () => {
 		// Should match patterns
 		expect(provider1.calls.track).toHaveLength(3);
 		expect(provider1.calls.track[0].event.action).toBe("newsletter_signup");
-		expect(provider1.calls.track[1].event.action).toBe("newsletter_unsubscribe");
+		expect(provider1.calls.track[1].event.action).toBe(
+			"newsletter_unsubscribe",
+		);
 		expect(provider1.calls.track[2].event.action).toBe("user_registered");
 	});
 
@@ -721,7 +774,9 @@ describe("Event-Level Routing - Server", () => {
 		analytics.initialize();
 		await analytics.track("newsletter_signup", { email: "test@example.com" });
 		await analytics.track("user_registered", { userId: "123" });
-		await analytics.track("newsletter_unsubscribe", { email: "test@example.com" });
+		await analytics.track("newsletter_unsubscribe", {
+			email: "test@example.com",
+		});
 
 		// Provider1 - all events
 		expect(provider1.calls.track).toHaveLength(3);
@@ -729,7 +784,9 @@ describe("Event-Level Routing - Server", () => {
 		// Provider2 - only newsletter events
 		expect(provider2.calls.track).toHaveLength(2);
 		expect(provider2.calls.track[0].event.action).toBe("newsletter_signup");
-		expect(provider2.calls.track[1].event.action).toBe("newsletter_unsubscribe");
+		expect(provider2.calls.track[1].event.action).toBe(
+			"newsletter_unsubscribe",
+		);
 
 		// Provider3 - all except newsletter events
 		expect(provider3.calls.track).toHaveLength(1);

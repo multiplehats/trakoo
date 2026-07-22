@@ -186,6 +186,8 @@ Never import a server provider, secret, or unprefixed server environment variabl
 
 Run the consuming project's type checker and narrowest relevant tests. Run its production build when client/server bundling or environment variables changed. Recheck installed declarations when an import, option, event property, or provider constructor fails.
 
+**Maintainer release gate:** This skill must not be published until PR #32's migrated implementation lands and representative consumer fixtures are compiled and typechecked against the real built package, not fabricated declarations. Fixtures must cover root helpers and registry; direct Zod transformation and distinct input/output types; Valibot or ArkType; client and server factories sharing `events`; browser identify traits and nested server traits; a propertyless client call; a propertyless server-options call; and validation `"drop"` and `"throw"`.
+
 ## Common mistakes
 
 - Defining calls before the shared runtime registry.

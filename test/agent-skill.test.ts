@@ -598,4 +598,33 @@ describe("Trakoo Agent Skill", () => {
 		);
 		expect(readme).toContain("skills/trakoo/SKILL.md");
 	});
+
+	it("gates publication on real-package v1 consumer fixtures", () => {
+		const skill = read("skills/trakoo/SKILL.md");
+		const verification = skill.match(
+			/## Verification\n\n([\s\S]*?)\n\n## Common mistakes/,
+		)?.[1];
+
+		expect(verification).toBeDefined();
+		expect(verification).toMatch(/maintainer release gate/i);
+		expect(verification).toMatch(
+			/must not be published[\s\S]*PR #32[\s\S]*migrated implementation lands/i,
+		);
+		expect(verification).toMatch(
+			/representative consumer fixtures[\s\S]*compiled[\s\S]*typechecked[\s\S]*real built package/i,
+		);
+		expect(verification).toMatch(/not[\s\S]*fabricated declarations/i);
+		for (const requiredCoverage of [
+			"root helpers and registry",
+			"Zod transformation and distinct input/output types",
+			"Valibot or ArkType",
+			"client and server factories sharing `events`",
+			"browser identify traits and nested server traits",
+			"propertyless client call",
+			"propertyless server-options call",
+			'validation `"drop"` and `"throw"`',
+		]) {
+			expect(verification).toContain(requiredCoverage);
+		}
+	});
 });

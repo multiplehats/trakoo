@@ -87,7 +87,8 @@
 		"typescript": "~5.5.3",
 		"vite": "^6.3.5",
 		"vite-plugin-dts": "^4.5.4",
-		"vitest": "^2.0.3"
+		"vitest": "^2.0.3",
+		"zod": "^4.4.3"
 	},
 	"optionalDependencies": {
 		"@bentonow/bento-node-sdk": "^0.2.1",
@@ -101,5 +102,8 @@
 		"pnpm": ">=9.0.0",
 		"node": ">=20"
 	},
-	"packageManager": "pnpm@9.14.4"
+	"packageManager": "pnpm@9.14.4",
+	"dependencies": {
+		"@standard-schema/spec": "^1.1.0"
+	}
 }

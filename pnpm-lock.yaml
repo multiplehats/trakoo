@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@standard-schema/spec':
+        specifier: ^1.1.0
+        version: 1.1.0
     optionalDependencies:
       '@bentonow/bento-node-sdk':
         specifier: ^0.2.1
@@ -66,6 +70,9 @@ importers:
       vitest:
         specifier: ^2.0.3
         version: 2.1.9(@types/node@20.17.51)(jsdom@26.1.0)(lightningcss@1.33.0)
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
 
   www:
     dependencies:
@@ -1757,6 +1764,9 @@ packages:
 
   '@standard-schema/spec@1.0.0':
     resolution: {integrity: sha512-m2bOd0f2RT9k8QJx1JN85cZYyH1RqFBdlwtkSlf4tBDYLCiiZnv1fIIwacK6cqwXavOydf0NPToMQgpKq+dVlA==}
+
+  '@standard-schema/spec@1.1.0':
+    resolution: {integrity: sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==}
 
   '@svitejs/changesets-changelog-github-compact@1.2.0':
     resolution: {integrity: sha512-08eKiDAjj4zLug1taXSIJ0kGL5cawjVCyJkBb6EWSg5fEPX6L+Wtr0CH2If4j5KYylz85iaZiFlUItvgJvll5g==}
@@ -7368,6 +7378,8 @@ snapshots:
   '@sindresorhus/is@4.6.0': {}
 
   '@standard-schema/spec@1.0.0': {}
+
+  '@standard-schema/spec@1.1.0': {}
 
   '@svitejs/changesets-changelog-github-compact@1.2.0':
     dependencies:

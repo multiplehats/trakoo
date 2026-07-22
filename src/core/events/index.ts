@@ -1,5 +1,7 @@
 // Re-export core types
 export * from "./types.js";
+export * from "./schema.js";
+export * from "./registry.js";
 
 // Generic type helpers for users to create their own strongly typed events
 export type CreateEventDefinition<

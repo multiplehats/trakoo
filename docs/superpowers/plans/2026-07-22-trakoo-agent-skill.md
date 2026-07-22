@@ -101,13 +101,13 @@ Write `.context/trakoo-skill-evals/evals/evals.json` with this exact structure:
 
 - [ ] **Step 2: Run all three baseline prompts in fresh contexts without the skill**
 
-Dispatch one fresh subagent per evaluation. Tell each subagent to inspect this repository for Trakoo's current public API, answer its assigned prompt, and save only its final response under:
+Dispatch one fresh subagent per evaluation. Each evaluator acts as an application developer working in a consuming repository, which models using the skill outside the Trakoo library repository. Give the evaluator only its exact evaluation prompt. The evaluator MUST NOT read this Trakoo repository's source, tests, README, documentation, existing plan or design specification, future skill files, or internet sources. It must answer from its existing knowledge without the Trakoo skill and save only its final response under:
 
 ```text
 .context/trakoo-skill-evals/iteration-1/<eval-name>/without_skill/outputs/response.md
 ```
 
-Expected: Three response files exist; at least one misses or mishandles a lifecycle, import-boundary, dependency, or provider-constraint assertion. Record exact misses in each evaluation directory's `baseline-findings.md`.
+Expected: Three response files exist. Grade each answer honestly against the objective assertions without instructing evaluators to omit information or otherwise degrade their answers. The RED gate passes only if at least one assertion genuinely fails. Record exact misses in each evaluation directory's `baseline-findings.md`.
 
 For each evaluation directory, also write `eval_metadata.json` with `eval_id`, `eval_name`, the exact prompt, and its assertion array from `evals.json`. When each subagent completes, immediately save the notification's token and duration values to `without_skill/timing.json`:
 

@@ -2,6 +2,7 @@
 export * from "./types.js";
 export * from "./schema.js";
 export * from "./registry.js";
+export * from "./validation.js";
 
 // Generic type helpers for users to create their own strongly typed events
 export type CreateEventDefinition<

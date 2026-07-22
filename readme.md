@@ -6,14 +6,14 @@
 
 A highly typed, zero-dependency, provider-agnostic analytics library for TypeScript applications. Works seamlessly on both client and server sides with full type safety for your custom events.
 
-> **📚 [Full Documentation](https://stacksee-analytics.vercel.app)** - For complete guides, examples, and API reference, visit our documentation site.
+> **📚 [Full Documentation](https://trakoo.co/docs)** - For complete guides, examples, and provider setup, visit our documentation site.
 
 ## Quick Links
 
-- 📖 [Documentation](https://stacksee-analytics.vercel.app)
-- 🚀 [Quick Start](https://stacksee-analytics.vercel.app/docs/quick-start)
-- 🔌 [Providers](https://stacksee-analytics.vercel.app/docs/providers)
-- 💡 [Core Concepts](https://stacksee-analytics.vercel.app/docs/core-concepts)
+- 📖 [Documentation](https://trakoo.co/docs)
+- 🚀 [Quick Start](https://trakoo.co/docs/quick-start)
+- 🔌 [Providers](https://trakoo.co/docs/providers)
+- 💡 [Core Concepts](https://trakoo.co/docs/core-concepts)
 
 ## Features
 
@@ -33,16 +33,16 @@ The library includes built-in support for popular analytics services, with more 
 
 | Provider | Type | Documentation |
 |----------|------|---------------|
-| **PostHog** | Product Analytics | [View Docs](https://stacksee-analytics.vercel.app/docs/providers/posthog) |
-| **OpenPanel** | Web & Product Analytics | [View Docs](https://stacksee-analytics.vercel.app/docs/providers/openpanel) |
-| **Bento** | Email Marketing & Events | [View Docs](https://stacksee-analytics.vercel.app/docs/providers/bento) |
-| **Pirsch** | Privacy-Focused Web Analytics | [View Docs](https://stacksee-analytics.vercel.app/docs/providers/pirsch) |
+| **PostHog** | Product Analytics | [View Docs](https://trakoo.co/docs/providers/posthog) |
+| **OpenPanel** | Web & Product Analytics | [View Docs](https://trakoo.co/docs/providers/openpanel) |
+| **Bento** | Email Marketing & Events | [View Docs](https://trakoo.co/docs/providers/bento) |
+| **Pirsch** | Privacy-Focused Web Analytics | [View Docs](https://trakoo.co/docs/providers/pirsch) |
 
 ### Community & Custom Providers
 
 Want to use a different analytics service? Check out our guide:
 
-**[Creating Custom Providers →](https://stacksee-analytics.vercel.app/docs/providers/custom)**
+**[Creating Custom Providers →](https://trakoo.co/docs/providers/custom)**
 
 You can easily create providers for:
 - Google Analytics
@@ -53,7 +53,7 @@ You can easily create providers for:
 - Loops
 - Any analytics service with a JavaScript SDK
 
-**[View all provider documentation →](https://stacksee-analytics.vercel.app/docs/providers)**
+**[View all provider documentation →](https://trakoo.co/docs/providers)**
 
 ## Installation
 
@@ -73,7 +73,7 @@ pnpm install @bentonow/bento-node-sdk
 pnpm install pirsch-sdk
 ```
 
-> **See also:** [Provider Documentation](https://stacksee-analytics.vercel.app/docs/providers) for detailed setup guides for each provider.
+> **See also:** [Provider Documentation](https://trakoo.co/docs/providers) for detailed setup guides for each provider.
 
 ## Quick Start
 
@@ -729,7 +729,7 @@ export const appEvents = {
 
 Want to integrate with a different analytics service? See our comprehensive guide:
 
-**[Creating Custom Providers →](https://stacksee-analytics.vercel.app/docs/providers/custom)**
+**[Creating Custom Providers →](https://trakoo.co/docs/providers/custom)**
 
 Quick example:
 
@@ -1054,12 +1054,12 @@ const analytics = createServerAnalytics<AppEvents>({
 
 This README provides a quick overview. For comprehensive documentation, guides, and examples:
 
-**📚 [Visit the Full Documentation](https://stacksee-analytics.vercel.app)**
+**📚 [Visit the Full Documentation](https://trakoo.co/docs)**
 
-- [Quick Start Guide](https://stacksee-analytics.vercel.app/docs/quick-start)
-- [Core Concepts](https://stacksee-analytics.vercel.app/docs/core-concepts)
-- [Provider Setup Guides](https://stacksee-analytics.vercel.app/docs/providers)
-- [API Reference](https://stacksee-analytics.vercel.app/docs/api-reference)
+- [Quick Start Guide](https://trakoo.co/docs/quick-start)
+- [Core Concepts](https://trakoo.co/docs/core-concepts)
+- [Provider Setup Guides](https://trakoo.co/docs/providers)
+- [Framework Guides](https://trakoo.co/docs/guides)
 
 ## Contributing
 

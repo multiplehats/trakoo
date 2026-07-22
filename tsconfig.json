@@ -20,5 +20,10 @@
 	},
 	"compileOnSave": true,
 	"include": ["src", "test"],
-	"exclude": ["node_modules", "dist", "coverage"]
+	"exclude": [
+		"node_modules",
+		"dist",
+		"coverage",
+		"test/fixtures/invalid-event-usage.ts"
+	]
 }

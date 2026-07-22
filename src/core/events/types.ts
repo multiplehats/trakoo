@@ -234,20 +234,3 @@ export interface AnalyticsConfig {
 	enabled?: boolean;
 	defaultContext?: Partial<EventContext>;
 }
-
-// Type helpers for creating strongly typed events
-export type EventDefinition<T extends string, P = Record<string, unknown>> = {
-	name: T;
-	category: EventCategory;
-	properties?: P;
-};
-
-export type ExtractEventName<T> = T extends EventDefinition<infer N, unknown>
-	? N
-	: never;
-export type ExtractEventProperties<T> = T extends EventDefinition<
-	string,
-	infer P
->
-	? P
-	: never;

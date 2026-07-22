@@ -1,7 +1,12 @@
 import { describe, expect, expectTypeOf, it } from "vitest";
 import type { ServerAnalytics as ServerAnalyticsClass } from "@/adapters/server/server-analytics";
-import { defineEvents, noProperties, typed } from "@/core/events";
-import * as ServerAnalytics from "@/server";
+import * as ServerAnalytics from "@/server/index";
+// @ts-expect-error applyValidationFailurePolicy is internal
+import { applyValidationFailurePolicy } from "@/server/index";
+
+void applyValidationFailurePolicy;
+
+const { defineEvents, noProperties, typed } = ServerAnalytics;
 
 interface UserTraits {
 	plan: "free" | "pro";
@@ -35,5 +40,15 @@ describe("trakoo/server exports", () => {
 	it("should export server analytics functions", () => {
 		expect(ServerAnalytics.createServerAnalytics).toBeDefined();
 		expect(ServerAnalytics.ServerAnalytics).toBeDefined();
+	});
+
+	it("exports the registry helpers and public validation error", () => {
+		expect(ServerAnalytics.defineEvents).toBeDefined();
+		expect(ServerAnalytics.typed).toBeDefined();
+		expect(ServerAnalytics.noProperties).toBeDefined();
+		expect(ServerAnalytics.AnalyticsValidationError).toBeDefined();
+		expect(ServerAnalytics).not.toHaveProperty(
+			"applyValidationFailurePolicy",
+		);
 	});
 });

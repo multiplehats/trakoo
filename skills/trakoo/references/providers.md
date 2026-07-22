@@ -85,6 +85,30 @@ try {
 
 For a long-lived module instance, call `shutdown()` only at application or process teardown. Do not call `shutdown()` after each event on a reusable module singleton. Bento `shutdown()` clears provider state; it is not a buffered flush.
 
+### EmitKit
+
+EmitKit is server-only. Construct `EmitKitServerProvider` with the server-only `EMITKIT_API_KEY`, explicitly await its initialization, and only then pass it to `createServerAnalytics()`:
+
+```ts
+import { createServerAnalytics } from "trakoo/server";
+import { EmitKitServerProvider } from "trakoo/providers/server";
+import type { AppEvents } from "./events";
+
+export async function createEmitKitAnalytics() {
+	const provider = new EmitKitServerProvider({
+		apiKey: process.env.EMITKIT_API_KEY!,
+	});
+
+	await provider.initialize();
+
+	return createServerAnalytics<AppEvents>({ providers: [provider] });
+}
+```
+
+`EMITKIT_API_KEY` is server-only. Never expose it through client-prefixed environment variables or import this module into browser code. EmitKit dynamically imports its SDK; early calls can be skipped until initialization completes, so awaiting `provider.initialize()` before the factory is required.
+
+For request-scoped ownership, create a fresh provider and analytics pair and shut down that same pair in `finally`. For a reusable instance, call `shutdown()` only at application or process teardown. EmitKit sends immediately rather than buffering; its shutdown clears the provider's client state.
+
 ### Pirsch
 
 No extra package is required. The current client constructor is `PirschClientProvider({ identificationCode, hostname? })`:

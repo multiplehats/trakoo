@@ -11,7 +11,7 @@ Trakoo is a typed, provider-agnostic analytics library. Preserve its central eve
 
 Before editing, detect the package manager, framework, installed `trakoo` version, browser/server entry points, existing analytics dependencies, and available verification commands. Determine whether each requested event is a browser interaction, an authoritative server event, or both.
 
-Use the consuming project's installed Trakoo declarations as the source of truth. If they differ from current official docs, explain the version mismatch; do not silently upgrade or invent an API.
+Use the consuming project's installed Trakoo declarations as the source of truth. Consult the official Trakoo docs at https://stacksee-analytics.vercel.app, but if they differ from the installed declarations, explain the version mismatch; do not silently upgrade or invent an API.
 
 Read [references/providers.md](references/providers.md) when choosing or configuring providers, routing events, using Proxy, or building a custom provider. Read only the matching section of [references/frameworks.md](references/frameworks.md) for Next.js, SvelteKit, TanStack Start, Astro, or framework-neutral integration.
 

@@ -88,6 +88,31 @@ describe("Trakoo Agent Skill", () => {
 		);
 	});
 
+	it("documents awaited EmitKit initialization and its server-only key boundary", () => {
+		const providers = read("skills/trakoo/references/providers.md");
+		const emitkit = providers.match(
+			/### EmitKit\n\n([\s\S]*?)(?:\n\n### |\n\n## )/,
+		)?.[1];
+
+		expect(emitkit).toBeDefined();
+		expect(emitkit).toMatch(
+			/import \{ EmitKitServerProvider \} from "trakoo\/providers\/server"/,
+		);
+		expect(emitkit).toMatch(
+			/new EmitKitServerProvider\(\{\s*apiKey: process\.env\.EMITKIT_API_KEY!,\s*\}\)/,
+		);
+		expect(emitkit).toMatch(
+			/const provider = new EmitKitServerProvider[\s\S]*await provider\.initialize\(\);[\s\S]*createServerAnalytics/,
+		);
+		expect(emitkit).toMatch(/EMITKIT_API_KEY[\s\S]*server-only/i);
+		expect(emitkit).toMatch(
+			/dynamically imports[\s\S]*early calls[\s\S]*skipped[\s\S]*initialization completes/i,
+		);
+		expect(emitkit).toMatch(
+			/request-scoped[\s\S]*`finally`[\s\S]*reusable[\s\S]*application or process teardown/i,
+		);
+	});
+
 	it("documents Pirsch automatic SPA page views without inventing a custom event", () => {
 		const providers = read("skills/trakoo/references/providers.md");
 
@@ -197,5 +222,13 @@ describe("Trakoo Agent Skill", () => {
 			"npx skills add multiplehats/trakoo --skill trakoo",
 		);
 		expect(readme).toContain("skills/trakoo/SKILL.md");
+	});
+
+	it("links the official Trakoo docs from source-of-truth guidance", () => {
+		const skill = read("skills/trakoo/SKILL.md");
+
+		expect(skill).toMatch(
+			/source of truth[\s\S]*https:\/\/stacksee-analytics\.vercel\.app/,
+		);
 	});
 });

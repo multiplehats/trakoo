@@ -1,66 +1,79 @@
 ---
 name: trakoo
-description: Use when adding, configuring, or troubleshooting Trakoo analytics in TypeScript applications, including typed events, browser or server tracking, PostHog, OpenPanel, Bento, Pirsch, EmitKit, Visitors, Proxy, provider routing, user identification, or framework integration.
+description: Use when adding, configuring, or troubleshooting Trakoo analytics in TypeScript applications, including typed or validated events, browser or server tracking, PostHog, OpenPanel, Bento, Pirsch, EmitKit, Visitors, Proxy, provider routing, user identification, or framework integration.
 ---
 
 # Trakoo Integration
 
-Trakoo is a typed, provider-agnostic analytics library. Preserve its central event contract and its browser/server boundary; those two choices prevent most integration errors.
+Trakoo is a typed, provider-agnostic analytics library. Define one runtime event registry, pass it to every analytics factory, and preserve the browser/server boundary.
 
-## Start by inspecting the application
+## Inspect the application first
 
-Before editing, detect the package manager, framework, installed `trakoo` version, browser/server entry points, existing analytics dependencies, and available verification commands. Determine whether each requested event is a browser interaction, an authoritative server event, or both.
+Detect the package manager, framework, installed `trakoo` version, browser/server entry points, analytics dependencies, and verification commands. Decide whether each event is a browser interaction, an authoritative server outcome, or both.
 
-Use the consuming project's installed Trakoo declarations as the source of truth. Consult the official Trakoo docs at https://stacksee-analytics.vercel.app, but if they differ from the installed declarations, explain the version mismatch; do not silently upgrade or invent an API.
+Use the consuming project's installed Trakoo declarations as the source of truth. Consult the current documentation at https://trakoo.co. If the installed declarations differ, explain the version mismatch instead of silently upgrading or inventing an API.
 
-Read [references/providers.md](references/providers.md) when choosing or configuring providers, routing events, using Proxy, or building a custom provider. Read only the matching section of [references/frameworks.md](references/frameworks.md) for Next.js, SvelteKit, TanStack Start, Astro, or framework-neutral integration.
+- Read [references/events-and-validation.md](references/events-and-validation.md) when defining events, adding Zod or another Standard Schema validator, configuring validation failures, or using propertyless events and custom traits.
+- Read [references/providers.md](references/providers.md) when choosing providers, routing events, using Proxy, or building a custom provider.
+- Read only the matching section of [references/frameworks.md](references/frameworks.md) for Next.js, SvelteKit, TanStack Start, Astro, or framework-neutral integration.
 
 ## Integration workflow
 
-1. Install `trakoo` with the project's package manager, plus only the selected providers' optional SDKs.
-2. Define the event collection before adding tracking calls.
-3. Put browser and server analytics in separate modules with environment-specific imports.
-4. Add tracking where the event becomes true: interactions in browser handlers; payments, signups, jobs, and other authoritative outcomes on the server.
-5. Apply identity and delivery lifecycle rules.
-6. Run the project's formatter, type checker, relevant tests, and build when it checks environment boundaries.
+1. Install `trakoo`, the selected providers' optional SDKs, and a validator only when runtime validation is wanted.
+2. Define and export one shared registry with `defineEvents()`.
+3. Put client and server analytics in separate modules and pass `events: appEvents` to each factory.
+4. Track where the event becomes true: interactions in browser handlers; payments, signups, jobs, and other authoritative outcomes on the server.
+5. Apply identity, validation, and delivery lifecycle rules.
+6. Run the consuming project's formatter, type checker, relevant tests, and production build.
 
-## Typed event contract
+## Shared event registry
+
+Root helpers are environment-neutral and safe to import from shared code:
 
 ```ts
-import type { CreateEventDefinition, EventCollection } from "trakoo";
+import { defineEvents, noProperties, typed } from "trakoo";
 
-export const appEvents = {
+export const appEvents = defineEvents({
 	ctaClicked: {
 		name: "cta_clicked",
 		category: "engagement",
-		properties: {} as { location: "hero" | "pricing" },
+		properties: typed<{ location: "hero" | "pricing" }>(),
 	},
 	purchaseCompleted: {
 		name: "purchase_completed",
 		category: "conversion",
-		properties: {} as {
+		properties: typed<{
 			orderId: string;
 			amount: number;
 			currency: string;
-		},
+		}>(),
 	},
-} as const satisfies EventCollection<
-	Record<string, CreateEventDefinition<string>>
->;
-
-export type AppEvents = typeof appEvents;
+	sessionStarted: {
+		name: "session_started",
+		category: "user",
+		properties: noProperties(),
+	},
+});
 ```
 
-Object keys organize source code; each `name` is the stable value sent to providers. Keep names stable after release and type properties narrowly.
+Registry keys organize application source; each `name` is the stable value emitted to providers. Use a Standard Schema-compatible validator directly for runtime validation and transformation. See the event reference for a complete Zod example.
 
 ## Browser module
 
 ```ts
+import { typed } from "trakoo";
 import { createClientAnalytics } from "trakoo/client";
 import { PostHogClientProvider } from "trakoo/providers/client";
-import type { AppEvents } from "./events";
+import { appEvents } from "./events";
 
-export const analytics = createClientAnalytics<AppEvents>({
+interface UserTraits {
+	email?: string;
+	plan?: "free" | "pro";
+}
+
+export const analytics = createClientAnalytics({
+	events: appEvents,
+	userTraits: typed<UserTraits>(),
 	providers: [
 		new PostHogClientProvider({
 			token: import.meta.env.VITE_POSTHOG_KEY,
@@ -70,18 +83,15 @@ export const analytics = createClientAnalytics<AppEvents>({
 
 const analyticsReady = analytics.initialize();
 
-export async function identifyUser(
-	userId: string,
-	traits: { email?: string },
-) {
+export async function identifyUser(userId: string, traits: UserTraits) {
 	await analyticsReady;
 	analytics.identify(userId, traits);
 }
 ```
 
-Create one browser instance per session and retain its initialization promise. Await readiness before the first `identify()` or identity-sensitive event because some providers ignore identity calls made before their SDK is ready. Login, signup, and restored-session/bootstrap flows must await the identity helper; call `analytics.reset()` on logout.
+Every factory call creates a fresh, registry-bound instance owned by the application. Retain its initialization promise and await readiness before the first `identify()` or identity-sensitive event because some providers ignore identity calls before their SDK is ready. Login, signup, and restored-session/bootstrap flows must await the identity helper; call `analytics.reset()` on logout.
 
-At the application's restored-session bootstrap boundary, await identity before enabling or emitting identity-sensitive events:
+At restored-session bootstrap, identify before enabling identity-sensitive events:
 
 ```ts
 const restoredSession = await restoreSession();
@@ -95,17 +105,18 @@ if (restoredSession.user) {
 // Enable identity-sensitive events only after this bootstrap completes.
 ```
 
-Browser tracking is normally fire-and-forget after readiness; do not block navigation on non-critical analytics.
+`track()` returns `Promise<void>`. Await work whose completion matters; use `void analytics.track(...)` for explicitly non-critical browser analytics rather than blocking navigation.
 
 ## Server module and critical event
 
 ```ts
 import { createServerAnalytics } from "trakoo/server";
 import { PostHogServerProvider } from "trakoo/providers/server";
-import type { AppEvents } from "./events";
+import { appEvents } from "./events";
 
 function createRequestAnalytics() {
-	return createServerAnalytics<AppEvents>({
+	return createServerAnalytics({
+		events: appEvents,
 		providers: [
 			new PostHogServerProvider({ apiKey: process.env.POSTHOG_API_KEY! }),
 		],
@@ -136,35 +147,35 @@ export async function trackPurchase(input: {
 }
 ```
 
-Server analytics is stateless across users: pass user context with each event and await critical events. Make server shutdown provider- and ownership-aware. For a fresh request-scoped provider/analytics pair, shut down that same pair in `finally`. For a reusable module instance, shut it down only at application or process teardown. Some providers flush buffered events during shutdown; others only clear state. Read the selected provider's installed implementation before choosing the lifecycle. Use the platform's `waitUntil` only for explicitly non-critical work.
+Server analytics is stateless across users: pass user context with each event and await critical events. For a fresh request-scoped provider/analytics pair, shut down that same pair in `finally`. A reusable instance shuts down only at application or process teardown. Some providers flush buffered events during shutdown; others only clear state. Inspect the selected provider's installed implementation before choosing the lifecycle. Use the platform's `waitUntil` only for explicitly non-critical work.
 
-Ownership summary: reusable instances shut down at teardown; request-scoped instances shut down in `finally`.
-
-## Import and lifecycle reference
+## Imports and ownership
 
 | Concern | Correct pattern |
 |---|---|
-| Shared types | `trakoo` |
+| Event helpers and shared types | `trakoo` (environment-neutral) |
 | Browser factory | `trakoo/client` |
 | Server factory | `trakoo/server` |
 | Browser providers | `trakoo/providers/client` |
 | Server providers | `trakoo/providers/server` |
-| Browser identity | Retain/await `initialize()` before first `identify()`; `reset()` on logout |
-| Server identity | Context on every call |
-| Critical server delivery | Await `track()`; shutdown timing follows provider behavior and instance ownership |
+| Browser identity | Await initialization before first identity transition; reset on logout |
+| Server identity | Pass request user context on every call |
+| Critical server delivery | Await `track()`; shutdown follows provider behavior and instance ownership |
 
 Never import a server provider, secret, or unprefixed server environment variable into browser code. Do not use a nonexistent `trakoo/providers` aggregate.
 
 ## Verification
 
-Use the consuming project's commands. At minimum, run its type checker and the narrowest relevant tests; run its production build when client/server bundling or environment variables changed. Recheck installed declarations when an import, option, event property, or provider constructor fails.
+Run the consuming project's type checker and narrowest relevant tests. Run its production build when client/server bundling or environment variables changed. Recheck installed declarations when an import, option, event property, or provider constructor fails.
 
 ## Common mistakes
 
-- Tracking first and defining events later, which loses useful type pressure.
-- Omitting `AppEvents` from an analytics factory.
+- Defining calls before the shared runtime registry.
+- Forgetting `events: appEvents` in either factory.
+- Repeating event generics instead of allowing registry inference.
+- Using `typed<T>()` when untrusted runtime input needs a validator.
 - Sharing stateful browser identity logic with stateless server analytics.
-- Sending every method and event to providers with different requirements instead of routing them.
-- Installing all optional provider SDKs instead of only those selected.
-- Calling `identify()` before client provider initialization, or forgetting logout reset.
-- Pairing a reusable server singleton with per-event shutdown.
+- Sending all methods and events to providers with different requirements instead of routing them.
+- Installing every optional SDK instead of only the selected provider and validator packages.
+- Calling `identify()` before client provider initialization or forgetting logout reset.
+- Pairing a reusable server instance with per-event shutdown.

@@ -2,6 +2,8 @@
 
 Read the selected provider's installed constructor types and official Trakoo provider page before generating final code. Install only dependencies required by the selected side.
 
+Import the shared runtime registry into every analytics module and pass `events: appEvents` to each client or server factory. Provider routing selects delivery targets; it does not replace registry validation.
+
 ## Capability and dependency matrix
 
 | Provider | Browser | Server | Extra dependency | Use and constraints |
@@ -49,7 +51,7 @@ The current server constructor is `BentoServerProvider({ siteUuid, authenticatio
 ```ts
 import { createServerAnalytics } from "trakoo/server";
 import { BentoServerProvider } from "trakoo/providers/server";
-import type { AppEvents } from "./events";
+import { appEvents } from "./events";
 
 export async function createBentoAnalytics() {
 	const provider = new BentoServerProvider({
@@ -62,7 +64,10 @@ export async function createBentoAnalytics() {
 
 	await provider.initialize();
 
-	return createServerAnalytics<AppEvents>({ providers: [provider] });
+	return createServerAnalytics({
+		events: appEvents,
+		providers: [provider],
+	});
 }
 ```
 
@@ -92,7 +97,7 @@ EmitKit is server-only. Construct `EmitKitServerProvider` with the server-only `
 ```ts
 import { createServerAnalytics } from "trakoo/server";
 import { EmitKitServerProvider } from "trakoo/providers/server";
-import type { AppEvents } from "./events";
+import { appEvents } from "./events";
 
 export async function createEmitKitAnalytics() {
 	const provider = new EmitKitServerProvider({
@@ -101,7 +106,10 @@ export async function createEmitKitAnalytics() {
 
 	await provider.initialize();
 
-	return createServerAnalytics<AppEvents>({ providers: [provider] });
+	return createServerAnalytics({
+		events: appEvents,
+		providers: [provider],
+	});
 }
 ```
 
@@ -134,6 +142,8 @@ Visitors is browser-only. `pageView()` does not send a duplicate because its scr
 ### Proxy
 
 Import `ProxyProvider` from `trakoo/providers/client`; import `createProxyHandler` or `ingestProxyEvents` from `trakoo/providers/server`. Keep the endpoint same-origin when the goal is first-party delivery. Configure batch size and interval only when defaults do not meet the application's delivery needs.
+
+Pass the same `appEvents` registry to the browser analytics factory and the ingesting server analytics factory. Raw proxy input crosses a JSON boundary, but the server registry still rejects or drops unknown names and validates schema-backed properties before provider routing.
 
 ## Custom providers
 

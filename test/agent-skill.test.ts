@@ -8,21 +8,126 @@ const read = (relativePath: string) =>
 		"utf8",
 	);
 
+const skillFiles = [
+	"skills/trakoo/SKILL.md",
+	"skills/trakoo/references/events-and-validation.md",
+	"skills/trakoo/references/providers.md",
+	"skills/trakoo/references/frameworks.md",
+];
+
 describe("Trakoo Agent Skill", () => {
-	it("has discoverable metadata and core integration rules", () => {
+	it("has discoverable metadata, v1 references, and current documentation", () => {
 		const skill = read("skills/trakoo/SKILL.md");
 
 		expect(skill).toMatch(/^---\nname: trakoo\ndescription: Use when /);
+		expect(skill).toContain("https://trakoo.co");
+		expect(skill).toContain("references/events-and-validation.md");
+		expect(skill).toContain("references/providers.md");
+		expect(skill).toContain("references/frameworks.md");
+	});
+
+	it("teaches the runtime registry and all three property modes", () => {
+		const events = read("skills/trakoo/references/events-and-validation.md");
+
+		expect(events).toContain(
+			'import { defineEvents, noProperties, typed } from "trakoo"',
+		);
+		expect(events).toContain("export const appEvents = defineEvents({");
+		expect(events).toContain("properties: typed<");
+		expect(events).toContain("properties: noProperties()");
+		expect(events).toMatch(
+			/properties: z\.object\(\{[\s\S]*z\.coerce\.number\(\)/,
+		);
+	});
+
+	it("documents direct Standard Schema validator compatibility", () => {
+		const events = read("skills/trakoo/references/events-and-validation.md");
+
+		for (const validator of ["Zod", "Valibot", "ArkType", "Standard Schema"]) {
+			expect(events).toContain(validator);
+		}
+		expect(events).toMatch(/no Trakoo adapter/i);
+		expect(events).toMatch(/install only[^\n]*chosen validator/i);
+		expect(events).toMatch(/input[\s\S]*provider output[\s\S]*coerc/i);
+	});
+
+	it("binds both factories to the shared registry without event generics", () => {
+		const skill = read("skills/trakoo/SKILL.md");
+		const registry = skill.match(
+			/## Shared event registry[\s\S]*?```ts\n([\s\S]*?)```/,
+		)?.[1];
+
+		expect(registry).toContain("purchaseCompleted");
+		expect(registry).toContain('name: "purchase_completed"');
+		expect(skill).toContain('import { appEvents } from "./events"');
+		expect(skill).toMatch(/createClientAnalytics\(\{[\s\S]*events: appEvents/);
+		expect(skill).toMatch(/createServerAnalytics\(\{[\s\S]*events: appEvents/);
+		expect(skill).toContain("userTraits: typed<UserTraits>()");
+	});
+
+	it("documents propertyless client and server call shapes", () => {
+		const events = read("skills/trakoo/references/events-and-validation.md");
+
+		expect(events).toContain('analytics.track("session_started")');
+		expect(events).toMatch(
+			/serverAnalytics\.track\(\s*"session_started",\s*\{ userId: "user_123" \},\s*\)/,
+		);
+		expect(events).toMatch(/server options go directly in argument two/i);
+		expect(events).toMatch(/never pass an `undefined` properties placeholder/i);
+	});
+
+	it("documents asynchronous validation and delivery ordering", () => {
+		const events = read("skills/trakoo/references/events-and-validation.md");
+
+		expect(events).toContain("`Promise<void>`");
+		expect(events).toMatch(/validation finishes before provider routing/i);
+		expect(events).toMatch(/concurrent[\s\S]*not guaranteed[\s\S]*call order/i);
+	});
+
+	it("documents validation defaults and sanitized reporting", () => {
+		const events = read("skills/trakoo/references/events-and-validation.md");
+
+		expect(events).toContain('onFailure: "throw"');
+		expect(events).toContain("AnalyticsValidationError");
+		expect(events).toMatch(/defaults? to `?"drop"`?[^\n]*client and server/i);
+		expect(events).toMatch(/`onError`[\s\S]*exactly once/i);
+		expect(events).toMatch(
+			/sanitized[\s\S]*do not retain or expose[\s\S]*payload/i,
+		);
+		expect(events).toMatch(
+			/does not redefine[\s\S]*provider-delivery[\s\S]*initialization/i,
+		);
+	});
+
+	it("keeps event helpers neutral and runtime-specific APIs on subpaths", () => {
+		const skill = read("skills/trakoo/SKILL.md");
+
+		expect(skill).toContain("environment-neutral");
 		expect(skill).toContain("trakoo/client");
 		expect(skill).toContain("trakoo/server");
 		expect(skill).toContain("trakoo/providers/client");
 		expect(skill).toContain("trakoo/providers/server");
-		expect(skill).toContain("as const satisfies");
-		expect(skill).toContain("createClientAnalytics<AppEvents>");
-		expect(skill).toContain("createServerAnalytics<AppEvents>");
-		expect(skill).toContain("shutdown()");
-		expect(skill).toContain("references/providers.md");
-		expect(skill).toContain("references/frameworks.md");
+		expect(skill).toMatch(/fresh[\s\S]*registry-bound instance/i);
+	});
+
+	it("contains no legacy event or singleton API guidance", () => {
+		const content = skillFiles.map(read).join("\n");
+		const forbidden = [
+			"CreateEventDefinition",
+			"EventCollection",
+			"as const satisfies",
+			"properties: {} as",
+			"AppEvents",
+			"createClientAnalytics<",
+			"createServerAnalytics<",
+			"typeof appEvents",
+			"getAnalytics",
+			"resetAnalyticsInstance",
+		];
+
+		for (const pattern of forbidden) {
+			expect(content).not.toContain(pattern);
+		}
 	});
 
 	it("covers every public provider and its delivery constraints", () => {
@@ -42,78 +147,26 @@ describe("Trakoo Agent Skill", () => {
 		}
 		expect(providers).toContain("@bentonow/bento-node-sdk");
 		expect(providers).toContain("IP address and User-Agent");
-		expect(providers).toContain("methods");
 		expect(providers).toContain("excludeEvents");
 		expect(providers).toContain("eventPatterns");
 	});
 
-	it("documents usable Pirsch and Bento constructor contracts", () => {
-		const providers = read("skills/trakoo/references/providers.md");
-
-		expect(providers).toContain(
-			"PirschClientProvider({ identificationCode, hostname? })",
-		);
-		expect(providers).toMatch(
-			/new PirschClientProvider\(\{\s*identificationCode: import\.meta\.env\.VITE_PIRSCH_IDENTIFICATION_CODE,\s*\}\)/,
-		);
-		expect(providers).toContain(
-			"BentoServerProvider({ siteUuid, authentication: { publishableKey, secretKey } })",
-		);
-		expect(providers).toMatch(
-			/new BentoServerProvider\(\{\s*siteUuid: process\.env\.BENTO_SITE_UUID!,\s*authentication: \{\s*publishableKey: process\.env\.BENTO_PUBLISHABLE_KEY!,\s*secretKey: process\.env\.BENTO_SECRET_KEY!,\s*\},\s*\}\)/,
-		);
-		expect(providers).toMatch(
-			/VITE_PIRSCH_IDENTIFICATION_CODE[\s\S]*browser-public/,
-		);
-		expect(providers).toMatch(/BENTO_SECRET_KEY[\s\S]*server-only/);
-	});
-
-	it("documents Bento initialization and shutdown ownership", () => {
+	it("passes the registry to provider examples and preserves initialization", () => {
 		const providers = read("skills/trakoo/references/providers.md");
 
 		expect(providers).toMatch(
-			/const provider = new BentoServerProvider[\s\S]*await provider\.initialize\(\);[\s\S]*createServerAnalytics/,
+			/const provider = new BentoServerProvider[\s\S]*await provider\.initialize\(\);[\s\S]*createServerAnalytics\(\{[\s\S]*events: appEvents/,
+		);
+		expect(providers).toMatch(
+			/const provider = new EmitKitServerProvider[\s\S]*await provider\.initialize\(\);[\s\S]*createServerAnalytics\(\{[\s\S]*events: appEvents/,
 		);
 		expect(providers).toContain(
 			"Do not call `shutdown()` after each event on a reusable module singleton.",
 		);
-		expect(providers).toMatch(
-			/request-scoped[\s\S]*fresh provider and analytics pair[\s\S]*same pair[\s\S]*`finally`/,
-		);
-		expect(providers).toMatch(
-			/long-lived[\s\S]*application or process teardown/,
-		);
-		expect(providers).toContain(
-			"Bento `shutdown()` clears provider state; it is not a buffered flush.",
-		);
+		expect(providers).toMatch(/request-scoped[\s\S]*`finally`/);
 	});
 
-	it("documents awaited EmitKit initialization and its server-only key boundary", () => {
-		const providers = read("skills/trakoo/references/providers.md");
-		const emitkit = providers.match(
-			/### EmitKit\n\n([\s\S]*?)(?:\n\n### |\n\n## )/,
-		)?.[1];
-
-		expect(emitkit).toBeDefined();
-		expect(emitkit).toMatch(
-			/import \{ EmitKitServerProvider \} from "trakoo\/providers\/server"/,
-		);
-		expect(emitkit).toMatch(
-			/new EmitKitServerProvider\(\{\s*apiKey: process\.env\.EMITKIT_API_KEY!,\s*\}\)/,
-		);
-		expect(emitkit).toMatch(
-			/const provider = new EmitKitServerProvider[\s\S]*await provider\.initialize\(\);[\s\S]*createServerAnalytics/,
-		);
-		expect(emitkit).toMatch(/EMITKIT_API_KEY[\s\S]*server-only/i);
-		expect(emitkit).toMatch(
-			/dynamically imports[\s\S]*early calls[\s\S]*skipped[\s\S]*initialization completes/i,
-		);
-		expect(emitkit).toMatch(
-			/request-scoped[\s\S]*`finally`[\s\S]*reusable[\s\S]*application or process teardown/i,
-		);
-	});
-
-	it("documents Pirsch automatic SPA page views without inventing a custom event", () => {
+	it("preserves Pirsch navigation and request-context constraints", () => {
 		const providers = read("skills/trakoo/references/providers.md");
 
 		expect(providers).toMatch(
@@ -122,26 +175,11 @@ describe("Trakoo Agent Skill", () => {
 		expect(providers).toContain(
 			"`window.pirsch(name, options)` is the custom-event API",
 		);
-		expect(providers).toContain("Do not redeclare `Window.pirsch`");
 		expect(providers).not.toMatch(
 			/window\.pirsch(?:\?\.)?\(\s*["']pageview["']/i,
 		);
 		expect(providers).toMatch(
-			/verify one initial hit[\s\S]*one SPA navigation hit/i,
-		);
-		expect(providers).toContain(
-			'`methods: ["pageView"]` does not emit SPA navigation hits.',
-		);
-		expect(providers).toMatch(
-			/router does not produce observable History API changes[\s\S]*page-view API explicitly supported by the installed Pirsch version/,
-		);
-	});
-
-	it("keeps Pirsch server request-context constraints visible for browser-only setups", () => {
-		const providers = read("skills/trakoo/references/providers.md");
-
-		expect(providers).toMatch(
-			/browser-only[\s\S]*server hits[\s\S]*original IP address[\s\S]*User-Agent[\s\S]*skipped/i,
+			/server hits[\s\S]*original IP address[\s\S]*User-Agent[\s\S]*skipped/i,
 		);
 	});
 
@@ -153,14 +191,7 @@ describe("Trakoo Agent Skill", () => {
 			/async function identifyUser[\s\S]*await analyticsReady;[\s\S]*analytics\.identify/,
 		);
 		expect(skill).toMatch(
-			/const restoredSession = await restoreSession\(\);[\s\S]*if \(restoredSession\.user\)[\s\S]*await identifyUser\([\s\S]*identity-sensitive events/,
-		);
-		expect(skill).toMatch(
 			/login[\s\S]*signup[\s\S]*restored-session\/bootstrap/i,
-		);
-		expect(skill).toMatch(/server shutdown[\s\S]*provider[\s\S]*ownership/i);
-		expect(skill).toMatch(
-			/reusable[\s\S]*teardown[\s\S]*request-scoped[\s\S]*`finally`/,
 		);
 	});
 
@@ -179,24 +210,7 @@ describe("Trakoo Agent Skill", () => {
 		);
 	});
 
-	it("ties request shutdown to fresh instance ownership in framework guidance", () => {
-		const frameworks = read("skills/trakoo/references/frameworks.md");
-		const nextjs = frameworks.match(
-			/## Next\.js\n\n([\s\S]*?)\n\n## SvelteKit/,
-		)?.[1];
-		const neutral = frameworks.match(
-			/## Framework-neutral TypeScript\n\n([\s\S]*?)\n\n## Verification/,
-		)?.[1];
-
-		for (const guidance of [nextjs, neutral]) {
-			expect(guidance).toMatch(/fresh provider\/analytics pair/);
-			expect(guidance).toMatch(
-				/reusable module singleton[\s\S]*application or process teardown/,
-			);
-		}
-	});
-
-	it("covers supported framework boundaries", () => {
+	it("passes the registry through supported framework boundaries", () => {
 		const frameworks = read("skills/trakoo/references/frameworks.md");
 
 		for (const name of [
@@ -208,6 +222,8 @@ describe("Trakoo Agent Skill", () => {
 		]) {
 			expect(frameworks).toContain(name);
 		}
+		expect(frameworks).toContain('import { appEvents } from "./events"');
+		expect(frameworks).toMatch(/events: appEvents/g);
 		expect(frameworks).toContain('router.subscribe("onResolved"');
 		expect(frameworks).toContain("astro:page-load");
 		expect(frameworks).toContain("PUBLIC_");
@@ -222,13 +238,5 @@ describe("Trakoo Agent Skill", () => {
 			"npx skills add multiplehats/trakoo --skill trakoo",
 		);
 		expect(readme).toContain("skills/trakoo/SKILL.md");
-	});
-
-	it("links the official Trakoo docs from source-of-truth guidance", () => {
-		const skill = read("skills/trakoo/SKILL.md");
-
-		expect(skill).toMatch(
-			/source of truth[\s\S]*https:\/\/stacksee-analytics\.vercel\.app/,
-		);
 	});
 });

@@ -42,6 +42,41 @@ Use one method selector: `methods` or `exclude`. Use one event selector: `events
 
 ## Provider constraints
 
+### PostHog
+
+Both PostHog constructors take a project capture credential (project API key), normally shaped like `phc_project_key`. A `phx_` value is a personal API key; never use or recommend a personal API key for event capture.
+
+Map the browser-public project key to client `token` and the deployment's server value to server `apiKey`:
+
+```ts
+import { PostHogClientProvider } from "trakoo/providers/client";
+import { PostHogServerProvider } from "trakoo/providers/server";
+
+const clientProvider = new PostHogClientProvider({
+	token: import.meta.env.VITE_POSTHOG_PROJECT_KEY,
+	capture_pageview: false,
+	capture_pageleave: false,
+});
+
+const serverProvider = new PostHogServerProvider({
+	apiKey: process.env.POSTHOG_PROJECT_KEY!,
+});
+```
+
+`VITE_POSTHOG_PROJECT_KEY` is intentionally browser-public. `POSTHOG_PROJECT_KEY` stays in server configuration even though both values identify the project. Do not expose unrelated server settings or personal credentials through the public prefix.
+
+Choose one page-view owner. When the application router owns initial and navigation views, set `capture_pageview: false` before manually emitting either stream. When PostHog auto-capture owns page views, do not add a manual initial view or router subscription. For page-leave tracking, use the same one-owner rule: set `capture_pageleave: false` when the application emits page leaves itself, or leave manual tracking out when PostHog owns it.
+
+For a router-owned stream, normalize every initial and navigation URL with the same function before deduplicating. Resolve relative router hrefs against `window.location.origin`, then compare the resulting absolute URL:
+
+```ts
+function normalizePageUrl(href: string): string {
+	const url = new URL(href, window.location.origin);
+	url.hash = "";
+	return url.href;
+}
+```
+
 ### Bento
 
 Call client `identify()` with a valid email before sending Bento events. Exclude `pageView` or restrict Bento to `identify` and `track`; send anonymous traffic to PostHog, Pirsch, or another suitable provider.

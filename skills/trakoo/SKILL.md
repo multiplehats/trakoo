@@ -76,7 +76,8 @@ export const analytics = createClientAnalytics({
 	userTraits: typed<UserTraits>(),
 	providers: [
 		new PostHogClientProvider({
-			token: import.meta.env.VITE_POSTHOG_KEY,
+			// Browser-public PostHog project key (phc_...), never a personal API key.
+			token: import.meta.env.VITE_POSTHOG_PROJECT_KEY,
 		}),
 	],
 });
@@ -110,15 +111,24 @@ if (restoredSession.user) {
 ## Server module and critical event
 
 ```ts
+import { typed } from "trakoo";
 import { createServerAnalytics } from "trakoo/server";
 import { PostHogServerProvider } from "trakoo/providers/server";
 import { appEvents } from "./events";
 
+interface UserTraits {
+	plan: "free" | "pro";
+}
+
 function createRequestAnalytics() {
 	return createServerAnalytics({
 		events: appEvents,
+		userTraits: typed<UserTraits>(),
 		providers: [
-			new PostHogServerProvider({ apiKey: process.env.POSTHOG_API_KEY! }),
+			new PostHogServerProvider({
+				// PostHog project capture key (phc_...), not a personal API key.
+				apiKey: process.env.POSTHOG_PROJECT_KEY!,
+			}),
 		],
 	});
 }
@@ -129,6 +139,7 @@ export async function trackPurchase(input: {
 	currency: string;
 	userId: string;
 	email: string;
+	plan: "free" | "pro";
 }) {
 	const analytics = createRequestAnalytics();
 	try {
@@ -139,7 +150,13 @@ export async function trackPurchase(input: {
 				amount: input.amount,
 				currency: input.currency,
 			},
-			{ userId: input.userId, user: { email: input.email } },
+			{
+				userId: input.userId,
+				user: {
+					email: input.email,
+					traits: { plan: input.plan },
+				},
+			},
 		);
 	} finally {
 		await analytics.shutdown();

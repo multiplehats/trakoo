@@ -79,9 +79,17 @@ For server analytics, server options go directly in argument two:
 ```ts
 await serverAnalytics.track(
 	"session_started",
-	{ userId: "user_123" },
+	{
+		userId: "user_123",
+		user: {
+			email: "ada@example.com",
+			traits: { plan: "pro" },
+		},
+	},
 );
 ```
+
+`userId` belongs directly in server track options. Identity fields such as `email` stay top-level in `user`, while application traits belong under `user.traits`. Do not pass a raw custom-traits object as `user`.
 
 Never pass an `undefined` properties placeholder. A client second argument, a server `undefined` placeholder, or properties supplied through untyped JavaScript is `invalid_properties` under the validation-failure policy.
 
@@ -96,7 +104,6 @@ import { createServerAnalytics } from "trakoo/server";
 import { appEvents } from "./events";
 
 interface UserTraits {
-	email: string;
 	plan: "free" | "pro";
 }
 
@@ -113,7 +120,7 @@ const serverAnalytics = createServerAnalytics({
 });
 ```
 
-The optional `userTraits` marker types `identify()` and server user context. It is type-only and is neither validated nor sent to providers as configuration.
+The optional `userTraits` marker types `identify()` and the `user.traits` member of server user context. It is type-only and is neither validated nor sent to providers as configuration. On the server, keep identity fields at the top level of `user` and wrap the typed application values inside `user.traits`, as shown above.
 
 ## Validation timing
 

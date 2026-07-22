@@ -84,7 +84,7 @@ describe("Trakoo Agent Skill", () => {
 
 		expect(events).toContain('analytics.track("session_started")');
 		expect(events).toMatch(
-			/serverAnalytics\.track\(\s*"session_started",\s*\{ userId: "user_123" \},\s*\)/,
+			/serverAnalytics\.track\(\s*"session_started",\s*\{\s*userId: "user_123",/,
 		);
 		expect(events).toMatch(/server options go directly in argument two/i);
 		expect(events).toMatch(/never pass an `undefined` properties placeholder/i);
@@ -320,6 +320,47 @@ describe("Trakoo Agent Skill", () => {
 		expect(serverExample).not.toMatch(
 			/^const analytics = createRequestAnalytics\(\);/m,
 		);
+		expect(serverExample).toMatch(
+			/userId: input\.userId,\s*user: \{\s*email: input\.email,\s*traits: \{ plan: input\.plan \},\s*\}/,
+		);
+		expect(serverExample).not.toMatch(/user:\s*input\.user/);
+		expect(serverExample).not.toMatch(/user:\s*\{\s*email:[^}]*,\s*plan:/);
+	});
+
+	it("nests custom traits in propertyless server user context", () => {
+		const events = read("skills/trakoo/references/events-and-validation.md");
+		const propertyless = events.match(
+			/## Propertyless calls[\s\S]*?```ts\n([\s\S]*?)```[\s\S]*?```ts\n([\s\S]*?)```/,
+		)?.[2];
+
+		expect(events).toMatch(
+			/identity fields[\s\S]*top-level[\s\S]*`user`[\s\S]*application traits[\s\S]*`user\.traits`/i,
+		);
+		expect(propertyless).toMatch(
+			/userId: "user_123",\s*user: \{\s*email: "ada@example\.com",\s*traits: \{ plan: "pro" \},\s*\}/,
+		);
+		expect(events).not.toMatch(/user:\s*input\.user/);
+	});
+
+	it("documents PostHog capture credentials and page-view ownership", () => {
+		const providers = read("skills/trakoo/references/providers.md");
+		const posthog = providers.match(
+			/### PostHog\n\n([\s\S]*?)\n\n### Bento/,
+		)?.[1];
+
+		expect(posthog).toBeDefined();
+		expect(posthog).toMatch(/project (?:capture |API )?key[\s\S]*`phc_/i);
+		expect(posthog).toMatch(/`phx_`[\s\S]*personal API key[\s\S]*never/i);
+		expect(posthog).toMatch(
+			/new PostHogClientProvider\(\{\s*token: import\.meta\.env\.VITE_POSTHOG_PROJECT_KEY,/,
+		);
+		expect(posthog).toMatch(
+			/new PostHogServerProvider\(\{\s*apiKey: process\.env\.POSTHOG_PROJECT_KEY!,/,
+		);
+		expect(posthog).toContain("capture_pageview: false");
+		expect(posthog).toMatch(/one page-view owner/i);
+		expect(posthog).toMatch(/page-leave[\s\S]*one[- ]owner/i);
+		expect(posthog).toMatch(/normalize[\s\S]*URL[\s\S]*deduplic/i);
 	});
 
 	it("passes the registry through supported framework boundaries", () => {
@@ -357,6 +398,36 @@ describe("Trakoo Agent Skill", () => {
 				/reusable module singleton[\s\S]*application or process teardown/,
 			);
 		}
+	});
+
+	it("enforces TanStack Start runtime boundaries and page-view ownership", () => {
+		const frameworks = read("skills/trakoo/references/frameworks.md");
+		const tanstack = frameworks.match(
+			/## TanStack Start\n\n([\s\S]*?)\n\n## Astro/,
+		)?.[1];
+
+		expect(tanstack).toContain("analytics.client.ts");
+		expect(tanstack).toContain("analytics.server.ts");
+		expect(tanstack).toContain('import "@tanstack/react-start/client-only"');
+		expect(tanstack).toContain('import "@tanstack/react-start/server-only"');
+		expect(tanstack).toMatch(
+			/\.server\.ts[\s\S]*imported only inside[\s\S]*server-function[\s\S]*handler/i,
+		);
+		expect(tanstack).toContain(
+			'import { createServerFn } from "@tanstack/react-start"',
+		);
+		expect(tanstack).toContain("createServerFn");
+		expect(tanstack).toContain(".handler(async");
+		expect(tanstack).toContain('await import("./analytics.server")');
+		expect(tanstack).toMatch(
+			/unprefixed[\s\S]*environment[\s\S]*`.handler\(\)`[\s\S]*per-request/i,
+		);
+		expect(tanstack).toMatch(/edge[\s\S]*bindings/i);
+		expect(tanstack).toContain("capture_pageview: false");
+		expect(tanstack).toMatch(/one page-view owner/i);
+		expect(tanstack).toContain("new URL(href, window.location.origin)");
+		expect(tanstack).toContain('router.subscribe("onResolved"');
+		expect(tanstack).toContain("unsubscribe()");
 	});
 
 	it("documents skills CLI installation", () => {

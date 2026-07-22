@@ -46,15 +46,65 @@ Initialize browser analytics only in browser-executed code such as `onMount`; im
 
 ## TanStack Start
 
-Place browser analytics in client-executed application code and server analytics inside `createServerFn` handlers or server routes. Import the shared `appEvents` registry on both sides and pass `events: appEvents` to each factory. With Vite, expose only browser-safe identifiers through `VITE_*`; keep secrets unprefixed and read them inside the per-request server handler, especially on edge runtimes. Subscribe to completed navigation for page views and clean up the subscription:
+Enforce the runtime boundary with filenames such as `analytics.client.ts` and `analytics.server.ts`. As an additional or alternative guard, put the matching side-effect marker at the top of each module:
 
 ```ts
-const unsubscribe = router.subscribe("onResolved", ({ toLocation }) => {
-	analytics.pageView({ path: toLocation.pathname, url: toLocation.href });
+// analytics.client.ts
+import "@tanstack/react-start/client-only";
+```
+
+```ts
+// analytics.server.ts
+import "@tanstack/react-start/server-only";
+```
+
+Place browser analytics in client-executed application code and server analytics inside `createServerFn` handlers or server routes. Import the shared `appEvents` registry on both sides and pass `events: appEvents` to each factory. Keep `.server.ts` helpers imported only inside a server-function handler or another compiler-recognized server callback:
+
+```ts
+import { createServerFn } from "@tanstack/react-start";
+
+export const trackPurchase = createServerFn({ method: "POST" }).handler(async ({ data }) => {
+	const { createRequestAnalytics } = await import("./analytics.server");
+	const projectKey = process.env.POSTHOG_PROJECT_KEY!;
+	const analytics = createRequestAnalytics(projectKey);
+
+	try {
+		await analytics.track("purchase_completed", data.properties, data.options);
+	} finally {
+		await analytics.shutdown();
+	}
 });
 ```
 
-Use the framework's lifecycle to call `unsubscribe()` when the owner is disposed.
+With Vite, expose only browser-safe identifiers through `VITE_*`. Read unprefixed deployment environment values inside `.handler()`, middleware `.server()`, server-route handlers, or other per-request callbacks. Edge runtimes may expose deployment bindings differently from Node's `process.env`; use the installed adapter's per-request binding API.
+
+Choose one page-view owner. The following router-owned approach requires the client `PostHogClientProvider` to use `capture_pageview: false` before the manual initial/navigation stream. If provider auto-capture owns page views, omit this stream. Normalize initial and router URLs identically so relative and absolute hrefs deduplicate:
+
+```ts
+let lastPageUrl: string | undefined;
+
+function emitPageView(href: string) {
+	const parsed = new URL(href, window.location.origin);
+	parsed.hash = "";
+	const url = parsed.href;
+
+	if (url === lastPageUrl) return;
+	lastPageUrl = url;
+
+	analytics.pageView({
+		path: `${parsed.pathname}${parsed.search}`,
+		url,
+	});
+}
+
+emitPageView(window.location.href);
+
+const unsubscribe = router.subscribe("onResolved", ({ toLocation }) => {
+	emitPageView(toLocation.href);
+});
+```
+
+Use the framework's lifecycle to call `unsubscribe()` when the owner is disposed. Apply the same one-owner decision to page-leave tracking; disable provider auto-capture before manually emitting page leaves.
 
 ## Astro
 

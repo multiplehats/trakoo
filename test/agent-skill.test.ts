@@ -46,4 +46,22 @@ describe("Trakoo Agent Skill", () => {
 		expect(providers).toContain("excludeEvents");
 		expect(providers).toContain("eventPatterns");
 	});
+
+	it("covers supported framework boundaries", () => {
+		const frameworks = read("skills/trakoo/references/frameworks.md");
+
+		for (const name of [
+			"Next.js",
+			"SvelteKit",
+			"TanStack Start",
+			"Astro",
+			"Framework-neutral",
+		]) {
+			expect(frameworks).toContain(name);
+		}
+		expect(frameworks).toContain("router.subscribe(\"onResolved\"");
+		expect(frameworks).toContain("astro:page-load");
+		expect(frameworks).toContain("PUBLIC_");
+		expect(frameworks).toContain("VITE_");
+	});
 });

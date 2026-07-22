@@ -28,7 +28,7 @@ skills/trakoo/
 
 `references/providers.md` contains the provider capability and dependency matrix, selection guidance, routing patterns, Proxy transport, custom providers, and provider-specific constraints.
 
-`references/frameworks.md` contains framework detection and integration guidance for Next.js, SvelteKit, and framework-neutral browser/server TypeScript projects. It focuses on file placement, environment-variable boundaries, navigation tracking, and server lifecycle rather than restating framework documentation.
+`references/frameworks.md` contains framework detection and integration guidance for Next.js, SvelteKit, TanStack Start, Astro, and framework-neutral browser/server TypeScript projects. It focuses on file placement, environment-variable boundaries, navigation tracking, and server lifecycle rather than restating framework documentation.
 
 ## Triggering and Scope
 

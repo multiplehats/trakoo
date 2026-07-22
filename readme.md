@@ -164,7 +164,7 @@ export const commerceEvents = defineEvents({
 
 The schema's input type controls what `track()` accepts. Its output type controls the validated and transformed properties passed to providers. In this example, `amount` may be a coercible input, but providers always receive a positive number.
 
-Validation failures are dropped by default. For strict handling, opt into throwing and report the sanitized error:
+Validation failures are dropped by default. For strict handling, opt into throwing and report the normalized, payload-free error:
 
 ```typescript
 const analytics = createClientAnalytics({
@@ -177,7 +177,7 @@ const analytics = createClientAnalytics({
 });
 ```
 
-`AnalyticsValidationError` contains a code, event name, and normalized issue messages/paths. It never retains the event payload. With `debug: true` and no `onError`, the fallback warning contains only the code, event name, and issue paths, so invalid values are not logged.
+`AnalyticsValidationError` contains a code, event name, and normalized issue messages/paths. Validator issue messages are retained for `onError` and thrown errors, but the complete input payload is never attached to the error. With `debug: true` and no `onError`, the fallback warning deliberately omits issue messages and input values; it contains only the code, event name, and issue paths.
 
 The error callback is awaited before the configured drop or throw policy is applied. Async schemas also mean concurrent `track()` calls can reach providers in validation-completion order rather than call order. Await calls sequentially if delivery order matters.
 

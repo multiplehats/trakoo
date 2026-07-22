@@ -189,20 +189,32 @@ await serverAnalytics.shutdown();
 
 ## Organizing registries
 
-Split large definition objects by domain, then combine them in the single registry passed to factories:
+For most applications, keep one central `defineEvents()` registry. If a large application must split definitions by domain, call `defineEvents()` where each literal is created so its wire names stay exact, then select the named definitions into the final application registry.
 
 ```typescript title="lib/events/index.ts"
 import { defineEvents } from 'trakoo';
-import { productEventDefinitions } from './product';
-import { userEventDefinitions } from './user';
+import { productEvents } from './product';
+import { userEvents } from './user';
 
 export const appEvents = defineEvents({
-  ...productEventDefinitions,
-  ...userEventDefinitions
+  productViewed: productEvents.productViewed,
+  userSignedUp: userEvents.userSignedUp
 });
 ```
 
-Keep definition fragments as plain objects and call `defineEvents()` once after merging. This guarantees duplicate wire names are checked across the full application registry.
+```typescript title="lib/events/product.ts"
+import { defineEvents, typed } from 'trakoo';
+
+export const productEvents = defineEvents({
+  productViewed: {
+    name: 'product_viewed',
+    category: 'engagement',
+    properties: typed<{ productId: string }>()
+  }
+});
+```
+
+Define `userEvents` the same way in its domain module. Selecting definitions by name preserves their literal wire names, while the final `defineEvents()` call checks duplicate wire names across the application registry. Do not treat registries as arbitrary mergeable objects.
 
 ## Next steps
 

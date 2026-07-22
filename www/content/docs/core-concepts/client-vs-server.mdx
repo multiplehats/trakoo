@@ -13,7 +13,7 @@ trakoo ships two entry points: `trakoo/client` for the browser and `trakoo/serve
 | User context | Set once, applied to later events | Passed with every `track()` |
 | Logout | Call `reset()` | Nothing to reset |
 | Lifetime | Application-owned session instance | Application-owned request, worker, or process instance |
-| Delivery | Fire-and-forget | Await critical events |
+| Delivery | Returns a promise; often handled in the background | Await critical events |
 | Shutdown | Not required | Required in serverless |
 
 ## When to use each
@@ -73,18 +73,31 @@ analytics.reset();
 
 See [Identifying Users](/docs/core-concepts/identifying-users) for traits, typing, and logout details.
 
-### Fire-and-forget
+### Handle the tracking promise
 
-Client tracking is non-blocking. Don't await it — let events send in the background so the UI stays responsive.
+Client `track()` always returns `Promise<void>`. UI flows often start that work without delaying navigation, but should explicitly handle a possible rejection. Rejections can matter when strict validation is configured or initialization fails.
 
 ```typescript
 function handleClick() {
-  analytics.track('button_clicked', { buttonId: 'cta' });
+  void analytics
+    .track('button_clicked', { buttonId: 'cta' })
+    .catch((error) => reportTrackingFailure(error));
   navigateTo('/checkout');
 }
 ```
 
-Awaiting `track()` on the client makes the user wait on an analytics request for no benefit.
+Await `track()` when completion matters or when the caller should handle a strict validation failure inline:
+
+```typescript
+async function trackBeforeContinuing() {
+  try {
+    await analytics.track('button_clicked', { buttonId: 'cta' });
+    continueWorkflow();
+  } catch (error) {
+    reportTrackingFailure(error);
+  }
+}
+```
 
 ### Page views
 

@@ -62,19 +62,50 @@ Place browser analytics in client-executed application code and server analytics
 
 ```ts
 import { createServerFn } from "@tanstack/react-start";
+import { z } from "zod";
 
-export const trackPurchase = createServerFn({ method: "POST" }).handler(async ({ data }) => {
-	const { createRequestAnalytics } = await import("./analytics.server");
-	const projectKey = process.env.POSTHOG_PROJECT_KEY!;
-	const analytics = createRequestAnalytics(projectKey);
-
-	try {
-		await analytics.track("purchase_completed", data.properties, data.options);
-	} finally {
-		await analytics.shutdown();
-	}
+const trackPurchaseInput = z.object({
+	orderId: z.string().min(1),
 });
+
+export const trackPurchase = createServerFn({ method: "POST" })
+	.validator(trackPurchaseInput)
+	.handler(async ({ data }) => {
+		const { createRequestAnalytics } = await import("./analytics.server");
+		const { requireUser } = await import("./auth.server");
+		const { purchases } = await import("./purchases.server");
+
+		const user = await requireUser();
+		const order = await purchases.confirmAndLoad({
+			orderId: data.orderId,
+			userId: user.id,
+		});
+		const projectKey = process.env.POSTHOG_PROJECT_KEY!;
+		const analytics = createRequestAnalytics(projectKey);
+
+		try {
+			await analytics.track(
+				"purchase_completed",
+				{
+					orderId: order.id,
+					amount: order.totalAmount,
+					currency: order.currency,
+				},
+				{
+					userId: user.id,
+					user: {
+						email: user.email,
+						traits: { plan: order.plan },
+					},
+				},
+			);
+		} finally {
+			await analytics.shutdown();
+		}
+	});
 ```
+
+`requireUser` and `purchases.confirmAndLoad` are seams supplied by the consuming application. Authenticate inside the server function, then use the lookup ID plus the authenticated user ID to load and confirm the authoritative purchase. Derive event properties and identity from that server-owned result and session; never accept event properties, user identity, or traits from the browser for an authoritative event.
 
 With Vite, expose only browser-safe identifiers through `VITE_*`. Read unprefixed deployment environment values inside `.handler()`, middleware `.server()`, server-route handlers, or other per-request callbacks. Edge runtimes may expose deployment bindings differently from Node's `process.env`; use the installed adapter's per-request binding API.
 

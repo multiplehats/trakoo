@@ -430,6 +430,33 @@ describe("Trakoo Agent Skill", () => {
 		expect(tanstack).toContain("unsubscribe()");
 	});
 
+	it("keeps TanStack critical events authoritative on the server", () => {
+		const frameworks = read("skills/trakoo/references/frameworks.md");
+		const tanstack = frameworks.match(
+			/## TanStack Start\n\n([\s\S]*?)\n\n## Astro/,
+		)?.[1];
+		const code = codeBlocks(tanstack ?? "");
+		const inputSchema = code.match(
+			/const trackPurchaseInput = z\.object\(\{([\s\S]*?)\}\);/,
+		)?.[1];
+
+		expect(inputSchema).toMatch(/^\s*orderId: z\.string\(\)\.min\(1\),?\s*$/);
+		expect(code).toContain(".validator(trackPurchaseInput)");
+		expect(code).toContain("const user = await requireUser()");
+		expect(code).toMatch(
+			/purchases\.confirmAndLoad\(\{\s*orderId: data\.orderId,\s*userId: user\.id,\s*\}\)/,
+		);
+		expect(code).toMatch(
+			/await analytics\.track\(\s*"purchase_completed",\s*\{\s*orderId: order\.id,\s*amount: order\.totalAmount,\s*currency: order\.currency,\s*\},\s*\{\s*userId: user\.id,\s*user: \{\s*email: user\.email,\s*traits: \{ plan: order\.plan \},\s*\},\s*\},\s*\)/,
+		);
+		expect(code).not.toMatch(/data\.(?:properties|options)\b/);
+		expect(code).not.toMatch(/\bdata\s+as\s+/);
+		expect(code).not.toMatch(/(?:amount|currency|userId|email|plan):\s*data\./);
+		expect(tanstack).toMatch(
+			/`requireUser` and `purchases\.confirmAndLoad`[\s\S]*consuming application/i,
+		);
+	});
+
 	it("documents skills CLI installation", () => {
 		const readme = read("readme.md");
 

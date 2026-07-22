@@ -131,16 +131,22 @@ const analytics = createServerAnalytics({
 	providers: serverProviders,
 	validation: {
 		onFailure: "throw",
-		onError(error: AnalyticsValidationError) {
-			reportValidationFailure(error);
+		onError(error) {
+			reportValidationFailure({
+				code: error.code,
+				eventName: error.eventName,
+				paths: error.issues.map((issue) => issue.path),
+			});
 		},
 	},
 });
 ```
 
-`AnalyticsValidationError` reports the emitted event name, normalized issue information, and one of `unknown_event`, `invalid_properties`, `validator_failure`, or `invalid_output`. When configured, `onError` receives the error exactly once. A throwing or rejected callback cannot change the selected drop/throw policy.
+`AnalyticsValidationError` reports the emitted event name, normalized issue information, and one of `unknown_event`, `invalid_properties`, `validator_failure`, or `invalid_output`. It never retains the submitted properties object or validator exception. Its normalized issues may include validator-provided messages, and those messages can contain application values.
 
-Errors and logs are sanitized; they do not retain or expose the full input payload or raw vendor issue messages. Debug output may contain only metadata such as the code, event name, and normalized paths.
+When configured, `onError` receives the error exactly once. A throwing or rejected callback cannot change the selected drop/throw policy. Select and sanitize fields before forwarding a validation failure to application observability; the example sends only the code, event name, and normalized paths rather than the whole error.
+
+Default debug logging exposes only sanitized metadata such as the code, event name, and normalized paths. It never logs raw messages or input.
 
 This validation policy does not redefine provider-delivery or initialization errors. Those retain their existing behavior, so `track()` can still reject for reasons outside event validation.
 

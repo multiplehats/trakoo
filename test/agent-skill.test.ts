@@ -88,17 +88,35 @@ describe("Trakoo Agent Skill", () => {
 		);
 	});
 
-	it("documents the Pirsch initial-load and SPA navigation limitation", () => {
+	it("documents Pirsch automatic SPA page views without inventing a custom event", () => {
 		const providers = read("skills/trakoo/references/providers.md");
 
 		expect(providers).toMatch(
-			/pa\.js[\s\S]*initial page load[\s\S]*`pageView\(\)` is a no-op/,
+			/pa\.js[\s\S]*initial page load[\s\S]*History API URL changes[\s\S]*by default/,
+		);
+		expect(providers).toContain(
+			"`window.pirsch(name, options)` is the custom-event API",
+		);
+		expect(providers).toContain("Do not redeclare `Window.pirsch`");
+		expect(providers).not.toMatch(
+			/window\.pirsch(?:\?\.)?\(\s*["']pageview["']/i,
+		);
+		expect(providers).toMatch(
+			/verify one initial hit[\s\S]*one SPA navigation hit/i,
 		);
 		expect(providers).toContain(
 			'`methods: ["pageView"]` does not emit SPA navigation hits.',
 		);
 		expect(providers).toMatch(
-			/installed Pirsch provider and version[\s\S]*supported SPA delivery path/,
+			/router does not produce observable History API changes[\s\S]*page-view API explicitly supported by the installed Pirsch version/,
+		);
+	});
+
+	it("keeps Pirsch server request-context constraints visible for browser-only setups", () => {
+		const providers = read("skills/trakoo/references/providers.md");
+
+		expect(providers).toMatch(
+			/browser-only[\s\S]*server hits[\s\S]*original IP address[\s\S]*User-Agent[\s\S]*skipped/i,
 		);
 	});
 
@@ -108,6 +126,12 @@ describe("Trakoo Agent Skill", () => {
 		expect(skill).toContain("const analyticsReady = analytics.initialize();");
 		expect(skill).toMatch(
 			/async function identifyUser[\s\S]*await analyticsReady;[\s\S]*analytics\.identify/,
+		);
+		expect(skill).toMatch(
+			/const restoredSession = await restoreSession\(\);[\s\S]*if \(restoredSession\.user\)[\s\S]*await identifyUser\([\s\S]*identity-sensitive events/,
+		);
+		expect(skill).toMatch(
+			/login[\s\S]*signup[\s\S]*restored-session\/bootstrap/i,
 		);
 		expect(skill).toMatch(/server shutdown[\s\S]*provider[\s\S]*ownership/i);
 		expect(skill).toMatch(

@@ -97,9 +97,11 @@ const provider = new PirschClientProvider({
 });
 ```
 
-`VITE_PIRSCH_IDENTIFICATION_CODE` and an optional hostname override are browser-public configuration, not secrets. Pirsch's `pa.js` script handles the initial page load; the current provider's `pageView()` is a no-op. Consequently, `methods: ["pageView"]` does not emit SPA navigation hits. Check the installed Pirsch provider and version for a supported SPA delivery path. If it has no programmatic navigation delivery, integrate a supported Pirsch SPA path directly or route completed client navigations to another provider; do not imply that routing alone emits them.
+`VITE_PIRSCH_IDENTIFICATION_CODE` and an optional hostname override are browser-public configuration, not secrets. Pirsch's `pa.js` script records the initial page load and programmatic History API URL changes by default. The current provider's `pageView()` is therefore a no-op, and `methods: ["pageView"]` does not emit SPA navigation hits. Do not add a duplicate router hook when `pa.js` can observe the navigation. Verify one initial hit and one SPA navigation hit in the browser Network panel.
 
-A server event without the original IP address and User-Agent cannot be attributed and is skipped. Proxy browser events through a server endpoint when that request context is needed.
+`window.pirsch(name, options)` is the custom-event API, not a programmatic page-view API. Do not redeclare `Window.pirsch` in consuming code; importing `PirschClientProvider` already supplies its installed type. If a router does not produce observable History API changes, use a page-view API explicitly supported by the installed Pirsch version or route navigation page views elsewhere.
+
+Even when the selected configuration is browser-only, state the server delivery constraint: Pirsch server hits require the visitor's original IP address and User-Agent; without both, they cannot be attributed and are skipped. Proxy browser events through a server endpoint when that request context is needed.
 
 ### Visitors
 

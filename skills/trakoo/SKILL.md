@@ -79,7 +79,23 @@ export async function identifyUser(
 }
 ```
 
-Create one browser instance per session and retain its initialization promise. Await readiness before the first `identify()` or identity-sensitive event because some providers ignore identity calls made before their SDK is ready. Make login, signup, and restored-session flows await the identity helper; call `analytics.reset()` on logout. Browser tracking is normally fire-and-forget after readiness; do not block navigation on non-critical analytics.
+Create one browser instance per session and retain its initialization promise. Await readiness before the first `identify()` or identity-sensitive event because some providers ignore identity calls made before their SDK is ready. Login, signup, and restored-session/bootstrap flows must await the identity helper; call `analytics.reset()` on logout.
+
+At the application's restored-session bootstrap boundary, await identity before enabling or emitting identity-sensitive events:
+
+```ts
+const restoredSession = await restoreSession();
+
+if (restoredSession.user) {
+	await identifyUser(restoredSession.user.id, {
+		email: restoredSession.user.email,
+	});
+}
+
+// Enable identity-sensitive events only after this bootstrap completes.
+```
+
+Browser tracking is normally fire-and-forget after readiness; do not block navigation on non-critical analytics.
 
 ## Server module and critical event
 

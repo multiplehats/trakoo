@@ -24,4 +24,26 @@ describe("Trakoo Agent Skill", () => {
 		expect(skill).toContain("references/providers.md");
 		expect(skill).toContain("references/frameworks.md");
 	});
+
+	it("covers every public provider and its delivery constraints", () => {
+		const providers = read("skills/trakoo/references/providers.md");
+
+		for (const name of [
+			"PostHog",
+			"OpenPanel",
+			"Bento",
+			"Pirsch",
+			"EmitKit",
+			"Visitors",
+			"Proxy",
+			"BaseAnalyticsProvider",
+		]) {
+			expect(providers).toContain(name);
+		}
+		expect(providers).toContain("@bentonow/bento-node-sdk");
+		expect(providers).toContain("IP address and User-Agent");
+		expect(providers).toContain("methods");
+		expect(providers).toContain("excludeEvents");
+		expect(providers).toContain("eventPatterns");
+	});
 });

@@ -1,66 +1,52 @@
 import { ServerAnalytics } from "@/adapters/server/server-analytics.js";
 import type {
-	AnalyticsConfig,
+	EventDefinitions,
+	EventRegistry,
+} from "@/core/events/registry.js";
+import type { InferMarker, TypeMarker } from "@/core/events/schema.js";
+import type {
+	EventContext,
 	ProviderConfigOrProvider,
 } from "@/core/events/types.js";
-import type {
-	EventCollection,
-	EventMapFromCollection,
-} from "@/core/events/index.js";
+import type { ValidationConfig } from "@/core/events/validation.js";
 
-export interface ServerAnalyticsConfig {
-	providers?: ProviderConfigOrProvider[];
-	debug?: boolean;
-	enabled?: boolean;
+type ServerUserTraits<M extends TypeMarker<object> | undefined> =
+	M extends undefined ? Record<string, unknown> : InferMarker<M>;
+
+export interface ServerAnalyticsConfig<
+	R extends EventRegistry<EventDefinitions>,
+	M extends TypeMarker<object> | undefined = undefined,
+> {
+	readonly events: R;
+	readonly userTraits?: M;
+	readonly providers?: ProviderConfigOrProvider[];
+	readonly validation?: ValidationConfig;
+	readonly debug?: boolean;
+	readonly enabled?: boolean;
+	readonly defaultContext?: Partial<EventContext<ServerUserTraits<M>>>;
 }
 
 /**
- * Create a server analytics instance
- *
- * @example
- * ```typescript
- * import { createServerAnalytics } from 'trakoo/server';
- * import { PostHogServerProvider } from 'trakoo/providers/server';
- * import { AppEvents } from './events';
- *
- * const analytics = createServerAnalytics<typeof AppEvents>({
- *   providers: [
- *     new PostHogServerProvider({
- *       apiKey: process.env.POSTHOG_API_KEY,
- *       host: process.env.POSTHOG_HOST
- *     })
- *   ],
- *   debug: true,
- *   enabled: true
- * });
- *
- * // Now event names and properties are fully typed!
- * await analytics.track('user_signed_up', {
- *   userId: 'user-123',
- *   email: 'user@example.com',
- *   plan: 'pro'
- * }, { userId: 'user-123' });
- * ```
+ * Creates and initializes a fresh registry-bound server analytics instance.
  */
 export function createServerAnalytics<
-	TEvents = never,
-	TUserTraits extends Record<string, unknown> = Record<string, unknown>,
+	R extends EventRegistry<EventDefinitions>,
+	M extends TypeMarker<object> | undefined = undefined,
 >(
-	config: ServerAnalyticsConfig,
-): ServerAnalytics<EventMapFromCollection<TEvents>, TUserTraits> {
-	const analyticsConfig: AnalyticsConfig = {
-		providers: config.providers || [],
+	config: ServerAnalyticsConfig<R, M>,
+): ServerAnalytics<R, ServerUserTraits<M>> {
+	const analytics = new ServerAnalytics<R, ServerUserTraits<M>>({
+		events: config.events,
+		providers: config.providers ?? [],
+		validation: config.validation,
 		debug: config.debug,
 		enabled: config.enabled,
-	};
-
-	const analytics = new ServerAnalytics<
-		EventMapFromCollection<TEvents>,
-		TUserTraits
-	>(analyticsConfig);
+		defaultContext: config.defaultContext,
+	});
 	analytics.initialize();
 
 	return analytics;
 }
 
 export { ServerAnalytics };
+export type { ServerTrackOptions } from "@/adapters/server/server-analytics.js";

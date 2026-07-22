@@ -1,5 +1,17 @@
 import type { EventContext } from "@/core/events/types.js";
-import type { ServerAnalytics } from "@/server.js";
+import {
+	getEventDefinition,
+	type EventDefinitions,
+	type EventName,
+	type EventRegistry,
+} from "@/core/events/registry.js";
+import { isNoPropertiesMarker } from "@/core/events/schema.js";
+import {
+	serverAnalyticsRegistry,
+	type ServerAnalytics,
+	type ServerAnalyticsRegistryAccess,
+	type ServerTrackOptions,
+} from "@/adapters/server/server-analytics.js";
 import type { ProxyPayload } from "./types.js";
 
 /**
@@ -44,14 +56,11 @@ export interface IngestProxyEventsConfig {
  * ```
  */
 export async function ingestProxyEvents<
-	TEventMap extends Record<string, Record<string, unknown>> = Record<
-		string,
-		Record<string, unknown>
-	>,
-	TUserTraits extends Record<string, unknown> = Record<string, unknown>,
+	TRegistry extends EventRegistry<EventDefinitions>,
+	TUserTraits extends object = Record<string, unknown>,
 >(
 	request: Request,
-	analytics: ServerAnalytics<TEventMap, TUserTraits>,
+	analytics: ServerAnalytics<TRegistry, TUserTraits>,
 	config?: IngestProxyEventsConfig,
 ): Promise<void> {
 	try {
@@ -96,22 +105,35 @@ export async function ingestProxyEvents<
 							},
 						} as EventContext<TUserTraits>;
 
-						// Convert BaseEvent back to track() parameters
-						await analytics.track(
+						const eventName = event.event.action as EventName<TRegistry>;
+						const options: ServerTrackOptions<TUserTraits> = {
+							userId: event.event.userId,
+							sessionId: event.event.sessionId,
+							context: enrichedContext,
+						};
+						const definition = getEventDefinition(
+							(
+								analytics as unknown as ServerAnalyticsRegistryAccess<TRegistry>
+							)[serverAnalyticsRegistry],
 							event.event.action,
-							// biome-ignore lint/suspicious/noExplicitAny: Properties from JSON cannot be type-checked against TEventMap at compile time
-							event.event.properties as any,
-							{
-								userId: event.event.userId,
-								sessionId: event.event.sessionId,
-								context: enrichedContext,
-							},
 						);
+
+						if (definition && isNoPropertiesMarker(definition.properties)) {
+							const rawArguments = [eventName, options] as const;
+							await analytics.track(...(rawArguments as never));
+						} else {
+							const rawArguments = [
+								eventName,
+								event.event.properties as never,
+								options,
+							] as const;
+							await analytics.track(...(rawArguments as never));
+						}
 						break;
 					}
 
 					case "identify": {
-						await analytics.identify(event.userId, event.traits);
+						await analytics.identify(event.userId, event.traits as TUserTraits);
 						break;
 					}
 
@@ -207,13 +229,10 @@ function extractIpFromRequest(request: Request): string | undefined {
  * ```
  */
 export function createProxyHandler<
-	TEventMap extends Record<string, Record<string, unknown>> = Record<
-		string,
-		Record<string, unknown>
-	>,
-	TUserTraits extends Record<string, unknown> = Record<string, unknown>,
+	TRegistry extends EventRegistry<EventDefinitions>,
+	TUserTraits extends object = Record<string, unknown>,
 >(
-	analytics: ServerAnalytics<TEventMap, TUserTraits>,
+	analytics: ServerAnalytics<TRegistry, TUserTraits>,
 	config?: IngestProxyEventsConfig,
 ): (request: Request) => Promise<Response> {
 	return async (request: Request) => {

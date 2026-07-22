@@ -285,7 +285,7 @@ describe("Provider Routing - Server", () => {
 	let provider1: MockAnalyticsProvider;
 	let provider2: MockAnalyticsProvider;
 	let provider3: MockAnalyticsProvider;
-	let analytics: ReturnType<typeof createServerAnalytics>;
+	let analytics: ServerAnalytics<typeof clientRoutingEvents>;
 
 	beforeEach(() => {
 		provider1 = new MockAnalyticsProvider({ debug: false, enabled: true });
@@ -304,6 +304,7 @@ describe("Provider Routing - Server", () => {
 
 	it("should call all methods on simple provider (default behavior)", async () => {
 		analytics = createServerAnalytics({
+			events: clientRoutingEvents,
 			providers: [provider1],
 		});
 
@@ -322,6 +323,7 @@ describe("Provider Routing - Server", () => {
 
 	it("should only call specified methods with 'methods' option", async () => {
 		analytics = createServerAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -348,6 +350,7 @@ describe("Provider Routing - Server", () => {
 
 	it("should skip specified methods with 'exclude' option", async () => {
 		analytics = createServerAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -374,6 +377,7 @@ describe("Provider Routing - Server", () => {
 
 	it("should handle mixed provider configurations", async () => {
 		analytics = createServerAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				// Simple provider - gets all methods
 				provider1,
@@ -608,7 +612,7 @@ describe("Event-Level Routing - Server", () => {
 	let provider1: MockAnalyticsProvider;
 	let provider2: MockAnalyticsProvider;
 	let provider3: MockAnalyticsProvider;
-	let analytics: ReturnType<typeof createServerAnalytics>;
+	let analytics: ServerAnalytics<typeof clientRoutingEvents>;
 
 	beforeEach(() => {
 		provider1 = new MockAnalyticsProvider({ debug: false, enabled: true });
@@ -627,6 +631,7 @@ describe("Event-Level Routing - Server", () => {
 
 	it("should only track whitelisted events with 'events' option", async () => {
 		analytics = createServerAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -649,6 +654,7 @@ describe("Event-Level Routing - Server", () => {
 
 	it("should exclude events with 'excludeEvents' option", async () => {
 		analytics = createServerAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -672,6 +678,7 @@ describe("Event-Level Routing - Server", () => {
 
 	it("should match events with 'eventPatterns' glob patterns", async () => {
 		analytics = createServerAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -700,6 +707,7 @@ describe("Event-Level Routing - Server", () => {
 
 	it("should combine method and event routing", async () => {
 		analytics = createServerAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				{
 					provider: provider1,
@@ -726,6 +734,7 @@ describe("Event-Level Routing - Server", () => {
 
 	it("should handle real-world use case: EmitKit for specific events only", async () => {
 		analytics = createServerAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				// All events go to PostHog
 				provider1,
@@ -755,6 +764,7 @@ describe("Event-Level Routing - Server", () => {
 
 	it("should support complex multi-provider event routing", async () => {
 		analytics = createServerAnalytics({
+			events: clientRoutingEvents,
 			providers: [
 				// All events
 				provider1,

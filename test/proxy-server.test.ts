@@ -6,14 +6,72 @@ import {
 import { createServerAnalytics } from "@/server.js";
 import { MockAnalyticsProvider } from "./mock-provider.js";
 import type { ProxyPayload } from "@/providers/proxy/types.js";
+import { defineEvents, noProperties, typed } from "@/core/events/index.js";
+import type { ServerAnalytics } from "@/adapters/server/server-analytics.js";
+
+interface UserTraits {
+	email?: string;
+	plan?: "free" | "pro";
+}
+
+const proxyEvents = defineEvents({
+	buttonClicked: {
+		name: "button_clicked",
+		category: "engagement",
+		properties: typed<{ buttonId: string }>(),
+	},
+	event1: {
+		name: "event1",
+		category: "test",
+		properties: typed<Record<string, unknown>>(),
+	},
+	event2: {
+		name: "event2",
+		category: "test",
+		properties: typed<Record<string, unknown>>(),
+	},
+	testEvent: {
+		name: "test_event",
+		category: "test",
+		properties: typed<Record<string, unknown>>(),
+	},
+	test: {
+		name: "test",
+		category: "test",
+		properties: typed<Record<string, unknown>>(),
+	},
+	sessionStarted: {
+		name: "session_started",
+		category: "user",
+		properties: noProperties(),
+	},
+});
+
+function assertStrictPublicServerTypes(
+	analytics: ServerAnalytics<typeof proxyEvents, UserTraits>,
+): void {
+	analytics.identify("user-123", { plan: "pro" });
+	analytics.track("button_clicked", { buttonId: "cta" });
+
+	// @ts-expect-error raw traits do not widen the public identify API
+	analytics.identify("user-123", { company: "Acme" });
+	// @ts-expect-error raw event names do not widen the public track API
+	analytics.track("unknown_event", {});
+	// @ts-expect-error event properties remain strict at the public track API
+	analytics.track("button_clicked", { label: "CTA" });
+}
+
+void assertStrictPublicServerTypes;
 
 describe("Proxy Server Ingestion", () => {
-	let serverAnalytics: ReturnType<typeof createServerAnalytics>;
+	let serverAnalytics: ServerAnalytics<typeof proxyEvents, UserTraits>;
 	let mockProvider: MockAnalyticsProvider;
 
 	beforeEach(() => {
 		mockProvider = new MockAnalyticsProvider();
 		serverAnalytics = createServerAnalytics({
+			events: proxyEvents,
+			userTraits: typed<UserTraits>(),
 			providers: [mockProvider],
 		});
 		serverAnalytics.initialize();
@@ -56,6 +114,41 @@ describe("Proxy Server Ingestion", () => {
 			);
 		});
 
+		it("replays client-shaped propertyless tracks with server options", async () => {
+			const payload: ProxyPayload = {
+				events: [
+					{
+						type: "track",
+						event: {
+							action: "session_started",
+							category: "user",
+							properties: {},
+							userId: "user-123",
+							sessionId: "session-123",
+						},
+						context: { page: { path: "/start" } },
+					},
+				],
+			};
+			const request = new Request("http://localhost/api/events", {
+				method: "POST",
+				body: JSON.stringify(payload),
+			});
+
+			await ingestProxyEvents(request, serverAnalytics);
+
+			expect(mockProvider.calls.track[0]).toMatchObject({
+				event: {
+					action: "session_started",
+					category: "user",
+					properties: {},
+					userId: "user-123",
+					sessionId: "session-123",
+				},
+				context: { page: { path: "/start" } },
+			});
+		});
+
 		it("should process identify events", async () => {
 			const payload: ProxyPayload = {
 				events: [
@@ -82,6 +175,95 @@ describe("Proxy Server Ingestion", () => {
 			expect(mockProvider.calls.identify[0].traits?.email).toBe(
 				"user@example.com",
 			);
+		});
+
+		it("replays raw identify traits and enriched typed user context", async () => {
+			const payload: ProxyPayload = {
+				events: [
+					{
+						type: "identify",
+						userId: "user-123",
+						traits: { email: "user@example.com", plan: "pro" },
+					},
+					{
+						type: "track",
+						event: {
+							action: "test_event",
+							category: "ignored-at-replay",
+							properties: { source: "proxy" },
+						},
+						context: {
+							user: {
+								userId: "user-123",
+								email: "user@example.com",
+								traits: { plan: "pro" },
+							},
+						},
+					},
+				],
+			};
+			const request = new Request("http://localhost/api/events", {
+				method: "POST",
+				headers: { "X-Forwarded-For": "1.2.3.4" },
+				body: JSON.stringify(payload),
+			});
+
+			await ingestProxyEvents(request, serverAnalytics, {
+				enrichContext: () => ({ server: { requestId: "req-123" } }),
+			});
+
+			expect(mockProvider.calls.identify[0]).toEqual({
+				userId: "user-123",
+				traits: { email: "user@example.com", plan: "pro" },
+			});
+			expect(mockProvider.calls.track[0].context).toMatchObject({
+				user: {
+					userId: "user-123",
+					email: "user@example.com",
+					traits: { plan: "pro" },
+				},
+				server: { requestId: "req-123" },
+				device: { ip: "1.2.3.4" },
+			});
+		});
+
+		it("routes unknown raw track names through server validation policy", async () => {
+			const validationError = vi.fn();
+			const replayError = vi.fn();
+			const strictAnalytics = createServerAnalytics({
+				events: proxyEvents,
+				userTraits: typed<UserTraits>(),
+				providers: [mockProvider],
+				validation: { onFailure: "throw", onError: validationError },
+			});
+			const payload: ProxyPayload = {
+				events: [
+					{
+						type: "track",
+						event: {
+							action: "not_registered",
+							category: "raw",
+							properties: { secret: true },
+						},
+					},
+				],
+			};
+			const request = new Request("http://localhost/api/events", {
+				method: "POST",
+				body: JSON.stringify(payload),
+			});
+
+			await ingestProxyEvents(request, strictAnalytics, {
+				onError: replayError,
+			});
+
+			expect(validationError).toHaveBeenCalledWith(
+				expect.objectContaining({ code: "unknown_event" }),
+			);
+			expect(replayError).toHaveBeenCalledWith(
+				expect.objectContaining({ code: "unknown_event" }),
+			);
+			expect(mockProvider.calls.track).toHaveLength(0);
 		});
 
 		it("should process pageView events", async () => {
@@ -465,6 +647,8 @@ describe("Proxy Server Ingestion", () => {
 			};
 
 			const analytics = createServerAnalytics({
+				events: proxyEvents,
+				userTraits: typed<UserTraits>(),
 				providers: [errorProvider],
 			});
 			analytics.initialize();

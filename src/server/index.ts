@@ -3,6 +3,7 @@ export {
 	createServerAnalytics,
 	ServerAnalytics,
 	type ServerAnalyticsConfig,
+	type ServerTrackOptions,
 } from "@/server.js";
 
 // Server-side providers

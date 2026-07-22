@@ -1091,13 +1091,29 @@ do not hand-edit generated changelog content before the release is published.
 
 - [ ] **Step 5: Run stale API checks**
 
-```bash
-rg -n 'CreateEventDefinition|EventCollection|ExtractEventNames|ExtractEventPropertiesFromCollection|EventMapFromCollection|as const satisfies|properties: \{\} as|create(Client|Server)Analytics<' src test readme.md www/content
-rg -n 'getAnalytics\(|resetAnalyticsInstance|createAnalytics as|createClientAnalytics as createAnalytics' src test readme.md www/content
-```
+Run a fail-closed, line-specific audit over `src`, `test`, `readme.md`, and
+`www/content`; do not obfuscate the historical examples or exclude whole files.
 
-Expected: no output and exit code 1 from both commands. Historical design/plan
-documents are intentionally outside the scan.
+- Scan all eight removed type-helper names with word boundaries:
+  `CreateEventDefinition`, `EventCollection`, `ExtractEventNames`,
+  `ExtractEventPropertiesFromCollection`, `EventMapFromCollection`,
+  `EventDefinition`, `ExtractEventName`, and `ExtractEventProperties`. Every
+  match must be one of the exact `@ts-expect-error` assertions/imports in
+  `test/client.test.ts` or an exact migration-before line in
+  `www/content/docs/guides/standard-schema-migration.mdx`; any other line fails
+  the audit.
+- Scan `as const satisfies`, `properties: {} as`, and
+  `create(Client|Server)Analytics<`. Allow only the exact migration-before
+  lines, the current generic factory declarations in `src/client.ts` and
+  `src/server.ts`, and the internal propertyless normalization cast in
+  `src/core/events/validation.ts`; any other line fails the audit.
+- Scan `getAnalytics(`, `resetAnalyticsInstance`, `createAnalytics as`, and
+  `createClientAnalytics as createAnalytics`. This singleton/alias scan remains
+  a zero-match check (exit code 1).
+
+Expected: both allowlisted scans contain only the exact lines above, and the
+singleton/alias scan has no output. New or changed matches fail closed and must
+be reviewed line by line.
 
 - [ ] **Step 6: Run full verification**
 

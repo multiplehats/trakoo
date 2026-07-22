@@ -7,9 +7,7 @@ import {
 	type EventRegistry,
 } from "./registry.js";
 import {
-	isNoPropertiesMarker,
-	isStandardSchema,
-	isTypeMarker,
+	classifyEventProperties,
 } from "./schema.js";
 import type { EventCategory } from "./types.js";
 
@@ -137,7 +135,28 @@ export async function resolveEvent<
 		);
 	}
 
-	if (isNoPropertiesMarker(definition.properties)) {
+	let category: EventCategory;
+	let properties: ReturnType<typeof classifyEventProperties>;
+	try {
+		category = definition.category;
+		properties = classifyEventProperties(definition.properties);
+	} catch {
+		return applyValidationFailurePolicy(
+			new AnalyticsValidationError("validator_failure", eventName),
+			validation,
+			debug,
+		);
+	}
+
+	if (properties.kind === "access_failure") {
+		return applyValidationFailurePolicy(
+			new AnalyticsValidationError("validator_failure", eventName),
+			validation,
+			debug,
+		);
+	}
+
+	if (properties.kind === "none") {
 		if (inputProvided) {
 			return applyValidationFailurePolicy(
 				new AnalyticsValidationError("invalid_properties", eventName),
@@ -147,12 +166,12 @@ export async function resolveEvent<
 		}
 		return {
 			name: eventName,
-			category: definition.category,
+			category,
 			properties: {} as EventOutputMap<R>[N],
 		};
 	}
 
-	if (isTypeMarker(definition.properties)) {
+	if (properties.kind === "type") {
 		if (!isPropertyObject(input)) {
 			return applyValidationFailurePolicy(
 				new AnalyticsValidationError("invalid_properties", eventName),
@@ -162,12 +181,12 @@ export async function resolveEvent<
 		}
 		return {
 			name: eventName,
-			category: definition.category,
+			category,
 			properties: input as EventOutputMap<R>[N],
 		};
 	}
 
-	if (!isStandardSchema(definition.properties)) {
+	if (properties.kind === "invalid") {
 		return applyValidationFailurePolicy(
 			new AnalyticsValidationError("invalid_properties", eventName),
 			validation,
@@ -177,7 +196,7 @@ export async function resolveEvent<
 
 	let result: StandardSchemaV1.Result<object>;
 	try {
-		result = await definition.properties["~standard"].validate(input);
+		result = await properties.validate.call(properties.standard, input);
 	} catch {
 		return applyValidationFailurePolicy(
 			new AnalyticsValidationError("validator_failure", eventName),
@@ -186,37 +205,43 @@ export async function resolveEvent<
 		);
 	}
 
+	let failure: AnalyticsValidationError | undefined;
+	let output: object | undefined;
 	try {
-		if ("issues" in result && result.issues) {
-			return applyValidationFailurePolicy(
-				new AnalyticsValidationError(
+		if ("issues" in result) {
+			const issues = result.issues;
+			if (issues) {
+				failure = new AnalyticsValidationError(
 					"invalid_properties",
 					eventName,
-					normalizeIssues(result.issues),
-				),
-				validation,
-				debug,
-			);
+					normalizeIssues(issues),
+				);
+			}
 		}
 
-		if (!("value" in result) || !isPropertyObject(result.value)) {
-			return applyValidationFailurePolicy(
-				new AnalyticsValidationError("invalid_output", eventName),
-				validation,
-				debug,
-			);
+		if (!failure) {
+			if (!("value" in result)) {
+				failure = new AnalyticsValidationError("invalid_output", eventName);
+			} else {
+				const value = result.value;
+				if (isPropertyObject(value)) {
+					output = value;
+				} else {
+					failure = new AnalyticsValidationError("invalid_output", eventName);
+				}
+			}
 		}
-
-		return {
-			name: eventName,
-			category: definition.category,
-			properties: result.value as EventOutputMap<R>[N],
-		};
 	} catch {
-		return applyValidationFailurePolicy(
-			new AnalyticsValidationError("validator_failure", eventName),
-			validation,
-			debug,
-		);
+		failure = new AnalyticsValidationError("validator_failure", eventName);
 	}
+
+	if (failure) {
+		return applyValidationFailurePolicy(failure, validation, debug);
+	}
+
+	return {
+		name: eventName,
+		category,
+		properties: output as EventOutputMap<R>[N],
+	};
 }

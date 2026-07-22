@@ -51,28 +51,68 @@ export type EventProperties =
 	| NoPropertiesMarker
 	| StandardSchemaV1<object, object>;
 
+export type EventPropertiesClassification =
+	| { readonly kind: "type" }
+	| { readonly kind: "none" }
+	| {
+			readonly kind: "schema";
+			readonly standard: StandardSchemaV1.Props<object, object>;
+			readonly validate: StandardSchemaV1.Props<object, object>["validate"];
+	  }
+	| { readonly kind: "invalid" }
+	| { readonly kind: "access_failure" };
+
+/** @internal Classifies external definitions and captures schema accessors safely. */
+export function classifyEventProperties(
+	value: unknown,
+): EventPropertiesClassification {
+	if (typeof value !== "object" || value === null) {
+		return { kind: "invalid" };
+	}
+
+	try {
+		if ("kind" in value) {
+			if (value.kind === "type") return { kind: "type" };
+			if (value.kind === "none") return { kind: "none" };
+		}
+
+		if (!("~standard" in value)) return { kind: "invalid" };
+		const standard = value["~standard"];
+		if (
+			typeof standard !== "object" ||
+			standard === null ||
+			!("validate" in standard)
+		) {
+			return { kind: "invalid" };
+		}
+
+		const validate = standard.validate as StandardSchemaV1.Props<
+			object,
+			object
+		>["validate"];
+		if (typeof validate !== "function") return { kind: "invalid" };
+		return {
+			kind: "schema",
+			standard: standard as StandardSchemaV1.Props<object, object>,
+			validate,
+		};
+	} catch {
+		return { kind: "access_failure" };
+	}
+}
+
 export function isTypeMarker(value: unknown): value is TypeMarker<object> {
-	return typeof value === "object" && value !== null && "kind" in value && value.kind === "type";
+	return classifyEventProperties(value).kind === "type";
 }
 
 export function isNoPropertiesMarker(
 	value: unknown,
 ): value is NoPropertiesMarker {
-	return typeof value === "object" && value !== null && "kind" in value && value.kind === "none";
+	return classifyEventProperties(value).kind === "none";
 }
 
 export function isStandardSchema(
 	value: unknown,
 ): value is StandardSchemaV1<object, object> {
-	if (typeof value !== "object" || value === null || !("~standard" in value)) {
-		return false;
-	}
-
-	const standard = value["~standard"];
-	return (
-		typeof standard === "object" &&
-		standard !== null &&
-		"validate" in standard &&
-		typeof standard.validate === "function"
-	);
+	return classifyEventProperties(value).kind === "schema";
 }

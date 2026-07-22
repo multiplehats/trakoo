@@ -6,6 +6,9 @@ import {
 	resolveEvent,
 	typed,
 	type EventName,
+	isNoPropertiesMarker,
+	isStandardSchema,
+	isTypeMarker,
 } from "@/core/events";
 import { describe, expect, expectTypeOf, it, vi } from "vitest";
 
@@ -29,6 +32,51 @@ function invalidResult<TOutput extends object>(
 	value: unknown,
 ): StandardSchemaV1.Result<TOutput> {
 	return { value } as StandardSchemaV1.Result<TOutput>;
+}
+
+function hostileSchemas(): readonly [string, StandardSchemaV1<object, object>][] {
+	const throwingStandardGetter = Object.defineProperty({}, "~standard", {
+		get() {
+			throw new Error("standard getter retained secret-input");
+		},
+	}) as StandardSchemaV1<object, object>;
+	const throwingValidateGetter = {
+		"~standard": Object.defineProperty(
+			{ version: 1 as const, vendor: "trakoo-test" },
+			"validate",
+			{
+				get() {
+					throw new Error("validate getter retained secret-input");
+				},
+			},
+		),
+	} as StandardSchemaV1<object, object>;
+	const throwingHasTrap = new Proxy(
+		{},
+		{
+			has() {
+				throw new Error("has trap retained secret-input");
+			},
+		},
+	) as StandardSchemaV1<object, object>;
+	const throwingGetTrap = new Proxy(
+		{},
+		{
+			has() {
+				return true;
+			},
+			get() {
+				throw new Error("get trap retained secret-input");
+			},
+		},
+	) as StandardSchemaV1<object, object>;
+
+	return [
+		["throwing ~standard getter", throwingStandardGetter],
+		["throwing validate getter", throwingValidateGetter],
+		["throwing Proxy has trap", throwingHasTrap],
+		["throwing Proxy get trap", throwingGetTrap],
+	];
 }
 
 const events = defineEvents({
@@ -110,6 +158,78 @@ async function rejectedValidationError(
 }
 
 describe("resolveEvent", () => {
+	it.each(hostileSchemas())(
+		"routes a %s through the default validator failure policy",
+		async (_description, properties) => {
+			const hostileEvents = defineEvents({
+				hostile: {
+					name: "hostile_event",
+					category: "system",
+					properties,
+				},
+			});
+			const onError = vi.fn();
+
+			await expect(
+				resolveEvent(
+					hostileEvents,
+					"hostile_event",
+					{ value: "secret-input" },
+					true,
+					{ onError },
+					false,
+				),
+			).resolves.toBeUndefined();
+			expect(onError).toHaveBeenCalledOnce();
+			expect(onError).toHaveBeenCalledWith(
+				expect.objectContaining({ code: "validator_failure", issues: [] }),
+			);
+		},
+	);
+
+	it.each(hostileSchemas())(
+		"sanitizes strict failures from a %s",
+		async (_description, properties) => {
+			const hostileEvents = defineEvents({
+				hostile: {
+					name: "hostile_event",
+					category: "system",
+					properties,
+				},
+			});
+
+			const error = await rejectedValidationError(
+				resolveEvent(
+					hostileEvents,
+					"hostile_event",
+					{ value: "secret-input" },
+					true,
+					{ onFailure: "throw" },
+					false,
+				),
+			);
+
+			expect(error).toMatchObject({
+				code: "validator_failure",
+				eventName: "hostile_event",
+				issues: [],
+			});
+			expect("input" in error).toBe(false);
+			expect("payload" in error).toBe(false);
+			expect("cause" in error).toBe(false);
+			expect(JSON.stringify(error)).not.toContain("secret");
+		},
+	);
+
+	it.each(hostileSchemas())(
+		"keeps public guards exception-safe for a %s",
+		(_description, properties) => {
+			expect(isNoPropertiesMarker(properties)).toBe(false);
+			expect(isTypeMarker(properties)).toBe(false);
+			expect(isStandardSchema(properties)).toBe(false);
+		},
+	);
+
 	it("returns transformed output from a synchronous Standard Schema validator", async () => {
 		const resolved = await resolveEvent(
 			events,

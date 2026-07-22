@@ -63,24 +63,28 @@ export class BrowserAnalytics<
 	 * Automatically generates a session ID and sets up the analytics context.
 	 * The instance will be ready to track events once initialized.
 	 *
-	 * @param config Analytics configuration including providers and default context
+	 * @param config Analytics configuration including an event registry, providers, and default context
+	 * @param config.events Runtime event registry created with `defineEvents()`
 	 * @param config.providers Array of analytics provider instances (e.g., PostHogClientProvider)
 	 * @param config.defaultContext Optional default context to include with all events
 	 *
 	 * @example
 	 * ```typescript
+	 * import { defineEvents } from 'trakoo';
 	 * import { BrowserAnalytics } from 'trakoo/client';
 	 * import { PostHogClientProvider } from 'trakoo/providers/client';
 	 *
+	 * const events = defineEvents({});
 	 * const analytics = new BrowserAnalytics({
+	 *   events,
 	 *   providers: [
 	 *     new PostHogClientProvider({
-	 *       apiKey: 'your-posthog-api-key',
+	 *       token: 'your-posthog-api-key',
 	 *       api_host: 'https://app.posthog.com'
 	 *     })
 	 *   ],
 	 *   defaultContext: {
-	 *     app: { version: '1.0.0' }
+	 *     page: { path: '/', title: 'Example app' }
 	 *   }
 	 * });
 	 *
@@ -272,13 +276,23 @@ export class BrowserAnalytics<
 	 *
 	 * @example
 	 * ```typescript
-	 * const analytics = new BrowserAnalytics({ providers: [] });
+	 * import { defineEvents, typed } from 'trakoo';
+	 * import { BrowserAnalytics } from 'trakoo/client';
+	 *
+	 * const events = defineEvents({
+	 *   pageViewed: {
+	 *     name: 'page_viewed',
+	 *     category: 'navigation',
+	 *     properties: typed<{ page: string }>(),
+	 *   },
+	 * });
+	 * const analytics = new BrowserAnalytics({ events, providers: [] });
 	 *
 	 * // Initialize before tracking events
 	 * await analytics.initialize();
 	 *
 	 * // Now ready to track events
-	 * analytics.track('page_viewed', { page: '/dashboard' });
+	 * await analytics.track('page_viewed', { page: '/dashboard' });
 	 * ```
 	 *
 	 * @example
@@ -372,7 +386,7 @@ export class BrowserAnalytics<
 	 * });
 	 *
 	 * // Now all subsequent track() calls automatically include user context
-	 * analytics.track('button_clicked', { buttonId: 'checkout' });
+	 * await analytics.track('button_clicked', { buttonId: 'checkout' });
 	 * // Providers receive: context.user = { userId: 'user-123', email: 'john@example.com', traits: {...} }
 	 * ```
 	 *
@@ -458,7 +472,7 @@ export class BrowserAnalytics<
 	 * });
 	 *
 	 * // Now all events automatically include user context
-	 * analytics.track('button_clicked', { buttonId: 'checkout' });
+	 * await analytics.track('button_clicked', { buttonId: 'checkout' });
 	 * // Providers receive: context.user = { userId: 'user-123', email: 'user@example.com', traits: {...} }
 	 * ```
 	 *
@@ -480,8 +494,9 @@ export class BrowserAnalytics<
 	 * @example
 	 * ```typescript
 	 * // Fire-and-forget for non-critical events (client-side typical usage)
-	 * analytics.track('feature_viewed', { feature: 'dashboard' });
-	 * // Don't await - let it track in the background
+	 * void analytics.track('feature_viewed', { feature: 'dashboard' }).catch((error) => {
+	 *   console.error('Background analytics failed:', error);
+	 * });
 	 * ```
 	 *
 	 * @example
@@ -490,8 +505,8 @@ export class BrowserAnalytics<
 	 * try {
 	 *   await analytics.track('critical_event', { data: 'important' });
 	 * } catch (error) {
-	 *   // Individual provider failures are handled internally
-	 *   // This catch would only trigger for initialization failures
+	 *   // Strict validation rejects with AnalyticsValidationError.
+	 *   // Browser initialization can also reject; provider track failures are isolated and logged.
 	 *   console.error('Failed to track event:', error);
 	 * }
 	 * ```
@@ -772,7 +787,7 @@ export class BrowserAnalytics<
 	 *   analytics.identify(newUserId);
 	 *
 	 *   // Track account switch
-	 *   analytics.track('account_switched', {
+	 *   await analytics.track('account_switched', {
 	 *     newUserId,
 	 *     timestamp: Date.now()
 	 *   });
@@ -808,7 +823,7 @@ export class BrowserAnalytics<
 	 * @example
 	 * ```typescript
 	 * // Flush before navigation
-	 * analytics.track('button_clicked', { buttonId: 'checkout' });
+	 * await analytics.track('button_clicked', { buttonId: 'checkout' });
 	 * await analytics.flush();
 	 * window.location.href = '/checkout';
 	 * ```

@@ -98,24 +98,28 @@ export class ServerAnalytics<
 	 * The server analytics instance is designed for Node.js environments including
 	 * long-running servers, serverless functions, and edge computing environments.
 	 *
-	 * @param config Analytics configuration including providers and default context
+	 * @param config Analytics configuration including an event registry, providers, and default context
+	 * @param config.events Runtime event registry created with `defineEvents()`
 	 * @param config.providers Array of analytics provider instances (e.g., PostHogServerProvider)
 	 * @param config.defaultContext Optional default context to include with all events
 	 *
 	 * @example
 	 * ```typescript
+	 * import { defineEvents } from 'trakoo';
 	 * import { ServerAnalytics } from 'trakoo/server';
 	 * import { PostHogServerProvider } from 'trakoo/providers/server';
 	 *
+	 * const events = defineEvents({});
 	 * const analytics = new ServerAnalytics({
+	 *   events,
 	 *   providers: [
 	 *     new PostHogServerProvider({
-	 *       apiKey: process.env.POSTHOG_API_KEY,
-	 *       host: process.env.POSTHOG_HOST
+	 *       apiKey: 'your-posthog-api-key',
+	 *       host: 'https://app.posthog.com'
 	 *     })
 	 *   ],
 	 *   defaultContext: {
-	 *     app: { version: '1.0.0', environment: 'production' }
+	 *     server: { version: '1.0.0', environment: 'production' }
 	 *   }
 	 * });
 	 *
@@ -302,7 +306,17 @@ export class ServerAnalytics<
 	 *
 	 * @example
 	 * ```typescript
-	 * const analytics = new ServerAnalytics({ providers: [] });
+	 * import { defineEvents, typed } from 'trakoo';
+	 * import { ServerAnalytics } from 'trakoo/server';
+	 *
+	 * const events = defineEvents({
+	 *   apiRequest: {
+	 *     name: 'api_request',
+	 *     category: 'system',
+	 *     properties: typed<{ endpoint: string }>(),
+	 *   },
+	 * });
+	 * const analytics = new ServerAnalytics({ events, providers: [] });
 	 *
 	 * // Initialize before tracking events
 	 * analytics.initialize();
@@ -313,9 +327,20 @@ export class ServerAnalytics<
 	 *
 	 * @example
 	 * ```typescript
+	 * import { defineEvents, typed } from 'trakoo';
+	 * import { ServerAnalytics } from 'trakoo/server';
+	 *
+	 * const events = defineEvents({
+	 *   functionInvoked: {
+	 *     name: 'function_invoked',
+	 *     category: 'system',
+	 *     properties: typed<{ path: string; method: string }>(),
+	 *   },
+	 * });
+	 *
 	 * // In a serverless function
 	 * export async function handler(req, res) {
-	 *   const analytics = new ServerAnalytics({ providers: [] });
+	 *   const analytics = new ServerAnalytics({ events, providers: [] });
 	 *   analytics.initialize(); // Quick synchronous initialization
 	 *
 	 *   await analytics.track('function_invoked', {
@@ -521,8 +546,8 @@ export class ServerAnalytics<
 	 *     currency: 'USD'
 	 *   });
 	 * } catch (error) {
-	 *   // This only catches initialization errors
-	 *   // Individual provider failures are logged but don't throw
+	 *   // Strict validation rejects with AnalyticsValidationError.
+	 *   // Initialization errors happen during initialize(); provider track failures are isolated and logged.
 	 *   console.error('Failed to track event:', error);
 	 * }
 	 * ```
@@ -817,9 +842,25 @@ export class ServerAnalytics<
 	 *
 	 * @example
 	 * ```typescript
+	 * import { defineEvents, typed } from 'trakoo';
+	 * import { ServerAnalytics } from 'trakoo/server';
+	 *
+	 * const events = defineEvents({
+	 *   functionCompleted: {
+	 *     name: 'function_completed',
+	 *     category: 'system',
+	 *     properties: typed<{ duration: number; success: boolean }>(),
+	 *   },
+	 *   functionFailed: {
+	 *     name: 'function_failed',
+	 *     category: 'error',
+	 *     properties: typed<{ error: string; duration: number }>(),
+	 *   },
+	 * });
+	 *
 	 * // In a serverless function
 	 * export async function handler(event, context) {
-	 *   const analytics = new ServerAnalytics({ providers: [] });
+	 *   const analytics = new ServerAnalytics({ events, providers: [] });
 	 *   analytics.initialize();
 	 *
 	 *   try {

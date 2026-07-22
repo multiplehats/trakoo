@@ -44,9 +44,62 @@ Use one method selector: `methods` or `exclude`. Use one event selector: `events
 
 Call client `identify()` with a valid email before sending Bento events. Exclude `pageView` or restrict Bento to `identify` and `track`; send anonymous traffic to PostHog, Pirsch, or another suitable provider.
 
+The current server constructor is `BentoServerProvider({ siteUuid, authentication: { publishableKey, secretKey } })`. All three values are server-only:
+
+```ts
+import { createServerAnalytics } from "trakoo/server";
+import { BentoServerProvider } from "trakoo/providers/server";
+import type { AppEvents } from "./events";
+
+export async function createBentoAnalytics() {
+	const provider = new BentoServerProvider({
+		siteUuid: process.env.BENTO_SITE_UUID!,
+		authentication: {
+			publishableKey: process.env.BENTO_PUBLISHABLE_KEY!,
+			secretKey: process.env.BENTO_SECRET_KEY!,
+		},
+	});
+
+	await provider.initialize();
+
+	return createServerAnalytics<AppEvents>({ providers: [provider] });
+}
+```
+
+Keep `BENTO_SITE_UUID`, `BENTO_PUBLISHABLE_KEY`, and `BENTO_SECRET_KEY` server-only; never expose them through client-prefixed environment variables.
+
+Explicitly await `BentoServerProvider.initialize()` before the first event. For request-scoped ownership, create a fresh provider and analytics pair, use it for that request, and shut down that same pair in `finally`:
+
+```ts
+const analytics = await createBentoAnalytics();
+
+try {
+	await analytics.track("signup_completed", properties, {
+		userId,
+		user: { email },
+	});
+} finally {
+	await analytics.shutdown();
+}
+```
+
+For a long-lived module instance, call `shutdown()` only at application or process teardown. Do not call `shutdown()` after each event on a reusable module singleton. Bento `shutdown()` clears provider state; it is not a buffered flush.
+
 ### Pirsch
 
-No extra package is required. A server event without the original IP address and User-Agent cannot be attributed and is skipped. Proxy browser events through a server endpoint when that request context is needed.
+No extra package is required. The current client constructor is `PirschClientProvider({ identificationCode, hostname? })`:
+
+```ts
+import { PirschClientProvider } from "trakoo/providers/client";
+
+const provider = new PirschClientProvider({
+	identificationCode: import.meta.env.VITE_PIRSCH_IDENTIFICATION_CODE,
+});
+```
+
+`VITE_PIRSCH_IDENTIFICATION_CODE` and an optional hostname override are browser-public configuration, not secrets. Pirsch's `pa.js` script handles the initial page load; the current provider's `pageView()` is a no-op. Consequently, `methods: ["pageView"]` does not emit SPA navigation hits. Check the installed Pirsch provider and version for a supported SPA delivery path. If it has no programmatic navigation delivery, integrate a supported Pirsch SPA path directly or route completed client navigations to another provider; do not imply that routing alone emits them.
+
+A server event without the original IP address and User-Agent cannot be attributed and is skipped. Proxy browser events through a server endpoint when that request context is needed.
 
 ### Visitors
 
@@ -62,4 +115,4 @@ Extend `BaseAnalyticsProvider` from the environment-specific provider export and
 
 ## Verification
 
-Typecheck constructor options against the installed provider types. Exercise one representative event per routing branch and confirm excluded events or methods do not reach that provider. For buffered server SDKs, verify the handler flushes before exit.
+Typecheck constructor options against the installed provider types. Exercise one representative event per routing branch and confirm excluded events or methods do not reach that provider. Verify an initial page load and one completed SPA navigation independently. For server providers, exercise two sequential lifecycle events and confirm initialization and shutdown match instance ownership. For buffered server SDKs, verify the handler flushes before exit.

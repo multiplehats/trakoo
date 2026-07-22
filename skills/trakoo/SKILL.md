@@ -67,9 +67,19 @@ export const analytics = createClientAnalytics<AppEvents>({
 		}),
 	],
 });
+
+const analyticsReady = analytics.initialize();
+
+export async function identifyUser(
+	userId: string,
+	traits: { email?: string },
+) {
+	await analyticsReady;
+	analytics.identify(userId, traits);
+}
 ```
 
-Create one browser instance per session. Call `analytics.identify(userId, traits)` after authentication and `analytics.reset()` on logout. Browser tracking is normally fire-and-forget; do not block navigation on non-critical analytics.
+Create one browser instance per session and retain its initialization promise. Await readiness before the first `identify()` or identity-sensitive event because some providers ignore identity calls made before their SDK is ready. Make login, signup, and restored-session flows await the identity helper; call `analytics.reset()` on logout. Browser tracking is normally fire-and-forget after readiness; do not block navigation on non-critical analytics.
 
 ## Server module and critical event
 
@@ -78,11 +88,15 @@ import { createServerAnalytics } from "trakoo/server";
 import { PostHogServerProvider } from "trakoo/providers/server";
 import type { AppEvents } from "./events";
 
-const analytics = createServerAnalytics<AppEvents>({
-	providers: [
-		new PostHogServerProvider({ apiKey: process.env.POSTHOG_API_KEY! }),
-	],
-});
+function createRequestAnalytics() {
+	return createServerAnalytics<AppEvents>({
+		providers: [
+			new PostHogServerProvider({ apiKey: process.env.POSTHOG_API_KEY! }),
+		],
+	});
+}
+
+const analytics = createRequestAnalytics();
 
 try {
 	await analytics.track(
@@ -95,7 +109,9 @@ try {
 }
 ```
 
-Server analytics is stateless across users: pass user context with each event. Await critical events. In serverless or other short-lived runtimes, call `shutdown()` before exit, preferably in `finally`; use the platform's `waitUntil` only for explicitly non-critical work.
+Server analytics is stateless across users: pass user context with each event and await critical events. Make server shutdown provider- and ownership-aware. For a fresh request-scoped provider/analytics pair, shut down that same pair in `finally`. For a reusable module instance, shut it down only at application or process teardown. Some providers flush buffered events during shutdown; others only clear state. Read the selected provider's installed implementation before choosing the lifecycle. Use the platform's `waitUntil` only for explicitly non-critical work.
+
+Ownership summary: reusable instances shut down at teardown; request-scoped instances shut down in `finally`.
 
 ## Import and lifecycle reference
 
@@ -106,9 +122,9 @@ Server analytics is stateless across users: pass user context with each event. A
 | Server factory | `trakoo/server` |
 | Browser providers | `trakoo/providers/client` |
 | Server providers | `trakoo/providers/server` |
-| Browser identity | `identify()` after login; `reset()` on logout |
+| Browser identity | Retain/await `initialize()` before first `identify()`; `reset()` on logout |
 | Server identity | Context on every call |
-| Critical server delivery | Await `track()` and then `shutdown()` |
+| Critical server delivery | Await `track()`; shutdown timing follows provider behavior and instance ownership |
 
 Never import a server provider, secret, or unprefixed server environment variable into browser code. Do not use a nonexistent `trakoo/providers` aggregate.
 
@@ -123,4 +139,5 @@ Use the consuming project's commands. At minimum, run its type checker and the n
 - Sharing stateful browser identity logic with stateless server analytics.
 - Sending every method and event to providers with different requirements instead of routing them.
 - Installing all optional provider SDKs instead of only those selected.
-- Forgetting logout reset, request user context, or short-lived-runtime shutdown.
+- Calling `identify()` before client provider initialization, or forgetting logout reset.
+- Pairing a reusable server singleton with per-event shutdown.

@@ -8,6 +8,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertRootBundleNeutral } from "./package-verification.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const consumerDirectory = mkdtempSync(
@@ -129,21 +130,19 @@ try {
 		}
 	}
 
-	const rootBundle = readFileSync(
-		join(consumerDirectory, "node_modules/trakoo/dist/index.js"),
-		"utf8",
+	const installedDist = join(
+		consumerDirectory,
+		"node_modules/trakoo/dist",
 	);
-	for (const prohibitedImport of [
+	assertRootBundleNeutral(join(installedDist, "index.js"), installedDist, [
 		...concreteValidators,
 		"posthog-js",
 		"posthog-node",
 		"@openpanel/sdk",
 		"@openpanel/web",
-	]) {
-		if (rootBundle.includes(prohibitedImport)) {
-			throw new Error(`root bundle includes ${prohibitedImport}`);
-		}
-	}
+		"@bentonow/bento-node-sdk",
+		"@emitkit/js",
+	]);
 
 	// Prove root event helpers load without optional provider packages present.
 	run("npm", ["prune", "--omit=optional"], consumerDirectory);

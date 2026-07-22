@@ -112,16 +112,27 @@ function createRequestAnalytics() {
 	});
 }
 
-const analytics = createRequestAnalytics();
-
-try {
-	await analytics.track(
-		"purchase_completed",
-		{ orderId, amount, currency },
-		{ userId, user: { email } },
-	);
-} finally {
-	await analytics.shutdown();
+export async function trackPurchase(input: {
+	orderId: string;
+	amount: number;
+	currency: string;
+	userId: string;
+	email: string;
+}) {
+	const analytics = createRequestAnalytics();
+	try {
+		await analytics.track(
+			"purchase_completed",
+			{
+				orderId: input.orderId,
+				amount: input.amount,
+				currency: input.currency,
+			},
+			{ userId: input.userId, user: { email: input.email } },
+		);
+	} finally {
+		await analytics.shutdown();
+	}
 }
 ```
 

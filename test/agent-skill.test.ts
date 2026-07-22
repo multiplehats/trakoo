@@ -139,6 +139,38 @@ describe("Trakoo Agent Skill", () => {
 		);
 	});
 
+	it("keeps critical server analytics owned by the request invocation", () => {
+		const skill = read("skills/trakoo/SKILL.md");
+		const serverExample = skill.match(
+			/## Server module and critical event[\s\S]*?```ts\n([\s\S]*?)```/,
+		)?.[1];
+
+		expect(serverExample).toBeDefined();
+		expect(serverExample).toMatch(
+			/export async function [^(]+\([^)]*\) \{\s*const analytics = createRequestAnalytics\(\);\s*try \{/,
+		);
+		expect(serverExample).not.toMatch(
+			/^const analytics = createRequestAnalytics\(\);/m,
+		);
+	});
+
+	it("ties request shutdown to fresh instance ownership in framework guidance", () => {
+		const frameworks = read("skills/trakoo/references/frameworks.md");
+		const nextjs = frameworks.match(
+			/## Next\.js\n\n([\s\S]*?)\n\n## SvelteKit/,
+		)?.[1];
+		const neutral = frameworks.match(
+			/## Framework-neutral TypeScript\n\n([\s\S]*?)\n\n## Verification/,
+		)?.[1];
+
+		for (const guidance of [nextjs, neutral]) {
+			expect(guidance).toMatch(/fresh provider\/analytics pair/);
+			expect(guidance).toMatch(
+				/reusable module singleton[\s\S]*application or process teardown/,
+			);
+		}
+	});
+
 	it("covers supported framework boundaries", () => {
 		const frameworks = read("skills/trakoo/references/frameworks.md");
 

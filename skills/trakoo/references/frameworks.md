@@ -22,7 +22,7 @@ Read only the section matching the consuming project. Framework APIs evolve; con
 
 ## Next.js
 
-Use a client component for browser initialization, identity lifecycle, and navigation effects. Browser values use `NEXT_PUBLIC_*`; unprefixed values remain server-only. Put critical tracking in route handlers, server actions, or other server-only modules. Await critical events and call `shutdown()` in `finally` before a short-lived request exits. Verify with `next build` because it catches accidental server imports in client bundles.
+Use a client component for browser initialization, identity lifecycle, and navigation effects. Browser values use `NEXT_PUBLIC_*`; unprefixed values remain server-only. Put critical tracking in route handlers, server actions, or other server-only modules. Await critical events. Call `shutdown()` in the request's `finally` block only when that request created and owns a fresh provider/analytics pair. A reusable module singleton stays alive across requests and shuts down only at application or process teardown. Verify with `next build` because it catches accidental server imports in client bundles.
 
 ## SvelteKit
 
@@ -54,7 +54,7 @@ Ensure a persistent script or guarded setup registers the listener once so clien
 
 ## Framework-neutral TypeScript
 
-Create one browser singleton from the application's browser entry and one server factory or request-scoped instance from server code. Use the build tool's public environment prefix (`VITE_*` for Vite by default). Subscribe to the chosen router's completed-navigation event rather than click events, because redirects and history navigation also change pages.
+Create one browser singleton from the application's browser entry and one server factory or request-scoped instance from server code. A short-lived request may call `shutdown()` in `finally` only for the fresh provider/analytics pair it created and owns; a reusable module singleton shuts down only at application or process teardown. Use the build tool's public environment prefix (`VITE_*` for Vite by default). Subscribe to the chosen router's completed-navigation event rather than click events, because redirects and history navigation also change pages.
 
 ## Verification
 

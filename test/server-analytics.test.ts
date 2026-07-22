@@ -241,6 +241,58 @@ describe("Server Analytics", () => {
 		},
 	);
 
+	it.each([
+		["null", null],
+		["an array", []],
+		["a primitive", "user_123"],
+		["unknown option keys", { unexpected: true }],
+	])(
+		"throws invalid_properties for property-bearing %s options",
+		async (_label, value) => {
+			const onError = vi.fn();
+			const strict = createServerAnalytics({
+				events,
+				providers: [mockProvider],
+				validation: { onFailure: "throw", onError },
+			});
+			const runtimeAnalytics = strict as unknown as {
+				track(
+					name: string,
+					properties: unknown,
+					options: unknown,
+				): Promise<void>;
+			};
+
+			await expect(
+				runtimeAnalytics.track("test_event", {}, value),
+			).rejects.toMatchObject({ code: "invalid_properties" });
+			expect(onError).toHaveBeenCalledWith(
+				expect.objectContaining({ code: "invalid_properties" }),
+			);
+			expect(mockProvider.calls.track).toHaveLength(0);
+		},
+	);
+
+	it("drops invalid property-bearing options through the shared policy", async () => {
+		const onError = vi.fn();
+		const dropping = createServerAnalytics({
+			events,
+			providers: [mockProvider],
+			validation: { onError },
+		});
+		const runtimeAnalytics = dropping as unknown as {
+			track(name: string, properties: unknown, options: unknown): Promise<void>;
+		};
+
+		await expect(
+			runtimeAnalytics.track("test_event", {}, { unexpected: true }),
+		).resolves.toBeUndefined();
+		expect(onError).toHaveBeenCalledWith(
+			expect.objectContaining({ code: "invalid_properties" }),
+		);
+		expect(mockProvider.calls.track).toHaveLength(0);
+	});
+
 	it("delivers transformed schema output to every routed provider", async () => {
 		const secondProvider = new MockAnalyticsProvider({ enabled: true });
 		const transformed = createServerAnalytics({

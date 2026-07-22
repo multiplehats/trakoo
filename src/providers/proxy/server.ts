@@ -35,6 +35,15 @@ export interface IngestProxyEventsConfig {
 	onError?: (error: unknown) => void;
 }
 
+function isEmptyPropertyObject(value: unknown): value is object {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		!Array.isArray(value) &&
+		Object.keys(value).length === 0
+	);
+}
+
 /**
  * Ingests events from ProxyProvider and replays them through server analytics
  *
@@ -118,7 +127,11 @@ export async function ingestProxyEvents<
 							event.event.action,
 						);
 
-						if (definition && isNoPropertiesMarker(definition.properties)) {
+						if (
+							definition &&
+							isNoPropertiesMarker(definition.properties) &&
+							isEmptyPropertyObject(event.event.properties)
+						) {
 							const rawArguments = [eventName, options] as const;
 							await analytics.track(...(rawArguments as never));
 						} else {

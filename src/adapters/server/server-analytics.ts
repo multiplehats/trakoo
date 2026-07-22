@@ -16,6 +16,8 @@ import type {
 	UserContext,
 } from "@/core/events/types.js";
 import {
+	AnalyticsValidationError,
+	applyValidationFailurePolicy,
 	resolveEvent,
 	type ValidationConfig,
 } from "@/core/events/validation.js";
@@ -555,10 +557,19 @@ export class ServerAnalytics<
 				input = undefined;
 				inputProvided = false;
 			}
-		} else {
+		} else if (definition) {
 			const thirdArgument = argumentValues[2];
-			if (isServerTrackOptions<TUserTraits>(thirdArgument)) {
+			if (thirdArgument === undefined) {
+				options = undefined;
+			} else if (isServerTrackOptions<TUserTraits>(thirdArgument)) {
 				options = thirdArgument;
+			} else {
+				await applyValidationFailurePolicy(
+					new AnalyticsValidationError("invalid_properties", eventName),
+					this.validation,
+					this.debug,
+				);
+				return;
 			}
 		}
 

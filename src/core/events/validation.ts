@@ -87,7 +87,8 @@ function normalizeIssues(
 	});
 }
 
-async function applyFailurePolicy(
+/** @internal Shared adapter failure-policy entry point; not part of the public API. */
+export async function applyValidationFailurePolicy(
 	error: AnalyticsValidationError,
 	validation: ValidationConfig | undefined,
 	debug: boolean,
@@ -129,7 +130,7 @@ export async function resolveEvent<
 ): Promise<ResolvedEvent<R, N> | undefined> {
 	const definition = getEventDefinition(registry, eventName);
 	if (!definition) {
-		return applyFailurePolicy(
+		return applyValidationFailurePolicy(
 			new AnalyticsValidationError("unknown_event", eventName),
 			validation,
 			debug,
@@ -138,7 +139,7 @@ export async function resolveEvent<
 
 	if (isNoPropertiesMarker(definition.properties)) {
 		if (inputProvided) {
-			return applyFailurePolicy(
+			return applyValidationFailurePolicy(
 				new AnalyticsValidationError("invalid_properties", eventName),
 				validation,
 				debug,
@@ -153,7 +154,7 @@ export async function resolveEvent<
 
 	if (isTypeMarker(definition.properties)) {
 		if (!isPropertyObject(input)) {
-			return applyFailurePolicy(
+			return applyValidationFailurePolicy(
 				new AnalyticsValidationError("invalid_properties", eventName),
 				validation,
 				debug,
@@ -167,7 +168,7 @@ export async function resolveEvent<
 	}
 
 	if (!isStandardSchema(definition.properties)) {
-		return applyFailurePolicy(
+		return applyValidationFailurePolicy(
 			new AnalyticsValidationError("invalid_properties", eventName),
 			validation,
 			debug,
@@ -178,7 +179,7 @@ export async function resolveEvent<
 	try {
 		result = await definition.properties["~standard"].validate(input);
 	} catch {
-		return applyFailurePolicy(
+		return applyValidationFailurePolicy(
 			new AnalyticsValidationError("validator_failure", eventName),
 			validation,
 			debug,
@@ -187,7 +188,7 @@ export async function resolveEvent<
 
 	try {
 		if ("issues" in result && result.issues) {
-			return applyFailurePolicy(
+			return applyValidationFailurePolicy(
 				new AnalyticsValidationError(
 					"invalid_properties",
 					eventName,
@@ -199,7 +200,7 @@ export async function resolveEvent<
 		}
 
 		if (!("value" in result) || !isPropertyObject(result.value)) {
-			return applyFailurePolicy(
+			return applyValidationFailurePolicy(
 				new AnalyticsValidationError("invalid_output", eventName),
 				validation,
 				debug,
@@ -212,7 +213,7 @@ export async function resolveEvent<
 			properties: result.value as EventOutputMap<R>[N],
 		};
 	} catch {
-		return applyFailurePolicy(
+		return applyValidationFailurePolicy(
 			new AnalyticsValidationError("validator_failure", eventName),
 			validation,
 			debug,

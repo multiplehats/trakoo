@@ -149,6 +149,53 @@ describe("Proxy Server Ingestion", () => {
 			});
 		});
 
+		it.each([
+			["non-empty properties", { unexpected: true }],
+			["null properties", null],
+			["array properties", []],
+			["primitive properties", "unexpected"],
+		])(
+			"validates propertyless proxy tracks with %s",
+			async (_label, properties) => {
+				const validationError = vi.fn();
+				const replayError = vi.fn();
+				const strictAnalytics = createServerAnalytics({
+					events: proxyEvents,
+					userTraits: typed<UserTraits>(),
+					providers: [mockProvider],
+					validation: { onFailure: "throw", onError: validationError },
+				});
+				const payload = {
+					events: [
+						{
+							type: "track",
+							event: {
+								action: "session_started",
+								category: "user",
+								properties,
+							},
+						},
+					],
+				} as unknown as ProxyPayload;
+				const request = new Request("http://localhost/api/events", {
+					method: "POST",
+					body: JSON.stringify(payload),
+				});
+
+				await ingestProxyEvents(request, strictAnalytics, {
+					onError: replayError,
+				});
+
+				expect(validationError).toHaveBeenCalledWith(
+					expect.objectContaining({ code: "invalid_properties" }),
+				);
+				expect(replayError).toHaveBeenCalledWith(
+					expect.objectContaining({ code: "invalid_properties" }),
+				);
+				expect(mockProvider.calls.track).toHaveLength(0);
+			},
+		);
+
 		it("should process identify events", async () => {
 			const payload: ProxyPayload = {
 				events: [

@@ -10,10 +10,10 @@ Import the shared runtime registry into every analytics module and pass `events:
 |---|---:|---:|---|---|
 | PostHog | Yes | Yes | Browser: `posthog-js`; server: `posthog-node` | General product analytics. Keep the server key out of browser code. |
 | OpenPanel | Yes | Yes | Browser: `@openpanel/web`; server: `@openpanel/sdk` | Product and web analytics across both runtimes. |
-| Bento | Yes | Yes | Browser: none; server: `@bentonow/bento-node-sdk` | Identified lifecycle/email events. An email is required; route anonymous page views elsewhere. |
+| Bento | Yes | Yes | Browser: none; server: `@bentonow/bento-node-sdk` | Browser page views may be anonymous. Email is required for identification, identified lifecycle events, and server events. |
 | Pirsch | Yes | Yes | None | Privacy-first analytics. Server hits require the visitor IP address and User-Agent request context. |
 | EmitKit | No | Yes | `@emitkit/js` when required by the installed version | Server-side event notifications; verify its current constructor from installed types. |
-| Visitors | Yes | No | None | Privacy-friendly web analytics. Identification needs persistence and appropriate consent; page views are automatic. |
+| Visitors | Yes | No | None | Privacy-friendly web analytics. `identify()` does not itself require persistence; persistence enables cross-session tracking and revenue attribution. Page views are automatic. |
 | Proxy | Yes | Ingestion helpers | None | First-party batching from `ProxyProvider` to `createProxyHandler` or `ingestProxyEvents`. It is transport, not an analytics vendor. |
 
 ## Choose by event semantics
@@ -79,7 +79,7 @@ function normalizePageUrl(href: string): string {
 
 ### Bento
 
-Call client `identify()` with a valid email before sending Bento events. Exclude `pageView` or restrict Bento to `identify` and `track`; send anonymous traffic to PostHog, Pirsch, or another suitable provider.
+Bento's browser integration can record anonymous page views. A valid email is required for `identify()`, identified lifecycle events, and server events; it is not required for every browser page view. Route other anonymous traffic according to the installed provider's supported methods.
 
 The current server constructor is `BentoServerProvider({ siteUuid, authentication: { publishableKey, secretKey } })`. All three values are server-only:
 
@@ -172,13 +172,15 @@ Even when the selected configuration is browser-only, state the server delivery 
 
 ### Visitors
 
-Visitors is browser-only. `pageView()` does not send a duplicate because its script tracks page loads automatically. Non-scalar custom properties are dropped. `identify()` requires persistence and, where applicable, explicit consent.
+Visitors is browser-only. `pageView()` does not send a duplicate because its script tracks page loads automatically. Non-scalar custom properties are dropped. `identify()` itself does not require persistence. Enable persistence when the application needs cross-session tracking or revenue attribution, and apply the appropriate consent rules whenever identification or persistence is used.
 
 ### Proxy
 
-Import `ProxyProvider` from `trakoo/providers/client`; import `createProxyHandler` or `ingestProxyEvents` from `trakoo/providers/server`. Keep the endpoint same-origin when the goal is first-party delivery. Configure batch size and interval only when defaults do not meet the application's delivery needs.
+Import `ProxyProvider` from `trakoo/providers/client`; import `createProxyHandler` or `ingestProxyEvents` from `trakoo/providers/server`. Treat its endpoint as an application endpoint accepting untrusted JSON, not as a trusted internal channel. Require a same-origin `Origin` check for first-party browser delivery. If cross-origin delivery is intentional, enforce an explicit CORS allowlist; when ingestion is user-scoped, require and verify an authenticated session as well.
 
-Pass the same `appEvents` registry to the browser analytics factory and the ingesting server analytics factory. Raw proxy input crosses a JSON boundary, but the server registry still rejects or drops unknown names and validates schema-backed properties before provider routing.
+Enforce a request body byte limit and decoded batch-size limits before ingestion, and rate limit the endpoint by an application-appropriate identity. Configure the deployment's trusted proxies before trusting `Forwarded`, `X-Forwarded-For`, or similar forwarded IP headers; otherwise use the directly observed peer address and do not treat forwarded values as visitor context.
+
+Pass the same `appEvents` registry to the browser analytics factory and the ingesting server analytics factory. The server registry must still reject or drop unknown names and validate schema-backed properties before provider routing. That runtime registry validation is necessary but not sufficient: it proves event shape, not caller authorization or truth. Never trust client-proxied `userId`, traits, or events as authoritative. Derive identity and critical business events from the authenticated session and server-owned state, and emit authoritative events at the server operation that confirms them.
 
 ## Custom providers
 

@@ -109,10 +109,14 @@ export const trackPurchase = createServerFn({ method: "POST" })
 
 With Vite, expose only browser-safe identifiers through `VITE_*`. Read unprefixed deployment environment values inside `.handler()`, middleware `.server()`, server-route handlers, or other per-request callbacks. Edge runtimes may expose deployment bindings differently from Node's `process.env`; use the installed adapter's per-request binding API.
 
-Choose one page-view owner. The following router-owned approach requires the client `PostHogClientProvider` to use `capture_pageview: false` before the manual initial/navigation stream. If provider auto-capture owns page views, omit this stream. Normalize initial and router URLs identically so relative and absolute hrefs deduplicate:
+Choose one page-view owner. The following router-owned approach requires the client `PostHogClientProvider` to use `capture_pageview: false` before the manual initial/navigation stream. If provider auto-capture owns page views, omit this stream. Export the retained client initialization promise as `analyticsReady`, and await it before emitting or recording the initial URL. Normalize initial and router URLs identically so relative and absolute hrefs deduplicate:
 
 ```ts
+import { analytics, analyticsReady } from "./analytics.client";
+
 let lastPageUrl: string | undefined;
+let unsubscribe: (() => void) | undefined;
+let disposed = false;
 
 function emitPageView(href: string) {
 	const parsed = new URL(href, window.location.origin);
@@ -128,21 +132,35 @@ function emitPageView(href: string) {
 	});
 }
 
-emitPageView(window.location.href);
+async function startPageViews() {
+	await analyticsReady;
+	if (disposed) return;
 
-const unsubscribe = router.subscribe("onResolved", ({ toLocation }) => {
-	emitPageView(toLocation.href);
-});
+	emitPageView(window.location.href);
+	unsubscribe = router.subscribe("onResolved", ({ toLocation }) => {
+		emitPageView(toLocation.href);
+	});
+}
+
+void startPageViews();
+
+function stopPageViews() {
+	disposed = true;
+	unsubscribe?.();
+}
 ```
 
-Use the framework's lifecycle to call `unsubscribe()` when the owner is disposed. Apply the same one-owner decision to page-leave tracking; disable provider auto-capture before manually emitting page leaves.
+Use the framework's lifecycle to call `stopPageViews()` when the owner is disposed; it prevents a pending initialization from installing the subscription and calls `unsubscribe()` after installation. Apply the same one-owner decision to page-leave tracking; disable provider auto-capture before manually emitting page leaves.
 
 ## Astro
 
-Initialize client analytics in a processed `<script>` or a hydrated UI-framework island, importing the shared registry and passing `events: appEvents`. Use `PUBLIC_*`/`astro:env/client` only for browser-safe values and `astro:env/server` for server provider secrets. Put critical tracking in endpoints, actions, middleware, or other server-rendered code and pass the same registry to the server factory. With Astro's client router, listen for completed navigations:
+Initialize client analytics in a processed `<script>` or a hydrated UI-framework island, importing the shared registry and passing `events: appEvents`. Use the retained initialization promise, exported as `analyticsReady` from the browser analytics module. Use `PUBLIC_*`/`astro:env/client` only for browser-safe values and `astro:env/server` for server provider secrets. Put critical tracking in endpoints, actions, middleware, or other server-rendered code and pass the same registry to the server factory. With Astro's client router, listen for completed navigations and await readiness before each page view:
 
 ```ts
-document.addEventListener("astro:page-load", () => {
+import { analytics, analyticsReady } from "./analytics.client";
+
+document.addEventListener("astro:page-load", async () => {
+	await analyticsReady;
 	analytics.pageView({ path: window.location.pathname, url: window.location.href });
 });
 ```

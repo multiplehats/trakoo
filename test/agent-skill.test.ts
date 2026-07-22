@@ -295,6 +295,50 @@ describe("Trakoo Agent Skill", () => {
 		);
 	});
 
+	it("documents accurate Bento and Visitors identity constraints", () => {
+		const providers = read("skills/trakoo/references/providers.md");
+		const bento = providers.match(
+			/### Bento\n\n([\s\S]*?)\n\n### EmitKit/,
+		)?.[1];
+		const visitors = providers.match(
+			/### Visitors\n\n([\s\S]*?)\n\n### Proxy/,
+		)?.[1];
+
+		expect(bento).toMatch(/anonymous page views[\s\S]*browser/i);
+		expect(bento).toMatch(
+			/email[\s\S]*identif(?:y|ication)[\s\S]*identified lifecycle[\s\S]*server events/i,
+		);
+		expect(bento).not.toMatch(/email before sending Bento events/i);
+		expect(visitors).toMatch(
+			/`identify\(\)`[\s\S]*does not require persistence/i,
+		);
+		expect(visitors).toMatch(
+			/persistence[\s\S]*cross-session tracking[\s\S]*revenue attribution/i,
+		);
+		expect(visitors).toMatch(/consent/i);
+	});
+
+	it("treats proxy ingestion as an untrusted application endpoint", () => {
+		const providers = read("skills/trakoo/references/providers.md");
+		const proxy = providers.match(
+			/### Proxy\n\n([\s\S]*?)\n\n## Custom providers/,
+		)?.[1];
+
+		expect(proxy).toMatch(/untrusted JSON/i);
+		expect(proxy).toMatch(
+			/same-origin `Origin`[\s\S]*CORS[\s\S]*authenticated session/i,
+		);
+		expect(proxy).toMatch(/request body[\s\S]*batch-size limits/i);
+		expect(proxy).toMatch(/rate limit/i);
+		expect(proxy).toMatch(/trusted prox(?:y|ies)[\s\S]*forwarded IP headers/i);
+		expect(proxy).toMatch(
+			/client-proxied[\s\S]*`userId`[\s\S]*traits[\s\S]*events[\s\S]*authoritative/i,
+		);
+		expect(proxy).toMatch(
+			/runtime registry validation[\s\S]*(?:necessary|required)[\s\S]*not sufficient/i,
+		);
+	});
+
 	it("requires client readiness before the first identity transition", () => {
 		const skill = read("skills/trakoo/SKILL.md");
 
@@ -428,6 +472,32 @@ describe("Trakoo Agent Skill", () => {
 		expect(tanstack).toContain("new URL(href, window.location.origin)");
 		expect(tanstack).toContain('router.subscribe("onResolved"');
 		expect(tanstack).toContain("unsubscribe()");
+	});
+
+	it("awaits browser readiness before TanStack and Astro page views", () => {
+		const frameworks = read("skills/trakoo/references/frameworks.md");
+		const tanstack = frameworks.match(
+			/## TanStack Start\n\n([\s\S]*?)\n\n## Astro/,
+		)?.[1];
+		const astro = frameworks.match(
+			/## Astro\n\n([\s\S]*?)\n\n## Framework-neutral TypeScript/,
+		)?.[1];
+		const tanstackCode = codeBlocks(tanstack ?? "");
+		const astroCode = codeBlocks(astro ?? "");
+
+		expect(tanstack).toMatch(/retained[\s\S]*initialization promise/i);
+		expect(tanstackCode).toMatch(
+			/await analyticsReady;[\s\S]*emitPageView\(window\.location\.href\)[\s\S]*router\.subscribe/,
+		);
+		expect(tanstackCode).not.toMatch(
+			/emitPageView\(window\.location\.href\)[\s\S]*await analyticsReady/,
+		);
+		expect(astro).toMatch(/retained[\s\S]*initialization promise/i);
+		expect(astroCode).toMatch(
+			/astro:page-load[\s\S]*await analyticsReady;[\s\S]*analytics\.pageView/,
+		);
+		expect(tanstack).toMatch(/disposed[\s\S]*unsubscribe/i);
+		expect(astro).toMatch(/registers the listener once/i);
 	});
 
 	it("keeps TanStack critical events authoritative on the server", () => {

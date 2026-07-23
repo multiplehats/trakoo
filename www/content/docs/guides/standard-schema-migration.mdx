@@ -50,6 +50,16 @@ const analytics = createClientAnalytics({
 
 The obsolete event collection helper types and generic-only factory signatures have been removed. Import `defineEvents()`, `typed()`, and `noProperties()` from the root `trakoo` entry point; keep importing factories and providers from their client or server subpaths.
 
+## Removed exports
+
+The type helpers that supported the old event collection shape are gone. Replace them with the registry-derived types exported from the root `trakoo` entry point:
+
+| Removed | Replacement | Notes |
+|---|---|---|
+| `ExtractEventNames<C>` | `EventName<R>` | Wire name union for a registry. |
+| `ExtractEventPropertiesFromCollection<C, N>` | `EventOutputMap<R>[N]` | Post-transform output type per event. Use `EventInputMap<R>[N]` for the type `track()` accepts at the call site. |
+| `EventMapFromCollection<C>` | `EventInputMap<R>` / `EventOutputMap<R>` | Full input or output map keyed by event name, in place of the single combined map. |
+
 ## Type-only migration
 
 Before, property shapes were asserted onto empty objects:
@@ -163,6 +173,12 @@ const analytics = createServerAnalytics({
 ```
 
 `AnalyticsValidationError` contains the event name, a stable error code, and normalized issue paths and messages. It never retains the submitted properties object. Validation failures are resolved before routing, so providers receive either the same normalized output or no event. Initialization and provider-delivery failures keep their existing behavior.
+
+On the server, `track(name, properties, options)` now validates the `options` object itself. Previously an unrecognized option key was silently ignored; now any key outside `userId`, `sessionId`, `context`, and `user` fails closed with the `invalid_options` code (this behavior is new — the old generic-only factory had no options validation to speak of). Audit server call sites that pass extra option keys.
+
+:::warning[Deploy server registries ahead of clients]
+The [Proxy](/docs/providers/proxy) replays client-batched events through server analytics. If a client bundle's registry knows an event the server registry doesn't — mid-deploy skew, or a stale cached client bundle — the server drops that event as `unknown_event`, silently under the default drop policy. Deploy server registries ahead of (or together with) client registries, and set `validation.onError` or `debug` on the server so drops during rollout are visible.
+:::
 
 ## Client singleton migration
 

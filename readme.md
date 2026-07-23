@@ -8,6 +8,16 @@ A typed, provider-agnostic analytics library for TypeScript applications. Define
 
 > **[Read the full documentation](https://trakoo.co/docs)** for framework guides and provider-specific setup.
 
+## Agent Skill
+
+Give your coding agent Trakoo-specific integration guidance for typed events, client/server boundaries, providers, and framework setup:
+
+```bash
+npx skills add multiplehats/trakoo --skill trakoo
+```
+
+The source is [`skills/trakoo/SKILL.md`](./skills/trakoo/SKILL.md) and follows the portable Agent Skills format used by skills.sh-compatible agents.
+
 ## Features
 
 - Event names and properties inferred from one registry

@@ -109,7 +109,7 @@ export const analytics = createClientAnalytics({
   providers: [new ProxyProvider({ endpoint: '/api/analytics' })]
 });
 
-analytics.track('button_clicked', { buttonId: 'signup' });
+await analytics.track('button_clicked', { buttonId: 'signup' });
 ```
 
 ```typescript title="app/api/analytics/route.ts"

@@ -44,7 +44,7 @@ Page views are tracked automatically when the Visitors script loads. Calling `an
 ### Custom events
 
 ```typescript
-analytics.track('button_clicked', {
+await analytics.track('button_clicked', {
   button: 'cta',
   page: 'pricing',
   value: 99

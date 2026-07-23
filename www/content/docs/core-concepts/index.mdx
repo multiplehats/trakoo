@@ -50,7 +50,7 @@ const analytics = createClientAnalytics({
 });
 
 // 3. Track — fully typed
-analytics.track('button_clicked', { buttonId: 'cta' });
+await analytics.track('button_clicked', { buttonId: 'cta' });
 ```
 
 The root import supplies environment-neutral registry helpers and shared types. Factories and providers stay on their client/server subpaths. Every factory call returns a fresh application-owned instance; passing `events` gives it the registry and all inferred types.

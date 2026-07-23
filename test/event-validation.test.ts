@@ -28,6 +28,24 @@ function schema<TInput extends object, TOutput extends object>(
 	};
 }
 
+function callableSchema<TInput extends object, TOutput extends object>(
+	validate: StandardSchemaV1.Props<TInput, TOutput>["validate"],
+	kind?: "type" | "none",
+): StandardSchemaV1<TInput, TOutput> {
+	const carrier = Object.assign(
+		() => undefined,
+		{
+			"~standard": {
+				version: 1 as const,
+				vendor: "trakoo-test",
+				validate,
+			},
+		},
+		kind ? { kind } : {},
+	);
+	return carrier as unknown as StandardSchemaV1<TInput, TOutput>;
+}
+
 function invalidResult<TOutput extends object>(
 	value: unknown,
 ): StandardSchemaV1.Result<TOutput> {
@@ -70,12 +88,43 @@ function hostileSchemas(): readonly [string, StandardSchemaV1<object, object>][]
 			},
 		},
 	) as StandardSchemaV1<object, object>;
+	const throwingCallableStandardGetter = Object.defineProperty(
+		() => undefined,
+		"~standard",
+		{
+			get() {
+				throw new Error("callable standard getter retained secret-input");
+			},
+		},
+	) as unknown as StandardSchemaV1<object, object>;
+	const throwingCallableHasTrap = new Proxy(
+		() => undefined,
+		{
+			has() {
+				throw new Error("callable has trap retained secret-input");
+			},
+		},
+	) as unknown as StandardSchemaV1<object, object>;
+	const throwingCallableGetTrap = new Proxy(
+		() => undefined,
+		{
+			has() {
+				return true;
+			},
+			get() {
+				throw new Error("callable get trap retained secret-input");
+			},
+		},
+	) as unknown as StandardSchemaV1<object, object>;
 
 	return [
 		["throwing ~standard getter", throwingStandardGetter],
 		["throwing validate getter", throwingValidateGetter],
 		["throwing Proxy has trap", throwingHasTrap],
 		["throwing Proxy get trap", throwingGetTrap],
+		["throwing callable ~standard getter", throwingCallableStandardGetter],
+		["throwing callable Proxy has trap", throwingCallableHasTrap],
+		["throwing callable Proxy get trap", throwingCallableGetTrap],
 	];
 }
 
@@ -158,6 +207,49 @@ async function rejectedValidationError(
 }
 
 describe("resolveEvent", () => {
+	it.each([undefined, "type", "none"] as const)(
+		"validates a callable Standard Schema carrier with kind %s",
+		async (kind) => {
+			const validate = vi.fn((input: { amount: string }) => ({
+				value: { amount: Number(input.amount), validated: true },
+			}));
+			const callableEvents = defineEvents({
+				purchase: {
+					name: "callable_purchase",
+					category: "conversion",
+					properties: callableSchema(validate, kind),
+				},
+			});
+			const input = { amount: "49" };
+
+			await expect(
+				resolveEvent(
+					callableEvents,
+					"callable_purchase",
+					input,
+					true,
+					undefined,
+					false,
+				),
+			).resolves.toMatchObject({
+				properties: { amount: 49, validated: true },
+			});
+			expect(validate).toHaveBeenCalledOnce();
+			expect(validate).toHaveBeenCalledWith(input);
+		},
+	);
+
+	it.each(["type", "none"] as const)(
+		"does not treat a bare callable with kind %s as a trakoo marker",
+		(kind) => {
+			const callable = Object.assign(() => undefined, { kind });
+
+			expect(isTypeMarker(callable)).toBe(false);
+			expect(isNoPropertiesMarker(callable)).toBe(false);
+			expect(isStandardSchema(callable)).toBe(false);
+		},
+	);
+
 	it.each(["type", "none"] as const)(
 		"prefers a callable Standard Schema validator over kind %s",
 		async (kind) => {

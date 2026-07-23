@@ -79,7 +79,7 @@ The root `trakoo` import contains shared types and environment-neutral event hel
 Then track from anywhere. TypeScript knows the valid event names and their required properties:
 
 ```typescript
-analytics.track('user_signed_up', {
+await analytics.track('user_signed_up', {
   email: 'ada@example.com',
   plan: 'pro'
 });

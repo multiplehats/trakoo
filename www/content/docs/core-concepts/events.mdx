@@ -82,7 +82,7 @@ const lifecycleEvents = defineEvents({
   }
 });
 
-analytics.track('session_started');
+await analytics.track('session_started');
 ```
 
 Passing `{}` or any other second argument is invalid. Providers receive an empty properties object after trakoo resolves the event.
@@ -168,7 +168,7 @@ export const analytics = createClientAnalytics({
   providers: [/* ... */]
 });
 
-analytics.track('button_clicked', {
+await analytics.track('button_clicked', {
   buttonId: 'cta',
   location: 'hero'
 });

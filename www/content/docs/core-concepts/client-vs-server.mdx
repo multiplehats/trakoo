@@ -64,7 +64,7 @@ analytics.identify('user-123', {
 });
 
 // 2. Later events include the user automatically.
-analytics.track('button_clicked', { buttonId: 'checkout' });
+await analytics.track('button_clicked', { buttonId: 'checkout' });
 // Providers receive userId 'user-123' and its traits.
 
 // 3. On logout, clear the state.
@@ -228,7 +228,7 @@ Client and server often cover two halves of the same journey. The client capture
 
 ```typescript
 // Client: the user clicked the signup button.
-analytics.track('signup_button_clicked', { location: 'hero' });
+await analytics.track('signup_button_clicked', { location: 'hero' });
 
 // Server: the account was actually created.
 await serverAnalytics.track('user_signed_up', {

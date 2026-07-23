@@ -75,7 +75,7 @@ const analytics = createClientAnalytics({
   ]
 });
 
-analytics.track('user_signed_up', {
+await analytics.track('user_signed_up', {
   email: 'ada@example.com',
   plan: 'pro'
 });

@@ -31,7 +31,7 @@ analytics.identify('user_123', {
 });
 
 // User context is attached to everything that follows.
-analytics.track('button_clicked', { buttonId: 'upgrade' });
+await analytics.track('button_clicked', { buttonId: 'upgrade' });
 // Providers receive: { userId: 'user_123', email: 'ada@example.com', traits: { name, plan } }
 ```
 

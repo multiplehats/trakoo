@@ -170,7 +170,7 @@ export const analytics = createClientAnalytics({
 ```typescript
 import { analytics } from "./analytics";
 
-analytics.track("button_clicked", { buttonId: "signup" });
+await analytics.track("button_clicked", { buttonId: "signup" });
 ```
 
 The compatibility alias, singleton getter and reset hook, and module-level tracking helpers have been removed. Import the owned instance wherever the application tracks events.

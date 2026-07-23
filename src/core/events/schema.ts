@@ -66,7 +66,8 @@ export type EventPropertiesClassification =
 export function classifyEventProperties(
 	value: unknown,
 ): EventPropertiesClassification {
-	if (typeof value !== "object" || value === null) {
+	const isObject = typeof value === "object" && value !== null;
+	if (!isObject && typeof value !== "function") {
 		return { kind: "invalid" };
 	}
 
@@ -91,6 +92,8 @@ export function classifyEventProperties(
 				}
 			}
 		}
+
+		if (!isObject) return { kind: "invalid" };
 
 		if ("kind" in value) {
 			if (value.kind === "type") return { kind: "type" };

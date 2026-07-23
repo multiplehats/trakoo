@@ -13,7 +13,7 @@ const analytics = createClientAnalytics({
   providers: [new PostHogClientProvider({ token: 'xxx' })]
 });
 
-analytics.track('user_signed_up', { email: 'ada@example.com' });
+await analytics.track('user_signed_up', { email: 'ada@example.com' });
 // PostHogClientProvider transforms the event and sends it to PostHog.
 ```
 
@@ -34,7 +34,7 @@ const analytics = createClientAnalytics({
 });
 
 // All three providers receive this event.
-analytics.track('user_signed_up', { email: 'ada@example.com', plan: 'pro' });
+await analytics.track('user_signed_up', { email: 'ada@example.com', plan: 'pro' });
 ```
 
 Not every provider should receive every call — Bento is built for identified users, not anonymous page views. Control which methods and events reach each provider with [routing](/docs/providers#routing).
@@ -67,7 +67,7 @@ You rarely call these directly — the instance does. See [Client vs Server](/do
 Providers are isolated from one another. If one fails, the others still receive the event, and the error is caught rather than thrown into your app.
 
 ```typescript
-analytics.track('purchase', { amount: 99.99 });
+await analytics.track('purchase', { amount: 99.99 });
 // If PostHog is unreachable, Bento and Pirsch still get the event.
 ```
 

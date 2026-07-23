@@ -39,7 +39,7 @@ export const analytics = createClientAnalytics({
   ]
 });
 
-analytics.track('button_clicked', { buttonId: 'signup-cta' });
+await analytics.track('button_clicked', { buttonId: 'signup-cta' });
 ```
 
 ## Server-side usage

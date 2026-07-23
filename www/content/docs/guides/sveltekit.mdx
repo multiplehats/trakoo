@@ -136,10 +136,14 @@ Initialize once in the root layout, then track a page view on every client-side 
   import { analytics } from '$lib/analytics';
 
   function handleClick() {
-    analytics.track('button_clicked', {
-      buttonId: 'signup-cta',
-      location: 'hero'
-    });
+    void analytics
+      .track('button_clicked', {
+        buttonId: 'signup-cta',
+        location: 'hero'
+      })
+      .catch((error) => {
+        console.error('Analytics tracking failed:', error);
+      });
   }
 </script>
 
@@ -345,10 +349,14 @@ With `use:enhance` you can track the submission client-side while the action rec
   method="POST"
   action="?/signup"
   use:enhance={() => {
-    analytics.track('button_clicked', {
-      buttonId: 'signup-submit',
-      location: 'signup-form'
-    });
+    void analytics
+      .track('button_clicked', {
+        buttonId: 'signup-submit',
+        location: 'signup-form'
+      })
+      .catch((error) => {
+        console.error('Analytics tracking failed:', error);
+      });
 
     return async ({ update }) => update();
   }}

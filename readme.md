@@ -91,13 +91,13 @@ export const analytics = createClientAnalytics({
 Each factory call returns a fresh instance. trakoo does not keep a global analytics singleton. Create and own the instance in your application, then import that owned instance where you track.
 
 ```typescript
-analytics.track('user_signed_up', {
+await analytics.track('user_signed_up', {
   userId: 'user-123',
   email: 'ada@example.com',
   plan: 'pro'
 });
 
-analytics.track('session_started');
+await analytics.track('session_started');
 ```
 
 The registry drives autocomplete and rejects misspelled names, missing properties, extra properties, and a properties argument for `session_started`.

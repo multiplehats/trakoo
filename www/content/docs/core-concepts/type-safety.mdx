@@ -10,7 +10,7 @@ trakoo binds each analytics instance to an event registry. Passing that registry
 Analytics mistakes are quiet: a typo can create a second event or an unusable property and remain unnoticed until a report is wrong. A registry-bound instance catches them while you write code.
 
 ```typescript
-analytics.track('user_signed_up', {
+await analytics.track('user_signed_up', {
   email: 'ada@example.com',
   plan: 'pro'
 });
@@ -79,12 +79,12 @@ Both factories return fresh, independent instances. The application owns the ret
 The registry produces a different tuple for each wire name:
 
 ```typescript
-analytics.track('user_signed_up', {
+await analytics.track('user_signed_up', {
   email: 'ada@example.com',
   plan: 'pro'
 });
 
-analytics.track('session_started');
+await analytics.track('session_started');
 ```
 
 The first call requires properties. The second rejects a properties argument. On the server, property-bearing events accept an optional third options argument, while propertyless events accept options directly as the second argument.

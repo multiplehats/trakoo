@@ -28,8 +28,10 @@ EmitKit is server-only — its SDK has no browser package. To capture browser ev
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { EmitKitServerProvider } from 'trakoo/providers/server';
+import { appEvents } from '@/lib/events';
 
 export const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new EmitKitServerProvider({
       apiKey: process.env.EMITKIT_API_KEY!, // starts with 'emitkit_'
@@ -100,12 +102,14 @@ Send browser events through your own API, then forward them to EmitKit on the se
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { ProxyProvider } from 'trakoo/providers/client';
+import { appEvents } from '@/lib/events';
 
 export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [new ProxyProvider({ endpoint: '/api/analytics' })]
 });
 
-analytics.track('button_clicked', { buttonId: 'signup' });
+await analytics.track('button_clicked', { buttonId: 'signup' });
 ```
 
 ```typescript title="app/api/analytics/route.ts"
@@ -114,8 +118,10 @@ import {
   EmitKitServerProvider,
   ingestProxyEvents
 } from 'trakoo/providers/server';
+import { appEvents } from '@/lib/events';
 
 const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new EmitKitServerProvider({
       apiKey: process.env.EMITKIT_API_KEY!,

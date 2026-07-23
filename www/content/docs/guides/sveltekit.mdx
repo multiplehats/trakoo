@@ -35,49 +35,49 @@ POSTHOG_API_KEY=your-posthog-api-key
 
 ## Define your events
 
-Describe every event once in a shared file so the client and server instances stay in sync.
+Describe every event once in a shared runtime registry so the client and server instances stay in sync.
 
 ```typescript title="src/lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from 'trakoo';
+import { defineEvents, typed } from 'trakoo';
 
-export const appEvents = {
+export const appEvents = defineEvents({
   pageViewed: {
     name: 'page_viewed',
     category: 'navigation',
-    properties: {} as {
+    properties: typed<{
       path: string;
       title: string;
-    }
+    }>()
   },
   buttonClicked: {
     name: 'button_clicked',
     category: 'engagement',
-    properties: {} as {
+    properties: typed<{
       buttonId: string;
       location: string;
-    }
+    }>()
   },
   userSignedUp: {
     name: 'user_signed_up',
     category: 'user',
-    properties: {} as {
+    properties: typed<{
       email: string;
       plan: 'free' | 'pro' | 'enterprise';
-    }
+    }>()
   },
 
   apiRequest: {
     name: 'api_request',
     category: 'system',
-    properties: {} as {
+    properties: typed<{
       path: string;
       method: string;
-    }
+    }>()
   }
-} as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
-
-export type AppEvents = typeof appEvents;
+});
 ```
+
+`typed<T>()` keeps this primary setup validator-free. To validate or transform properties at runtime, pass any Standard Schema-compatible validator instead; see [Runtime validation](/docs/guides/standard-schema-migration#runtime-validation).
 
 ## Client analytics
 
@@ -87,9 +87,10 @@ Create one stateful client instance and import it wherever you track in the brow
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
 import { PUBLIC_POSTHOG_KEY, PUBLIC_POSTHOG_HOST } from '$env/static/public';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const analytics = createClientAnalytics<AppEvents>({
+export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new PostHogClientProvider({
       token: PUBLIC_POSTHOG_KEY,
@@ -135,10 +136,14 @@ Initialize once in the root layout, then track a page view on every client-side 
   import { analytics } from '$lib/analytics';
 
   function handleClick() {
-    analytics.track('button_clicked', {
-      buttonId: 'signup-cta',
-      location: 'hero'
-    });
+    void analytics
+      .track('button_clicked', {
+        buttonId: 'signup-cta',
+        location: 'hero'
+      })
+      .catch((error) => {
+        console.error('Analytics tracking failed:', error);
+      });
   }
 </script>
 
@@ -182,9 +187,10 @@ import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
 import { POSTHOG_API_KEY } from '$env/static/private';
 import { PUBLIC_POSTHOG_HOST } from '$env/static/public';
-import type { AppEvents } from './events';
+import { appEvents } from './events';
 
-export const serverAnalytics = createServerAnalytics<AppEvents>({
+export const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new PostHogServerProvider({
       apiKey: POSTHOG_API_KEY,
@@ -343,10 +349,14 @@ With `use:enhance` you can track the submission client-side while the action rec
   method="POST"
   action="?/signup"
   use:enhance={() => {
-    analytics.track('button_clicked', {
-      buttonId: 'signup-submit',
-      location: 'signup-form'
-    });
+    void analytics
+      .track('button_clicked', {
+        buttonId: 'signup-submit',
+        location: 'signup-form'
+      })
+      .catch((error) => {
+        console.error('Analytics tracking failed:', error);
+      });
 
     return async ({ update }) => update();
   }}
@@ -386,7 +396,7 @@ export const GET: RequestHandler = async () => {
 
 **`$env` import errors.** Use static imports — `PUBLIC_*` from `$env/static/public`, secrets from `$env/static/private` — rather than `$env/dynamic/*`, so values are inlined at build time.
 
-**Type errors on the analytics functions.** Import the client from `trakoo/client` and the server from `trakoo/server`. The root `trakoo` entry exports types only, not the `createClientAnalytics`/`createServerAnalytics` factories.
+**Type errors on the analytics functions.** Import the client from `trakoo/client` and the server from `trakoo/server`. The root `trakoo` entry exports shared types and environment-neutral event helpers; factories remain on their client and server subpaths.
 
 ## Next steps
 

@@ -1,16 +1,34 @@
 import type {
-	AnalyticsConfig,
 	AnalyticsProvider,
 	BaseEvent,
-	EventCategory,
 	EventContext,
 	ProviderConfigOrProvider,
 	ProviderMethod,
 } from "@/core/events/types.js";
+import type {
+	ClientTrackArgs,
+	EventDefinitions,
+	EventName,
+	EventOutputMap,
+	EventRegistry,
+} from "@/core/events/registry.js";
+import {
+	resolveEvent,
+	type ValidationConfig,
+} from "@/core/events/validation.js";
 import { isBrowser } from "@/utils/environment";
 
-// Default event map type
-type DefaultEventMap = Record<string, Record<string, unknown>>;
+export interface BrowserAnalyticsConfig<
+	TRegistry extends EventRegistry<EventDefinitions>,
+	TUserTraits extends object = Record<string, unknown>,
+> {
+	readonly events: TRegistry;
+	readonly providers: ProviderConfigOrProvider[];
+	readonly validation?: ValidationConfig;
+	readonly debug?: boolean;
+	readonly enabled?: boolean;
+	readonly defaultContext?: Partial<EventContext<TUserTraits>>;
+}
 
 /**
  * Internal normalized provider configuration
@@ -24,8 +42,8 @@ interface NormalizedProviderConfig {
 }
 
 export class BrowserAnalytics<
-	TEventMap extends DefaultEventMap = DefaultEventMap,
-	TUserTraits extends Record<string, unknown> = Record<string, unknown>,
+	TRegistry extends EventRegistry<EventDefinitions>,
+	TUserTraits extends object = Record<string, unknown>,
 > {
 	private providerConfigs: NormalizedProviderConfig[] = [];
 	private context: EventContext<TUserTraits> = {};
@@ -34,6 +52,10 @@ export class BrowserAnalytics<
 	private userTraits?: TUserTraits;
 	private initialized = false;
 	private initializePromise?: Promise<void>;
+	private readonly registry: TRegistry;
+	private readonly validation?: ValidationConfig;
+	private readonly debug: boolean;
+	private readonly enabled: boolean;
 
 	/**
 	 * Creates a new BrowserAnalytics instance for client-side event tracking.
@@ -41,36 +63,44 @@ export class BrowserAnalytics<
 	 * Automatically generates a session ID and sets up the analytics context.
 	 * The instance will be ready to track events once initialized.
 	 *
-	 * @param config Analytics configuration including providers and default context
+	 * @param config Analytics configuration including an event registry, providers, and default context
+	 * @param config.events Runtime event registry created with `defineEvents()`
 	 * @param config.providers Array of analytics provider instances (e.g., PostHogClientProvider)
 	 * @param config.defaultContext Optional default context to include with all events
 	 *
 	 * @example
 	 * ```typescript
+	 * import { defineEvents } from 'trakoo';
 	 * import { BrowserAnalytics } from 'trakoo/client';
 	 * import { PostHogClientProvider } from 'trakoo/providers/client';
 	 *
+	 * const events = defineEvents({});
 	 * const analytics = new BrowserAnalytics({
+	 *   events,
 	 *   providers: [
 	 *     new PostHogClientProvider({
-	 *       apiKey: 'your-posthog-api-key',
+	 *       token: 'your-posthog-api-key',
 	 *       api_host: 'https://app.posthog.com'
 	 *     })
 	 *   ],
 	 *   defaultContext: {
-	 *     app: { version: '1.0.0' }
+	 *     page: { path: '/', title: 'Example app' }
 	 *   }
 	 * });
 	 *
 	 * await analytics.initialize();
 	 * ```
 	 */
-	constructor(config: AnalyticsConfig) {
+	constructor(config: BrowserAnalyticsConfig<TRegistry, TUserTraits>) {
+		this.registry = config.events;
+		this.validation = config.validation;
+		this.debug = config.debug === true;
+		this.enabled = config.enabled !== false;
 		this.providerConfigs = this.normalizeProviders(config.providers);
 
 		// Set default context
 		if (config.defaultContext) {
-			this.context = { ...config.defaultContext } as EventContext<TUserTraits>;
+			this.context = { ...config.defaultContext };
 		}
 
 		// Generate session ID
@@ -246,13 +276,23 @@ export class BrowserAnalytics<
 	 *
 	 * @example
 	 * ```typescript
-	 * const analytics = new BrowserAnalytics({ providers: [] });
+	 * import { defineEvents, typed } from 'trakoo';
+	 * import { BrowserAnalytics } from 'trakoo/client';
+	 *
+	 * const events = defineEvents({
+	 *   pageViewed: {
+	 *     name: 'page_viewed',
+	 *     category: 'navigation',
+	 *     properties: typed<{ page: string }>(),
+	 *   },
+	 * });
+	 * const analytics = new BrowserAnalytics({ events, providers: [] });
 	 *
 	 * // Initialize before tracking events
 	 * await analytics.initialize();
 	 *
 	 * // Now ready to track events
-	 * analytics.track('page_viewed', { page: '/dashboard' });
+	 * await analytics.track('page_viewed', { page: '/dashboard' });
 	 * ```
 	 *
 	 * @example
@@ -263,6 +303,7 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	async initialize(): Promise<void> {
+		if (!this.enabled) return;
 		if (!isBrowser()) return;
 
 		if (this.initialized) return;
@@ -345,7 +386,7 @@ export class BrowserAnalytics<
 	 * });
 	 *
 	 * // Now all subsequent track() calls automatically include user context
-	 * analytics.track('button_clicked', { buttonId: 'checkout' });
+	 * await analytics.track('button_clicked', { buttonId: 'checkout' });
 	 * // Providers receive: context.user = { userId: 'user-123', email: 'john@example.com', traits: {...} }
 	 * ```
 	 *
@@ -374,6 +415,8 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	identify(userId: string, traits?: TUserTraits): void {
+		if (!this.enabled) return;
+
 		this.userId = userId;
 		this.userTraits = traits;
 
@@ -384,7 +427,10 @@ export class BrowserAnalytics<
 
 		for (const config of this.providerConfigs) {
 			if (this.shouldCallMethod(config, "identify")) {
-				config.provider.identify(userId, traits);
+				config.provider.identify(
+					userId,
+					traits as Record<string, unknown> | undefined,
+				);
 			}
 		}
 	}
@@ -426,7 +472,7 @@ export class BrowserAnalytics<
 	 * });
 	 *
 	 * // Now all events automatically include user context
-	 * analytics.track('button_clicked', { buttonId: 'checkout' });
+	 * await analytics.track('button_clicked', { buttonId: 'checkout' });
 	 * // Providers receive: context.user = { userId: 'user-123', email: 'user@example.com', traits: {...} }
 	 * ```
 	 *
@@ -448,8 +494,9 @@ export class BrowserAnalytics<
 	 * @example
 	 * ```typescript
 	 * // Fire-and-forget for non-critical events (client-side typical usage)
-	 * analytics.track('feature_viewed', { feature: 'dashboard' });
-	 * // Don't await - let it track in the background
+	 * void analytics.track('feature_viewed', { feature: 'dashboard' }).catch((error) => {
+	 *   console.error('Background analytics failed:', error);
+	 * });
 	 * ```
 	 *
 	 * @example
@@ -458,23 +505,36 @@ export class BrowserAnalytics<
 	 * try {
 	 *   await analytics.track('critical_event', { data: 'important' });
 	 * } catch (error) {
-	 *   // Individual provider failures are handled internally
-	 *   // This catch would only trigger for initialization failures
+	 *   // Strict validation rejects with AnalyticsValidationError.
+	 *   // Browser initialization can also reject; provider track failures are isolated and logged.
 	 *   console.error('Failed to track event:', error);
 	 * }
 	 * ```
 	 */
-	async track<TEventName extends keyof TEventMap & string>(
-		eventName: TEventName,
-		properties: TEventMap[TEventName],
+	async track<TName extends EventName<TRegistry>>(
+		...args: ClientTrackArgs<TRegistry, TName>
 	): Promise<void> {
+		if (!this.enabled) return;
+
 		// Ensure initialization but don't block the track call
 		await this.ensureInitialized();
 
-		const event: BaseEvent = {
-			action: eventName,
-			category: this.getCategoryFromEventName(eventName),
-			properties: properties as Record<string, unknown>,
+		const eventName = args[0];
+		const input = args.length > 1 ? (args as readonly unknown[])[1] : undefined;
+		const resolved = await resolveEvent(
+			this.registry,
+			eventName,
+			input,
+			args.length > 1,
+			this.validation,
+			this.debug,
+		);
+		if (!resolved) return;
+
+		const event: BaseEvent<EventOutputMap<TRegistry>[TName]> = {
+			action: resolved.name,
+			category: resolved.category,
+			properties: resolved.properties,
 			timestamp: Date.now(),
 			userId: this.userId,
 			sessionId: this.sessionId,
@@ -505,7 +565,10 @@ export class BrowserAnalytics<
 			)
 			.map(async (config) => {
 				try {
-					await config.provider.track(event, contextWithUser);
+					await config.provider.track(
+						event as BaseEvent,
+						contextWithUser as EventContext,
+					);
 				} catch (error) {
 					// Log error but don't throw - one provider failing shouldn't break others
 					console.error(
@@ -580,6 +643,8 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	pageView(properties?: Record<string, unknown>): void {
+		if (!this.enabled) return;
+
 		// Run initialization if needed, but don't block
 		this.ensureInitialized().catch((error) => {
 			console.error("[Analytics] Failed to initialize during pageView:", error);
@@ -596,7 +661,7 @@ export class BrowserAnalytics<
 
 		for (const config of this.providerConfigs) {
 			if (this.shouldCallMethod(config, "pageView")) {
-				config.provider.pageView(properties, this.context);
+				config.provider.pageView(properties, this.context as EventContext);
 			}
 		}
 	}
@@ -657,6 +722,8 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	pageLeave(properties?: Record<string, unknown>): void {
+		if (!this.enabled) return;
+
 		// Run initialization if needed, but don't block
 		this.ensureInitialized().catch((error) => {
 			console.error(
@@ -670,7 +737,7 @@ export class BrowserAnalytics<
 				this.shouldCallMethod(config, "pageLeave") &&
 				config.provider.pageLeave
 			) {
-				config.provider.pageLeave(properties, this.context);
+				config.provider.pageLeave(properties, this.context as EventContext);
 			}
 		}
 	}
@@ -720,7 +787,7 @@ export class BrowserAnalytics<
 	 *   analytics.identify(newUserId);
 	 *
 	 *   // Track account switch
-	 *   analytics.track('account_switched', {
+	 *   await analytics.track('account_switched', {
 	 *     newUserId,
 	 *     timestamp: Date.now()
 	 *   });
@@ -728,6 +795,8 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	reset(): void {
+		if (!this.enabled) return;
+
 		this.userId = undefined;
 		this.userTraits = undefined;
 		this.sessionId = this.generateSessionId();
@@ -754,7 +823,7 @@ export class BrowserAnalytics<
 	 * @example
 	 * ```typescript
 	 * // Flush before navigation
-	 * analytics.track('button_clicked', { buttonId: 'checkout' });
+	 * await analytics.track('button_clicked', { buttonId: 'checkout' });
 	 * await analytics.flush();
 	 * window.location.href = '/checkout';
 	 * ```
@@ -774,9 +843,14 @@ export class BrowserAnalytics<
 	 * ```
 	 */
 	async flush(useBeacon = false): Promise<void> {
+		if (!this.enabled) return;
+
 		const flushPromises = this.providerConfigs.map(async (config) => {
 			// Only call flush if the provider has the method
-			if (config.provider.flush && typeof config.provider.flush === "function") {
+			if (
+				config.provider.flush &&
+				typeof config.provider.flush === "function"
+			) {
 				try {
 					await config.provider.flush(useBeacon);
 				} catch (error) {
@@ -874,17 +948,6 @@ export class BrowserAnalytics<
 				...context.utm,
 			},
 		};
-	}
-
-	private getCategoryFromEventName(eventName: string): EventCategory {
-		// Extract category from event name pattern: category_action
-		const parts = eventName.split("_");
-		// Only use the first part as category if there's actually an underscore
-		if (parts.length > 1 && parts[0]) {
-			return parts[0];
-		}
-
-		return "engagement"; // Default fallback category
 	}
 
 	private generateSessionId(): string {

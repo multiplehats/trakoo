@@ -4,6 +4,7 @@
 		"module": "ESNext",
 		"moduleResolution": "bundler",
 		"noImplicitReturns": true,
+		"strictNullChecks": true,
 		"esModuleInterop": true,
 		"outDir": "dist",
 		"sourceMap": true,
@@ -19,5 +20,10 @@
 	},
 	"compileOnSave": true,
 	"include": ["src", "test"],
-	"exclude": ["node_modules", "dist", "coverage"]
+	"exclude": [
+		"node_modules",
+		"dist",
+		"coverage",
+		"test/fixtures/invalid-event-usage.ts"
+	]
 }

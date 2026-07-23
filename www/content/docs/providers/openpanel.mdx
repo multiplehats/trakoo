@@ -26,8 +26,10 @@ Use `OpenPanelClientProvider` from `trakoo/providers/client`. Browser code needs
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { OpenPanelClientProvider } from 'trakoo/providers/client';
+import { appEvents } from '@/lib/events';
 
 export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new OpenPanelClientProvider({
       clientId: import.meta.env.VITE_OPENPANEL_CLIENT_ID
@@ -70,8 +72,10 @@ Use `OpenPanelServerProvider` from `trakoo/providers/server`. Server analytics i
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { OpenPanelServerProvider } from 'trakoo/providers/server';
+import { appEvents } from '@/lib/events';
 
 export const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new OpenPanelServerProvider({
       clientId: process.env.OPENPANEL_CLIENT_ID!,

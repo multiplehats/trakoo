@@ -31,22 +31,29 @@ Everything comes back to three moves: define events, create an instance with pro
 
 ```typescript
 // 1. Define events once
-export const appEvents = {
+import { defineEvents, typed } from 'trakoo';
+import { createClientAnalytics } from 'trakoo/client';
+import { PostHogClientProvider } from 'trakoo/providers/client';
+
+export const appEvents = defineEvents({
   buttonClicked: {
     name: 'button_clicked',
     category: 'engagement',
-    properties: {} as { buttonId: string }
+    properties: typed<{ buttonId: string }>()
   }
-} as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
+});
 
 // 2. Create an instance with your providers
-const analytics = createClientAnalytics<typeof appEvents>({
+const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [new PostHogClientProvider({ token: 'xxx' })]
 });
 
 // 3. Track — fully typed
-analytics.track('button_clicked', { buttonId: 'cta' });
+await analytics.track('button_clicked', { buttonId: 'cta' });
 ```
+
+The root import supplies environment-neutral registry helpers and shared types. Factories and providers stay on their client/server subpaths. Every factory call returns a fresh application-owned instance; passing `events` gives it the registry and all inferred types.
 
 Client tracking is stateful: `identify()` once, and later events carry that user until you `reset()`. Server tracking is stateless: pass user context with each `track()`, then `shutdown()` to flush. [Client vs Server](/docs/core-concepts/client-vs-server) covers the difference in full.
 

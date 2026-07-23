@@ -85,8 +85,10 @@ A custom provider goes in the `providers` array like any built-in one, and it wo
 ```typescript
 import { createClientAnalytics } from 'trakoo/client';
 import { CustomProvider } from './custom-provider';
+import { appEvents } from '@/lib/events';
 
 const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new CustomProvider({ apiKey: 'your-api-key', debug: true })
   ]

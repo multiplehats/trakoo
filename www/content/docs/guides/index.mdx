@@ -10,6 +10,9 @@ These guides show how to wire trakoo into a specific framework end to end: where
 ## Available guides
 
 <CardGroup>
+  <Card title="Standard Schema migration" href="/docs/guides/standard-schema-migration" icon="arrow-right-left">
+    Migrate legacy event collections and the client singleton to runtime event registries.
+  </Card>
   <Card title="Next.js App Router" href="/docs/guides/nextjs" icon="triangle">
     Next.js 13+ with the App Router, Server Components, and Server Actions.
   </Card>
@@ -26,7 +29,7 @@ trakoo has no framework requirement, so the pattern is the same everywhere:
 2. Create a server analytics instance for server code with `createServerAnalytics()`.
 3. Track events on the instance that matches where the code runs.
 
-If your framework isn't listed yet, start from [Quick Start](/docs/quick-start) and read [Client vs Server](/docs/core-concepts/client-vs-server) to decide where each event belongs. The same typed event definitions work in any framework.
+If your framework isn't listed yet, start from [Quick Start](/docs/quick-start) and read [Client vs Server](/docs/core-concepts/client-vs-server) to decide where each event belongs. The same runtime event registry works in any framework.
 
 :::note[More guides coming]
 Want a guide for the framework you use? [Open an issue](https://github.com/multiplehats/trakoo/issues) and let us know.

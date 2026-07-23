@@ -54,8 +54,10 @@ import {
   PostHogClientProvider,
   VisitorsClientProvider
 } from 'trakoo/providers/client';
+import { appEvents } from '@/lib/events';
 
 const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new PostHogClientProvider({
       token: import.meta.env.VITE_POSTHOG_KEY
@@ -73,7 +75,7 @@ const analytics = createClientAnalytics({
   ]
 });
 
-analytics.track('user_signed_up', {
+await analytics.track('user_signed_up', {
   email: 'ada@example.com',
   plan: 'pro'
 });
@@ -86,7 +88,15 @@ The application emits one typed event. trakoo fans it out to each enabled provid
 Some providers should not receive every call. Bento is usually better for identified user lifecycle events than anonymous page views. EmitKit is usually better for selected events than high-volume click streams. Wrap a provider in a config object to control exactly which methods and events reach it.
 
 ```typescript
+import { createClientAnalytics } from 'trakoo/client';
+import {
+  BentoClientProvider,
+  PostHogClientProvider
+} from 'trakoo/providers/client';
+import { appEvents } from '@/lib/events';
+
 const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new PostHogClientProvider({ token: import.meta.env.VITE_POSTHOG_KEY }),
     {
@@ -119,8 +129,10 @@ Use the proxy when browser events should go through your domain before reaching 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { ProxyProvider } from 'trakoo/providers/client';
+import { appEvents } from '@/lib/events';
 
 export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new ProxyProvider({
       endpoint: '/api/events',
@@ -136,8 +148,10 @@ import {
   EmitKitServerProvider,
   createProxyHandler
 } from 'trakoo/providers/server';
+import { appEvents } from '@/lib/events';
 
 const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new EmitKitServerProvider({
       apiKey: process.env.EMITKIT_API_KEY!,

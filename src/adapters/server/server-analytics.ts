@@ -1,17 +1,76 @@
-import type { AnyEventName, AnyEventProperties } from "@/core/events/index.js";
+import {
+	getEventClassification,
+	type EventDefinitions,
+	type EventName,
+	type EventOutputMap,
+	type EventRegistry,
+	type ServerTrackArgs,
+} from "@/core/events/registry.js";
 import type {
-	AnalyticsConfig,
 	AnalyticsProvider,
 	BaseEvent,
-	EventCategory,
 	EventContext,
 	ProviderConfigOrProvider,
 	ProviderMethod,
 	UserContext,
 } from "@/core/events/types.js";
+import {
+	AnalyticsValidationError,
+	applyValidationFailurePolicy,
+	resolveEvent,
+	resolveReplayEvent,
+	type ResolvedEvent,
+	type ValidationConfig,
+} from "@/core/events/validation.js";
 
-// Default event map type - allows any event with any properties when no specific map is provided
-type DefaultEventMap = Record<string, Record<string, unknown>>;
+export const serverAnalyticsReplay: unique symbol = Symbol(
+	"trakoo.serverAnalytics.replay",
+);
+
+export interface ServerAnalyticsReplayAccess<TUserTraits extends object> {
+	readonly [serverAnalyticsReplay]: (
+		eventName: string,
+		properties: unknown,
+		options: ServerTrackOptions<TUserTraits> | undefined,
+	) => Promise<void>;
+}
+
+export interface ServerTrackOptions<TUserTraits extends object> {
+	readonly userId?: string;
+	readonly sessionId?: string;
+	readonly context?: EventContext<TUserTraits>;
+	readonly user?: UserContext<TUserTraits>;
+}
+
+export interface ServerAnalyticsAdapterConfig<
+	TRegistry extends EventRegistry<EventDefinitions>,
+	TUserTraits extends object = Record<string, unknown>,
+> {
+	readonly events: TRegistry;
+	readonly providers: ProviderConfigOrProvider[];
+	readonly validation?: ValidationConfig;
+	readonly debug?: boolean;
+	readonly enabled?: boolean;
+	readonly defaultContext?: Partial<EventContext<TUserTraits>>;
+}
+
+const serverTrackOptionKeys = new Set([
+	"userId",
+	"sessionId",
+	"context",
+	"user",
+]);
+
+function isServerTrackOptions<TUserTraits extends object>(
+	value: unknown,
+): value is ServerTrackOptions<TUserTraits> {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		!Array.isArray(value) &&
+		Object.keys(value).every((key) => serverTrackOptionKeys.has(key))
+	);
+}
 
 /**
  * Internal normalized provider configuration
@@ -25,12 +84,17 @@ interface NormalizedProviderConfig {
 }
 
 export class ServerAnalytics<
-	TEventMap extends Record<string, Record<string, unknown>> = DefaultEventMap,
-	TUserTraits extends Record<string, unknown> = Record<string, unknown>,
-> {
+	TRegistry extends EventRegistry<EventDefinitions>,
+	TUserTraits extends object = Record<string, unknown>,
+> implements ServerAnalyticsReplayAccess<TUserTraits>
+{
 	private providerConfigs: NormalizedProviderConfig[] = [];
-	private config: AnalyticsConfig;
 	private initialized = false;
+	private readonly registry: TRegistry;
+	private readonly validation?: ValidationConfig;
+	private readonly debug: boolean;
+	private readonly enabled: boolean;
+	private readonly defaultContext?: Partial<EventContext<TUserTraits>>;
 
 	/**
 	 * Creates a new ServerAnalytics instance for server-side event tracking.
@@ -38,32 +102,40 @@ export class ServerAnalytics<
 	 * The server analytics instance is designed for Node.js environments including
 	 * long-running servers, serverless functions, and edge computing environments.
 	 *
-	 * @param config Analytics configuration including providers and default context
+	 * @param config Analytics configuration including an event registry, providers, and default context
+	 * @param config.events Runtime event registry created with `defineEvents()`
 	 * @param config.providers Array of analytics provider instances (e.g., PostHogServerProvider)
 	 * @param config.defaultContext Optional default context to include with all events
 	 *
 	 * @example
 	 * ```typescript
+	 * import { defineEvents } from 'trakoo';
 	 * import { ServerAnalytics } from 'trakoo/server';
 	 * import { PostHogServerProvider } from 'trakoo/providers/server';
 	 *
+	 * const events = defineEvents({});
 	 * const analytics = new ServerAnalytics({
+	 *   events,
 	 *   providers: [
 	 *     new PostHogServerProvider({
-	 *       apiKey: process.env.POSTHOG_API_KEY,
-	 *       host: process.env.POSTHOG_HOST
+	 *       apiKey: 'your-posthog-api-key',
+	 *       host: 'https://app.posthog.com'
 	 *     })
 	 *   ],
 	 *   defaultContext: {
-	 *     app: { version: '1.0.0', environment: 'production' }
+	 *     server: { version: '1.0.0', environment: 'production' }
 	 *   }
 	 * });
 	 *
 	 * analytics.initialize();
 	 * ```
 	 */
-	constructor(config: AnalyticsConfig) {
-		this.config = config;
+	constructor(config: ServerAnalyticsAdapterConfig<TRegistry, TUserTraits>) {
+		this.registry = config.events;
+		this.validation = config.validation;
+		this.debug = config.debug === true;
+		this.enabled = config.enabled !== false;
+		this.defaultContext = config.defaultContext;
 		this.providerConfigs = this.normalizeProviders(config.providers);
 	}
 
@@ -233,7 +305,17 @@ export class ServerAnalytics<
 	 *
 	 * @example
 	 * ```typescript
-	 * const analytics = new ServerAnalytics({ providers: [] });
+	 * import { defineEvents, typed } from 'trakoo';
+	 * import { ServerAnalytics } from 'trakoo/server';
+	 *
+	 * const events = defineEvents({
+	 *   apiRequest: {
+	 *     name: 'api_request',
+	 *     category: 'system',
+	 *     properties: typed<{ endpoint: string }>(),
+	 *   },
+	 * });
+	 * const analytics = new ServerAnalytics({ events, providers: [] });
 	 *
 	 * // Initialize before tracking events
 	 * analytics.initialize();
@@ -244,9 +326,20 @@ export class ServerAnalytics<
 	 *
 	 * @example
 	 * ```typescript
+	 * import { defineEvents, typed } from 'trakoo';
+	 * import { ServerAnalytics } from 'trakoo/server';
+	 *
+	 * const events = defineEvents({
+	 *   functionInvoked: {
+	 *     name: 'function_invoked',
+	 *     category: 'system',
+	 *     properties: typed<{ path: string; method: string }>(),
+	 *   },
+	 * });
+	 *
 	 * // In a serverless function
 	 * export async function handler(req, res) {
-	 *   const analytics = new ServerAnalytics({ providers: [] });
+	 *   const analytics = new ServerAnalytics({ events, providers: [] });
 	 *   analytics.initialize(); // Quick synchronous initialization
 	 *
 	 *   await analytics.track('function_invoked', {
@@ -259,6 +352,7 @@ export class ServerAnalytics<
 	 * ```
 	 */
 	initialize(): void {
+		if (!this.enabled) return;
 		if (this.initialized) return;
 
 		// Initialize all providers synchronously (initialize is always called regardless of routing)
@@ -315,10 +409,17 @@ export class ServerAnalytics<
 	 * }
 	 * ```
 	 */
-	async identify(userId: string, traits?: Record<string, unknown>): Promise<void> {
+	async identify(userId: string, traits?: TUserTraits): Promise<void> {
+		if (!this.enabled) return;
+
 		const promises = this.providerConfigs
 			.filter((config) => this.shouldCallMethod(config, "identify"))
-			.map((config) => config.provider.identify(userId, traits));
+			.map((config) =>
+				config.provider.identify(
+					userId,
+					traits as Record<string, unknown> | undefined,
+				),
+			);
 
 		const results = await Promise.allSettled(promises);
 
@@ -444,42 +545,140 @@ export class ServerAnalytics<
 	 *     currency: 'USD'
 	 *   });
 	 * } catch (error) {
-	 *   // This only catches initialization errors
-	 *   // Individual provider failures are logged but don't throw
+	 *   // Strict validation rejects with AnalyticsValidationError.
+	 *   // Initialization errors happen during initialize(); provider track failures are isolated and logged.
 	 *   console.error('Failed to track event:', error);
 	 * }
 	 * ```
 	 */
-	async track<TEventName extends string>(
-		eventName: TEventName,
-		properties: TEventName extends keyof TEventMap
-			? TEventMap[TEventName]
-			: Record<string, unknown>,
-		options?: {
-			userId?: string;
-			sessionId?: string;
-			context?: EventContext<TUserTraits>;
-			user?: UserContext<TUserTraits>;
-		},
+	async track<TName extends EventName<TRegistry>>(
+		...args: ServerTrackArgs<TRegistry, TName, ServerTrackOptions<TUserTraits>>
 	): Promise<void> {
+		if (!this.enabled) return;
+
 		if (!this.initialized) {
 			console.warn("[Analytics] Not initialized. Call initialize() first.");
 			return;
 		}
 
-		const event: BaseEvent = {
-			action: eventName,
-			category: this.getCategoryFromEventName(eventName),
-			properties: properties as Record<string, unknown>,
+		const argumentValues: readonly unknown[] = args;
+		const eventName = args[0];
+		const classification = getEventClassification(this.registry, eventName);
+		const secondArgument = argumentValues[1];
+		let input = secondArgument;
+		let inputProvided = args.length > 1;
+		let options: ServerTrackOptions<TUserTraits> | undefined;
+
+		if (classification?.kind === "none") {
+			if (
+				args.length === 2 &&
+				isServerTrackOptions<TUserTraits>(secondArgument)
+			) {
+				options = secondArgument;
+				input = undefined;
+				inputProvided = false;
+			} else if (args.length === 1) {
+				input = undefined;
+				inputProvided = false;
+			} else if (args.length === 3 && secondArgument === undefined) {
+				const thirdArgument = argumentValues[2];
+				if (thirdArgument === undefined) {
+					input = undefined;
+					inputProvided = false;
+				} else if (isServerTrackOptions<TUserTraits>(thirdArgument)) {
+					options = thirdArgument;
+					input = undefined;
+					inputProvided = false;
+				} else {
+					await applyValidationFailurePolicy(
+						new AnalyticsValidationError("invalid_options", eventName),
+						this.validation,
+						this.debug,
+					);
+					return;
+				}
+			}
+		} else if (classification) {
+			const thirdArgument = argumentValues[2];
+			if (thirdArgument === undefined) {
+				options = undefined;
+			} else if (isServerTrackOptions<TUserTraits>(thirdArgument)) {
+				options = thirdArgument;
+			} else {
+				await applyValidationFailurePolicy(
+					new AnalyticsValidationError("invalid_options", eventName),
+					this.validation,
+					this.debug,
+				);
+				return;
+			}
+		}
+
+		const resolved = await resolveEvent(
+			this.registry,
+			eventName,
+			input,
+			inputProvided,
+			this.validation,
+			this.debug,
+		);
+		if (!resolved) return;
+
+		await this.dispatchResolvedEvent(resolved, options);
+	}
+
+	/**
+	 * Replays an already-validated proxy event through the shared dispatch
+	 * path. Internal entry point used by `ingestProxyEvents`; the replayed
+	 * properties are the client's post-transform validator output, so they
+	 * are resolved via `resolveReplayEvent` instead of being re-validated.
+	 */
+	async [serverAnalyticsReplay](
+		eventName: string,
+		properties: unknown,
+		options: ServerTrackOptions<TUserTraits> | undefined,
+	): Promise<void> {
+		if (!this.enabled) return;
+
+		if (!this.initialized) {
+			console.warn("[Analytics] Not initialized. Call initialize() first.");
+			return;
+		}
+
+		const resolved = await resolveReplayEvent(
+			this.registry,
+			eventName as EventName<TRegistry>,
+			properties,
+			this.validation,
+			this.debug,
+		);
+		if (!resolved) return;
+
+		await this.dispatchResolvedEvent(resolved, options);
+	}
+
+	/**
+	 * Shared dispatch tail for track() and the proxy replay entry point:
+	 * builds the BaseEvent, merges context, and fans out to providers.
+	 */
+	private async dispatchResolvedEvent<TName extends EventName<TRegistry>>(
+		resolved: ResolvedEvent<TRegistry, TName>,
+		options: ServerTrackOptions<TUserTraits> | undefined,
+	): Promise<void> {
+		const event: BaseEvent<EventOutputMap<TRegistry>[TName]> = {
+			action: resolved.name,
+			category: resolved.category,
+			properties: resolved.properties,
 			timestamp: Date.now(),
 			userId: options?.userId,
 			sessionId: options?.sessionId,
 		};
 
 		const context: EventContext<TUserTraits> = {
-			...this.config.defaultContext,
+			...this.defaultContext,
 			...options?.context,
-			user: options?.user || options?.context?.user,
+			user:
+				options?.user ?? options?.context?.user ?? this.defaultContext?.user,
 		};
 
 		// Track with all providers in parallel (respecting method and event routing)
@@ -487,11 +686,14 @@ export class ServerAnalytics<
 			.filter(
 				(config) =>
 					this.shouldCallMethod(config, "track") &&
-					this.shouldTrackEvent(config, eventName),
+					this.shouldTrackEvent(config, resolved.name),
 			)
 			.map(async (config) => {
 				try {
-					await config.provider.track(event, context);
+					await config.provider.track(
+						event as BaseEvent,
+						context as EventContext,
+					);
 				} catch (error) {
 					// Log error but don't throw - one provider failing shouldn't break others
 					console.error(
@@ -571,16 +773,19 @@ export class ServerAnalytics<
 			context?: EventContext<TUserTraits>;
 		},
 	): Promise<void> {
+		if (!this.enabled) return;
 		if (!this.initialized) return;
 
 		const context: EventContext<TUserTraits> = {
-			...this.config.defaultContext,
+			...this.defaultContext,
 			...options?.context,
-		} as EventContext<TUserTraits>;
+		};
 
 		const promises = this.providerConfigs
 			.filter((config) => this.shouldCallMethod(config, "pageView"))
-			.map((config) => config.provider.pageView(properties, context));
+			.map((config) =>
+				config.provider.pageView(properties, context as EventContext),
+			);
 
 		const results = await Promise.allSettled(promises);
 
@@ -656,19 +861,20 @@ export class ServerAnalytics<
 			context?: EventContext<TUserTraits>;
 		},
 	): void {
+		if (!this.enabled) return;
 		if (!this.initialized) return;
 
 		const context: EventContext<TUserTraits> = {
-			...this.config.defaultContext,
+			...this.defaultContext,
 			...options?.context,
-		} as EventContext<TUserTraits>;
+		};
 
 		for (const config of this.providerConfigs) {
 			if (
 				this.shouldCallMethod(config, "pageLeave") &&
 				config.provider.pageLeave
 			) {
-				config.provider.pageLeave(properties, context);
+				config.provider.pageLeave(properties, context as EventContext);
 			}
 		}
 	}
@@ -693,9 +899,25 @@ export class ServerAnalytics<
 	 *
 	 * @example
 	 * ```typescript
+	 * import { defineEvents, typed } from 'trakoo';
+	 * import { ServerAnalytics } from 'trakoo/server';
+	 *
+	 * const events = defineEvents({
+	 *   functionCompleted: {
+	 *     name: 'function_completed',
+	 *     category: 'system',
+	 *     properties: typed<{ duration: number; success: boolean }>(),
+	 *   },
+	 *   functionFailed: {
+	 *     name: 'function_failed',
+	 *     category: 'error',
+	 *     properties: typed<{ error: string; duration: number }>(),
+	 *   },
+	 * });
+	 *
 	 * // In a serverless function
 	 * export async function handler(event, context) {
-	 *   const analytics = new ServerAnalytics({ providers: [] });
+	 *   const analytics = new ServerAnalytics({ events, providers: [] });
 	 *   analytics.initialize();
 	 *
 	 *   try {
@@ -758,6 +980,8 @@ export class ServerAnalytics<
 	 * ```
 	 */
 	async shutdown(): Promise<void> {
+		if (!this.enabled) return;
+
 		// Shutdown all providers that support it (note: shutdown is not routable, always called)
 		const shutdownPromises = this.providerConfigs.map((config) => {
 			if (
@@ -770,16 +994,5 @@ export class ServerAnalytics<
 		});
 
 		await Promise.all(shutdownPromises);
-	}
-
-	private getCategoryFromEventName(eventName: string): EventCategory {
-		// Extract category from event name pattern: category_action
-		const parts = eventName.split("_");
-		// Only use the first part as category if there's actually an underscore
-		if (parts.length > 1 && parts[0]) {
-			return parts[0];
-		}
-
-		return "engagement"; // Default fallback category
 	}
 }

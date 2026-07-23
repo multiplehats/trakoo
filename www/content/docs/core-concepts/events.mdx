@@ -1,234 +1,231 @@
 ---
 title: Events
-description: Define type-safe analytics events once and track them across every provider.
+description: Define a typed event registry, optionally validate at runtime, and control validation failures.
 ---
 
-Events are the core of analytics tracking. Each one represents an action in your app — a button click, a signup, a purchase — that you want to measure. In trakoo you define events once, in a typed collection, and every `track()` call is checked against those definitions.
+An event registry is the source of truth for the names, categories, and properties your application can track. Both client and server factories require the registry value, so compile-time inference and runtime lookup use the same definitions.
 
 ## Defining events
 
-Describe your events in a single collection. The object keys organize your code; the `name` values are what trakoo sends to providers.
-
 ```typescript title="lib/events.ts"
-import type { CreateEventDefinition, EventCollection } from 'trakoo';
+import { defineEvents, noProperties, typed } from 'trakoo';
 
-export const appEvents = {
+export const appEvents = defineEvents({
   userSignedUp: {
     name: 'user_signed_up',
     category: 'user',
-    properties: {} as {
+    properties: typed<{
       email: string;
       plan: 'free' | 'pro' | 'enterprise';
       referralSource?: string;
-    }
+    }>()
   },
   buttonClicked: {
     name: 'button_clicked',
     category: 'engagement',
-    properties: {} as {
+    properties: typed<{
       buttonId: string;
       location: string;
-    }
+    }>()
+  },
+  sessionStarted: {
+    name: 'session_started',
+    category: 'user',
+    properties: noProperties()
   }
-} as const satisfies EventCollection<Record<string, CreateEventDefinition<string>>>;
+});
 ```
 
-The `as const satisfies` pattern is what gives you exact event names, autocomplete on properties, and a compile error when a definition or a `track()` call is wrong. See [Type Safety](/docs/core-concepts/type-safety) for how it works.
+The object keys are local labels. The `name` values are stable wire names accepted by `track()` and sent to providers. `defineEvents()` preserves literal types, verifies the definition shape, builds the runtime lookup, and throws immediately if two definitions use the same wire name.
 
-## The three parts
+## Names and categories
 
-Every event definition has a name, an optional category, and a set of properties.
+Use stable, descriptive names such as `checkout_completed`. Renaming a production event splits its history, so prefer adding a new event and deprecating the old one.
 
-### Name
+Every definition requires a category. trakoo autocompletes common categories:
 
-The `name` is the string sent to your providers. A few conventions keep your data clean:
+- `user`
+- `navigation`
+- `conversion`
+- `engagement`
+- `error`
+- `performance`
 
-- Use `snake_case` — it matches most analytics tools.
-- Use past tense: `button_clicked`, not `button_click`.
-- Be descriptive but concise: `checkout_completed`, not `user_clicked_complete_checkout_button`.
+Custom strings such as `billing`, `product`, and `ai` are also accepted.
 
-Once an event is live, treat its name as stable. Renaming it splits your history — add a new event and deprecate the old one instead.
+## Validator-free properties
 
-### Category
-
-Categories group related events. The field is optional, but it keeps large collections navigable. trakoo ships a set of common categories:
-
-- `user` — lifecycle events like signup, login, and profile updates
-- `navigation` — page views and navigation
-- `conversion` — goals and revenue events
-- `engagement` — feature usage and interactions
-- `error` — error tracking
-- `performance` — performance monitoring
-
-You can also use your own domain-specific categories such as `product`, `billing`, or `ai`:
+`typed<T>()` is the primary developer experience. It declares the input and provider-output type without installing or executing a validator:
 
 ```typescript
-export const appEvents = {
-  aiResponseGenerated: {
-    name: 'ai_response_generated',
-    category: 'ai',
-    properties: {} as {
-      model: string;
-      tokensUsed: number;
-      responseTime: number;
-    }
-  }
-} as const;
-```
-
-### Properties
-
-Properties are the data attached to each event. Type them as narrowly as the data allows — specific types catch mistakes at the call site and keep your reports consistent.
-
-```typescript
-// Good — narrow types and explicit units
-properties: {} as {
+properties: typed<{
   plan: 'free' | 'pro' | 'enterprise';
   amount: number;
   currency: 'USD' | 'EUR' | 'GBP';
-}
-
-// Avoid — anything goes, nothing is checked
-properties: {} as {
-  plan: string;
-  amount: any;
-  currency: string;
-}
+}>()
 ```
 
-Mark optional properties with `?`.
+TypeScript checks the individual properties at call sites. At runtime, trakoo checks only that the supplied value is a non-null, non-array object. Use runtime validation for data from forms, webhooks, queues, or other untrusted boundaries.
 
-## Tracking events
+`typed<T>()` accepts object shapes, including nested objects and array-valued fields, but the top-level event properties must be an object.
 
-With events defined, `track()` takes the event key and its typed properties. Mistype the name or omit a required property, and TypeScript flags it before the event ships.
+## Propertyless events
 
-Client analytics is fire-and-forget, so calls don't block the UI:
+Use `noProperties()` when an event carries no custom properties:
 
 ```typescript
-import { analytics } from '@/lib/analytics';
+const lifecycleEvents = defineEvents({
+  sessionStarted: {
+    name: 'session_started',
+    category: 'user',
+    properties: noProperties()
+  }
+});
 
-analytics.track('button_clicked', {
+await analytics.track('session_started');
+```
+
+Passing `{}` or any other second argument is invalid. Providers receive an empty properties object after trakoo resolves the event.
+
+## Runtime validation
+
+Standard Schema is a shared interface implemented by validation libraries. It is not a validator runtime and is not required to use trakoo. When runtime validation or transformation is useful, provide a compatible schema directly. Zod implements Standard Schema:
+
+```typescript title="lib/commerce-events.ts"
+import { defineEvents } from 'trakoo';
+import { z } from 'zod';
+
+export const commerceEvents = defineEvents({
+  orderCompleted: {
+    name: 'order_completed',
+    category: 'conversion',
+    properties: z.object({
+      orderId: z.string(),
+      amount: z.coerce.number().positive()
+    })
+  }
+});
+```
+
+The validator's input type determines what `track()` accepts. Its output type determines what providers receive. Here `amount` can enter as a coercible value, while the provider always receives a positive `number`. Only validated output is delivered.
+
+Other Standard Schema-compatible libraries work the same way; trakoo does not wrap or adapt them.
+
+## Validation failure policy
+
+Unknown wire names, missing or unexpected properties arguments, schema issues, validator exceptions, and non-object validator outputs are validation failures. On the server, a malformed `options` argument — a third `track()` argument containing a key outside `userId`, `sessionId`, `context`, and `user` — is also a validation failure, reported with the `invalid_options` code.
+
+The default policy is **drop**: the call resolves without sending the event to any provider. Opt into strict mode when the caller must handle the failure:
+
+```typescript
+import { createClientAnalytics } from 'trakoo/client';
+import { commerceEvents } from './commerce-events';
+
+const analytics = createClientAnalytics({
+  events: commerceEvents,
+  providers: [/* ... */],
+  validation: {
+    onFailure: 'throw',
+    onError: (error) => reportValidationFailure(error)
+  }
+});
+```
+
+`onError` runs and is awaited before trakoo drops or throws. Errors expose a code, event name, and normalized issue messages/paths. They do not retain the original payload.
+
+With `debug: true` and no `onError`, the fallback warning is sanitized to the error code, event name, and issue paths. It does not log invalid values. If `onError` itself throws or rejects, that reporting failure is ignored so it cannot change the selected drop/throw policy.
+
+The validation policy applies only to event registry and property validation. Initialization failures and provider failures retain their existing behavior.
+
+## Async schemas and ordering
+
+Validators may return promises. Concurrent calls proceed as their validators finish, so invocation order does not guarantee provider delivery order:
+
+```typescript
+await Promise.all([
+  analytics.track('first_event', firstInput),
+  analytics.track('second_event', secondInput)
+]);
+```
+
+Await calls one at a time if order matters:
+
+```typescript
+await analytics.track('first_event', firstInput);
+await analytics.track('second_event', secondInput);
+```
+
+## Tracking
+
+Create a registry-bound instance; no event generic is needed:
+
+```typescript title="lib/analytics.ts"
+import { createClientAnalytics } from 'trakoo/client';
+import { appEvents } from './events';
+
+export const analytics = createClientAnalytics({
+  events: appEvents,
+  providers: [/* ... */]
+});
+
+await analytics.track('button_clicked', {
   buttonId: 'cta',
   location: 'hero'
 });
 ```
 
-Server analytics is stateless: pass user context with each call, and flush before the process exits.
+On the server, pass user context after properties and shut down before a short-lived runtime exits:
 
 ```typescript
-import { serverAnalytics } from '@/lib/server-analytics';
-
 await serverAnalytics.track('user_signed_up', {
   email: 'ada@example.com',
   plan: 'pro'
 }, {
-  userId: 'user_123',
-  user: { email: 'ada@example.com' }
+  userId: 'user_123'
 });
 
 await serverAnalytics.shutdown();
 ```
 
-See [Client vs Server](/docs/core-concepts/client-vs-server) for where each kind of event belongs.
+## Organizing registries
 
-## Organizing events
-
-For a small app, one file is enough:
-
-```typescript title="lib/events.ts"
-export const appEvents = {
-  userSignedUp: { /* ... */ },
-  productViewed: { /* ... */ },
-  buttonClicked: { /* ... */ }
-} as const;
-```
-
-As the collection grows, split by area and merge in an index:
+For most applications, keep one central `defineEvents()` registry. If a large application must split definitions by domain, call `defineEvents()` where each literal is created so its wire names stay exact, then select the named definitions into the final application registry.
 
 ```typescript title="lib/events/index.ts"
-import { userEvents } from './user';
+import { defineEvents } from 'trakoo';
 import { productEvents } from './product';
+import { userEvents } from './user';
 
-export const appEvents = {
-  ...userEvents,
-  ...productEvents
-} as const;
+export const appEvents = defineEvents({
+  productViewed: productEvents.productViewed,
+  userSignedUp: userEvents.userSignedUp
+});
 ```
 
-## Common patterns
+```typescript title="lib/events/product.ts"
+import { defineEvents, typed } from 'trakoo';
 
-E-commerce apps track the path from view to purchase:
-
-```typescript
-export const appEvents = {
+export const productEvents = defineEvents({
   productViewed: {
     name: 'product_viewed',
-    category: 'product',
-    properties: {} as {
-      productId: string;
-      price: number;
-    }
-  },
-  purchaseCompleted: {
-    name: 'purchase_completed',
-    category: 'conversion',
-    properties: {} as {
-      orderId: string;
-      total: number;
-      currency: 'USD' | 'EUR' | 'GBP';
-    }
+    category: 'engagement',
+    properties: typed<{ productId: string }>()
   }
-} as const;
+});
 ```
 
-SaaS apps focus on activation and upgrades:
-
-```typescript
-export const appEvents = {
-  trialStarted: {
-    name: 'trial_started',
-    category: 'conversion',
-    properties: {} as {
-      plan: 'pro' | 'enterprise';
-      trialDays: number;
-    }
-  },
-  subscriptionUpgraded: {
-    name: 'subscription_upgraded',
-    category: 'conversion',
-    properties: {} as {
-      fromPlan: string;
-      toPlan: string;
-      price: number;
-    }
-  }
-} as const;
-```
-
-## Best practices
-
-- Define events before you track them. A central, typed collection means autocomplete works everywhere and typos become compile errors.
-- Document non-obvious events with a comment on when and why they fire, and who relies on them.
-- Keep names stable in production. Add and deprecate rather than rename.
-
-```typescript
-export const appEvents = {
-  // @deprecated Use 'subscription_upgraded' instead
-  planUpgraded: { /* ... */ },
-  subscriptionUpgraded: { /* ... */ }
-} as const;
-```
+Define `userEvents` the same way in its domain module. Selecting definitions by name preserves their literal wire names, while the final `defineEvents()` call checks duplicate wire names across the application registry. Do not treat registries as arbitrary mergeable objects.
 
 ## Next steps
 
 <CardGroup>
+  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield-check">
+    See how registry inference flows through track calls and traits.
+  </Card>
   <Card title="How Providers Work" href="/docs/core-concepts/providers" icon="plug">
-    See how providers send your events to analytics services.
+    Learn how validated output fans out to providers.
   </Card>
   <Card title="Client vs Server" href="/docs/core-concepts/client-vs-server" icon="server">
     Decide where each event belongs.
-  </Card>
-  <Card title="Type Safety" href="/docs/core-concepts/type-safety" icon="shield-check">
-    Understand the types behind the autocomplete.
   </Card>
 </CardGroup>

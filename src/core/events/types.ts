@@ -12,18 +12,18 @@ export type EventCategory =
 	| PredefinedEventCategory
 	| (string & Record<never, never>);
 
-export interface BaseEvent {
+export interface BaseEvent<
+	TProperties extends object = Record<string, unknown>,
+> {
 	category: EventCategory;
 	action: string;
 	timestamp?: number;
 	userId?: string;
 	sessionId?: string;
-	properties?: Record<string, unknown>;
+	properties?: TProperties;
 }
 
-export interface UserContext<
-	TTraits extends Record<string, unknown> = Record<string, unknown>,
-> {
+export interface UserContext<TTraits extends object = Record<string, unknown>> {
 	userId?: string;
 	email?: string;
 	traits?: TTraits;
@@ -42,7 +42,7 @@ export interface ServerContext {
 }
 
 export interface EventContext<
-	TTraits extends Record<string, unknown> = Record<string, unknown>,
+	TTraits extends object = Record<string, unknown>,
 > {
 	user?: UserContext<TTraits>;
 	page?: {
@@ -234,20 +234,3 @@ export interface AnalyticsConfig {
 	enabled?: boolean;
 	defaultContext?: Partial<EventContext>;
 }
-
-// Type helpers for creating strongly typed events
-export type EventDefinition<T extends string, P = Record<string, unknown>> = {
-	name: T;
-	category: EventCategory;
-	properties?: P;
-};
-
-export type ExtractEventName<T> = T extends EventDefinition<infer N, unknown>
-	? N
-	: never;
-export type ExtractEventProperties<T> = T extends EventDefinition<
-	string,
-	infer P
->
-	? P
-	: never;

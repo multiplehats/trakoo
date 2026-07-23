@@ -28,8 +28,10 @@ Use `PostHogClientProvider` from `trakoo/providers/client`. It accepts every opt
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
 import { PostHogClientProvider } from 'trakoo/providers/client';
+import { appEvents } from '@/lib/events';
 
 export const analytics = createClientAnalytics({
+  events: appEvents,
   providers: [
     new PostHogClientProvider({
       token: import.meta.env.VITE_POSTHOG_KEY,
@@ -46,8 +48,10 @@ Use `PostHogServerProvider` from `trakoo/providers/server`. Server analytics is 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
 import { PostHogServerProvider } from 'trakoo/providers/server';
+import { appEvents } from '@/lib/events';
 
 export const serverAnalytics = createServerAnalytics({
+  events: appEvents,
   providers: [
     new PostHogServerProvider({
       apiKey: process.env.POSTHOG_API_KEY!,

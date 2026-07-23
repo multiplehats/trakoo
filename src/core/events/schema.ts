@@ -71,31 +71,33 @@ export function classifyEventProperties(
 	}
 
 	try {
+		if ("~standard" in value) {
+			const standard = value["~standard"];
+			if (
+				typeof standard === "object" &&
+				standard !== null &&
+				"validate" in standard
+			) {
+				const validate = standard.validate as StandardSchemaV1.Props<
+					object,
+					object
+				>["validate"];
+				if (typeof validate === "function") {
+					return {
+						kind: "schema",
+						standard: standard as StandardSchemaV1.Props<object, object>,
+						validate,
+					};
+				}
+			}
+		}
+
 		if ("kind" in value) {
 			if (value.kind === "type") return { kind: "type" };
 			if (value.kind === "none") return { kind: "none" };
 		}
 
-		if (!("~standard" in value)) return { kind: "invalid" };
-		const standard = value["~standard"];
-		if (
-			typeof standard !== "object" ||
-			standard === null ||
-			!("validate" in standard)
-		) {
-			return { kind: "invalid" };
-		}
-
-		const validate = standard.validate as StandardSchemaV1.Props<
-			object,
-			object
-		>["validate"];
-		if (typeof validate !== "function") return { kind: "invalid" };
-		return {
-			kind: "schema",
-			standard: standard as StandardSchemaV1.Props<object, object>,
-			validate,
-		};
+		return { kind: "invalid" };
 	} catch {
 		return { kind: "access_failure" };
 	}

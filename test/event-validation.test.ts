@@ -158,6 +158,44 @@ async function rejectedValidationError(
 }
 
 describe("resolveEvent", () => {
+	it.each(["type", "none"] as const)(
+		"prefers a callable Standard Schema validator over kind %s",
+		async (kind) => {
+			const validate = vi.fn((input: { amount: string }) => ({
+				value: { amount: Number(input.amount), validated: true },
+			}));
+			const collidingEvents = defineEvents({
+				purchase: {
+					name: "colliding_purchase",
+					category: "conversion",
+					properties: Object.assign(
+						schema<
+							{ amount: string },
+							{ amount: number; validated: boolean }
+						>(validate),
+						{ kind },
+					),
+				},
+			});
+			const input = { amount: "49" };
+
+			await expect(
+				resolveEvent(
+					collidingEvents,
+					"colliding_purchase",
+					input,
+					true,
+					undefined,
+					false,
+				),
+			).resolves.toMatchObject({
+				properties: { amount: 49, validated: true },
+			});
+			expect(validate).toHaveBeenCalledOnce();
+			expect(validate).toHaveBeenCalledWith(input);
+		},
+	);
+
 	it.each(hostileSchemas())(
 		"routes a %s through the default validator failure policy",
 		async (_description, properties) => {

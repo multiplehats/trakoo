@@ -247,7 +247,7 @@ describe("Server Analytics", () => {
 		["a primitive", "user_123"],
 		["unknown option keys", { unexpected: true }],
 	])(
-		"throws invalid_properties for property-bearing %s options",
+		"throws invalid_options for property-bearing %s options",
 		async (_label, value) => {
 			const onError = vi.fn();
 			const strict = createServerAnalytics({
@@ -265,9 +265,9 @@ describe("Server Analytics", () => {
 
 			await expect(
 				runtimeAnalytics.track("test_event", {}, value),
-			).rejects.toMatchObject({ code: "invalid_properties" });
+			).rejects.toMatchObject({ code: "invalid_options" });
 			expect(onError).toHaveBeenCalledWith(
-				expect.objectContaining({ code: "invalid_properties" }),
+				expect.objectContaining({ code: "invalid_options" }),
 			);
 			expect(mockProvider.calls.track).toHaveLength(0);
 		},
@@ -288,9 +288,31 @@ describe("Server Analytics", () => {
 			runtimeAnalytics.track("test_event", {}, { unexpected: true }),
 		).resolves.toBeUndefined();
 		expect(onError).toHaveBeenCalledWith(
-			expect.objectContaining({ code: "invalid_properties" }),
+			expect.objectContaining({ code: "invalid_options" }),
 		);
 		expect(mockProvider.calls.track).toHaveLength(0);
+	});
+
+	it("accepts propertyless calls passing undefined properties with options", async () => {
+		const runtimeAnalytics = analytics as unknown as {
+			track(
+				name: string,
+				properties: unknown,
+				options: unknown,
+			): Promise<void>;
+		};
+
+		await runtimeAnalytics.track("session_started", undefined, {
+			userId: "user_123",
+			sessionId: "session_123",
+		});
+
+		expect(mockProvider.calls.track).toHaveLength(1);
+		expect(mockProvider.calls.track[0].event).toMatchObject({
+			properties: {},
+			userId: "user_123",
+			sessionId: "session_123",
+		});
 	});
 
 	it("delivers transformed schema output to every routed provider", async () => {

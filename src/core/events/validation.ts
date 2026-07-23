@@ -1,5 +1,6 @@
 import type { StandardSchemaV1 } from "@standard-schema/spec";
 import {
+	getEventClassification,
 	getEventDefinition,
 	type EventDefinitions,
 	type EventName,
@@ -8,12 +9,14 @@ import {
 } from "./registry.js";
 import {
 	classifyEventProperties,
+	type EventPropertiesClassification,
 } from "./schema.js";
 import type { EventCategory } from "./types.js";
 
 export type AnalyticsValidationErrorCode =
 	| "unknown_event"
 	| "invalid_properties"
+	| "invalid_options"
 	| "validator_failure"
 	| "invalid_output";
 
@@ -115,6 +118,78 @@ export async function applyValidationFailurePolicy(
 	return undefined;
 }
 
+interface ClassifiedRegisteredEvent {
+	readonly category: EventCategory;
+	readonly classification: Exclude<
+		EventPropertiesClassification,
+		{ kind: "access_failure" }
+	>;
+}
+
+/**
+ * Shared registry lookup + classification plumbing for resolveEvent and
+ * resolveReplayEvent. Applies the failure policy (and returns undefined)
+ * for unknown events, hostile category/classification access, and
+ * access_failure classifications.
+ */
+async function classifyRegisteredEvent<
+	R extends EventRegistry<EventDefinitions>,
+	N extends EventName<R>,
+>(
+	registry: R,
+	eventName: N,
+	validation: ValidationConfig | undefined,
+	debug: boolean,
+): Promise<ClassifiedRegisteredEvent | undefined> {
+	const definition = getEventDefinition(registry, eventName);
+	if (!definition) {
+		return applyValidationFailurePolicy(
+			new AnalyticsValidationError("unknown_event", eventName),
+			validation,
+			debug,
+		);
+	}
+
+	let category: EventCategory;
+	let classification: EventPropertiesClassification;
+	try {
+		// A hostile getter can throw on the category read — this guard is
+		// load-bearing even though classification itself is cached.
+		category = definition.category;
+		classification =
+			getEventClassification(registry, eventName) ??
+			classifyEventProperties(definition.properties);
+	} catch {
+		return applyValidationFailurePolicy(
+			new AnalyticsValidationError("validator_failure", eventName),
+			validation,
+			debug,
+		);
+	}
+
+	if (classification.kind === "access_failure") {
+		return applyValidationFailurePolicy(
+			new AnalyticsValidationError("validator_failure", eventName),
+			validation,
+			debug,
+		);
+	}
+
+	return { category, classification };
+}
+
+function failInvalidProperties(
+	eventName: string,
+	validation: ValidationConfig | undefined,
+	debug: boolean,
+): Promise<undefined> {
+	return applyValidationFailurePolicy(
+		new AnalyticsValidationError("invalid_properties", eventName),
+		validation,
+		debug,
+	);
+}
+
 export async function resolveEvent<
 	R extends EventRegistry<EventDefinitions>,
 	N extends EventName<R>,
@@ -126,43 +201,18 @@ export async function resolveEvent<
 	validation: ValidationConfig | undefined,
 	debug: boolean,
 ): Promise<ResolvedEvent<R, N> | undefined> {
-	const definition = getEventDefinition(registry, eventName);
-	if (!definition) {
-		return applyValidationFailurePolicy(
-			new AnalyticsValidationError("unknown_event", eventName),
-			validation,
-			debug,
-		);
-	}
+	const classified = await classifyRegisteredEvent(
+		registry,
+		eventName,
+		validation,
+		debug,
+	);
+	if (!classified) return undefined;
+	const { category, classification } = classified;
 
-	let category: EventCategory;
-	let properties: ReturnType<typeof classifyEventProperties>;
-	try {
-		category = definition.category;
-		properties = classifyEventProperties(definition.properties);
-	} catch {
-		return applyValidationFailurePolicy(
-			new AnalyticsValidationError("validator_failure", eventName),
-			validation,
-			debug,
-		);
-	}
-
-	if (properties.kind === "access_failure") {
-		return applyValidationFailurePolicy(
-			new AnalyticsValidationError("validator_failure", eventName),
-			validation,
-			debug,
-		);
-	}
-
-	if (properties.kind === "none") {
+	if (classification.kind === "none") {
 		if (inputProvided) {
-			return applyValidationFailurePolicy(
-				new AnalyticsValidationError("invalid_properties", eventName),
-				validation,
-				debug,
-			);
+			return failInvalidProperties(eventName, validation, debug);
 		}
 		return {
 			name: eventName,
@@ -171,13 +221,9 @@ export async function resolveEvent<
 		};
 	}
 
-	if (properties.kind === "type") {
+	if (classification.kind === "type") {
 		if (!isPropertyObject(input)) {
-			return applyValidationFailurePolicy(
-				new AnalyticsValidationError("invalid_properties", eventName),
-				validation,
-				debug,
-			);
+			return failInvalidProperties(eventName, validation, debug);
 		}
 		return {
 			name: eventName,
@@ -186,17 +232,13 @@ export async function resolveEvent<
 		};
 	}
 
-	if (properties.kind === "invalid") {
-		return applyValidationFailurePolicy(
-			new AnalyticsValidationError("invalid_properties", eventName),
-			validation,
-			debug,
-		);
+	if (classification.kind === "invalid") {
+		return failInvalidProperties(eventName, validation, debug);
 	}
 
 	let result: StandardSchemaV1.Result<object>;
 	try {
-		result = await properties.validate.call(properties.standard, input);
+		result = await classification.validate.call(classification.standard, input);
 	} catch {
 		return applyValidationFailurePolicy(
 			new AnalyticsValidationError("validator_failure", eventName),
@@ -243,5 +285,65 @@ export async function resolveEvent<
 		name: eventName,
 		category,
 		properties: output as EventOutputMap<R>[N],
+	};
+}
+
+/**
+ * @internal Resolves a proxy-replayed event without re-running schema
+ * validation; not part of the public API.
+ *
+ * Replayed proxy properties are the client-validated POST-TRANSFORM output of
+ * the event's validator. Standard Schema validators only accept input, so
+ * re-validating that output on the server would reject any transforming
+ * schema (e.g. zod's `z.string().transform(Number)`). Schema-backed events
+ * therefore only get a structural property-object check here.
+ */
+export async function resolveReplayEvent<
+	R extends EventRegistry<EventDefinitions>,
+	N extends EventName<R>,
+>(
+	registry: R,
+	eventName: N,
+	rawProperties: unknown,
+	validation: ValidationConfig | undefined,
+	debug: boolean,
+): Promise<ResolvedEvent<R, N> | undefined> {
+	const classified = await classifyRegisteredEvent(
+		registry,
+		eventName,
+		validation,
+		debug,
+	);
+	if (!classified) return undefined;
+	const { category, classification } = classified;
+
+	if (classification.kind === "none") {
+		const isEmptyObject =
+			isPropertyObject(rawProperties) &&
+			Object.keys(rawProperties).length === 0;
+		if (rawProperties !== undefined && !isEmptyObject) {
+			return failInvalidProperties(eventName, validation, debug);
+		}
+		return {
+			name: eventName,
+			category,
+			properties: {} as EventOutputMap<R>[N],
+		};
+	}
+
+	if (classification.kind === "invalid") {
+		return failInvalidProperties(eventName, validation, debug);
+	}
+
+	// kind "type" or "schema": pass the replayed properties through as-is.
+	// For "schema" this deliberately skips the validator — see the note above.
+	if (!isPropertyObject(rawProperties)) {
+		return failInvalidProperties(eventName, validation, debug);
+	}
+
+	return {
+		name: eventName,
+		category,
+		properties: rawProperties as EventOutputMap<R>[N],
 	};
 }

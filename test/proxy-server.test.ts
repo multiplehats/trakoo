@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { z } from "zod";
 import {
 	ingestProxyEvents,
 	createProxyHandler,
@@ -195,6 +196,87 @@ describe("Proxy Server Ingestion", () => {
 				expect(mockProvider.calls.track).toHaveLength(0);
 			},
 		);
+
+		it("replays propertyless tracks whose payload omits the properties key", async () => {
+			const payload = {
+				events: [
+					{
+						type: "track",
+						event: {
+							action: "session_started",
+							category: "user",
+							userId: "user-123",
+							sessionId: "session-123",
+						},
+						context: { page: { path: "/start" } },
+					},
+				],
+			} as unknown as ProxyPayload;
+			const request = new Request("http://localhost/api/events", {
+				method: "POST",
+				body: JSON.stringify(payload),
+			});
+
+			await ingestProxyEvents(request, serverAnalytics);
+
+			expect(mockProvider.calls.track[0]).toMatchObject({
+				event: {
+					action: "session_started",
+					category: "user",
+					properties: {},
+					userId: "user-123",
+					sessionId: "session-123",
+				},
+				context: { page: { path: "/start" } },
+			});
+		});
+
+		it("replays transformed schema output without re-validating", async () => {
+			const transformEvents = defineEvents({
+				purchaseCompleted: {
+					name: "purchase_completed",
+					category: "revenue",
+					properties: z.object({
+						orderId: z.string(),
+						amount: z.string().transform(Number),
+					}),
+				},
+			});
+			const provider = new MockAnalyticsProvider();
+			const analytics = createServerAnalytics({
+				events: transformEvents,
+				providers: [provider],
+				validation: { onFailure: "throw" },
+			});
+			// The client validated { amount: "49" } before the proxy POST, so the
+			// payload carries the post-transform output { amount: 49 }.
+			const payload = {
+				events: [
+					{
+						type: "track",
+						event: {
+							action: "purchase_completed",
+							category: "revenue",
+							properties: { orderId: "order_1", amount: 49 },
+							userId: "user-123",
+						},
+					},
+				],
+			} as unknown as ProxyPayload;
+			const request = new Request("http://localhost/api/events", {
+				method: "POST",
+				body: JSON.stringify(payload),
+			});
+
+			await ingestProxyEvents(request, analytics);
+
+			expect(provider.calls.track).toHaveLength(1);
+			expect(provider.calls.track[0].event).toMatchObject({
+				action: "purchase_completed",
+				properties: { orderId: "order_1", amount: 49 },
+				userId: "user-123",
+			});
+		});
 
 		it("should process identify events", async () => {
 			const payload: ProxyPayload = {

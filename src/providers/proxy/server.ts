@@ -1,15 +1,12 @@
 import type { EventContext } from "@/core/events/types.js";
-import {
-	getEventDefinition,
-	type EventDefinitions,
-	type EventName,
-	type EventRegistry,
+import type {
+	EventDefinitions,
+	EventRegistry,
 } from "@/core/events/registry.js";
-import { isNoPropertiesMarker } from "@/core/events/schema.js";
 import {
-	serverAnalyticsRegistry,
+	serverAnalyticsReplay,
 	type ServerAnalytics,
-	type ServerAnalyticsRegistryAccess,
+	type ServerAnalyticsReplayAccess,
 	type ServerTrackOptions,
 } from "@/adapters/server/server-analytics.js";
 import type { ProxyPayload } from "./types.js";
@@ -33,15 +30,6 @@ export interface IngestProxyEventsConfig {
 	 * Error handler
 	 */
 	onError?: (error: unknown) => void;
-}
-
-function isEmptyPropertyObject(value: unknown): value is object {
-	return (
-		typeof value === "object" &&
-		value !== null &&
-		!Array.isArray(value) &&
-		Object.keys(value).length === 0
-	);
 }
 
 /**
@@ -114,34 +102,22 @@ export async function ingestProxyEvents<
 							},
 						} as EventContext<TUserTraits>;
 
-						const eventName = event.event.action as EventName<TRegistry>;
 						const options: ServerTrackOptions<TUserTraits> = {
 							userId: event.event.userId,
 							sessionId: event.event.sessionId,
 							context: enrichedContext,
 						};
-						const definition = getEventDefinition(
-							(
-								analytics as unknown as ServerAnalyticsRegistryAccess<TRegistry>
-							)[serverAnalyticsRegistry],
-							event.event.action,
-						);
 
-						if (
-							definition &&
-							isNoPropertiesMarker(definition.properties) &&
-							isEmptyPropertyObject(event.event.properties)
-						) {
-							const rawArguments = [eventName, options] as const;
-							await analytics.track(...(rawArguments as never));
-						} else {
-							const rawArguments = [
-								eventName,
-								event.event.properties as never,
-								options,
-							] as const;
-							await analytics.track(...(rawArguments as never));
-						}
+						// Replay through the internal normalized entry point: the
+						// properties are already client-validated output, so they
+						// must not be re-validated by track().
+						await (
+							analytics as unknown as ServerAnalyticsReplayAccess<TUserTraits>
+						)[serverAnalyticsReplay](
+							event.event.action,
+							event.event.properties,
+							options,
+						);
 						break;
 					}
 

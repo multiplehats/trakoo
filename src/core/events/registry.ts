@@ -1,9 +1,11 @@
 import type { StandardSchemaV1, StandardTypedV1 } from "@standard-schema/spec";
 import type { EventCategory } from "./types.js";
-import type {
-	EventProperties,
-	NoPropertiesMarker,
-	PropertyObject,
+import {
+	classifyEventProperties,
+	type EventProperties,
+	type EventPropertiesClassification,
+	type NoPropertiesMarker,
+	type PropertyObject,
 } from "./schema.js";
 
 export interface RuntimeEventDefinition<
@@ -18,6 +20,11 @@ export interface RuntimeEventDefinition<
 export type EventDefinitions = Record<string, RuntimeEventDefinition>;
 
 const registryBrand: unique symbol = Symbol("trakoo.eventRegistry");
+
+const classificationsByRegistry = new WeakMap<
+	object,
+	ReadonlyMap<string, EventPropertiesClassification>
+>();
 
 export type EventRegistry<T extends EventDefinitions> = T & {
 	readonly [registryBrand]: ReadonlyMap<string, RuntimeEventDefinition>;
@@ -42,12 +49,22 @@ export function defineEvents<const T extends EventDefinitions>(
 	definitions: T & ObjectPropertyDefinitions<T>,
 ): EventRegistry<T> {
 	const definitionsByName = new Map<string, RuntimeEventDefinition>();
+	const classificationsByName = new Map<
+		string,
+		EventPropertiesClassification
+	>();
 
 	for (const definition of Object.values(definitions)) {
 		if (definitionsByName.has(definition.name)) {
 			throw new Error(`Duplicate event name: ${definition.name}`);
 		}
 		definitionsByName.set(definition.name, definition);
+		// Classify once at definition time; classifyEventProperties is
+		// exception-safe, so hostile schemas surface as "access_failure".
+		classificationsByName.set(
+			definition.name,
+			classifyEventProperties(definition.properties),
+		);
 	}
 
 	Object.defineProperty(definitions, registryBrand, {
@@ -55,6 +72,7 @@ export function defineEvents<const T extends EventDefinitions>(
 		enumerable: false,
 		writable: false,
 	});
+	classificationsByRegistry.set(definitions, classificationsByName);
 
 	return definitions as EventRegistry<T>;
 }
@@ -64,6 +82,14 @@ export function getEventDefinition<T extends EventDefinitions>(
 	name: string,
 ): RuntimeEventDefinition | undefined {
 	return registry[registryBrand].get(name);
+}
+
+/** @internal Returns the classification cached at defineEvents() time; undefined for unknown events. */
+export function getEventClassification<T extends EventDefinitions>(
+	registry: EventRegistry<T>,
+	name: string,
+): EventPropertiesClassification | undefined {
+	return classificationsByRegistry.get(registry)?.get(name);
 }
 
 type RegistryDefinitions<R extends EventRegistry<EventDefinitions>> =

@@ -1,12 +1,11 @@
 import {
-	getEventDefinition,
+	getEventClassification,
 	type EventDefinitions,
 	type EventName,
 	type EventOutputMap,
 	type EventRegistry,
 	type ServerTrackArgs,
 } from "@/core/events/registry.js";
-import { isNoPropertiesMarker } from "@/core/events/schema.js";
 import type {
 	AnalyticsProvider,
 	BaseEvent,
@@ -19,17 +18,21 @@ import {
 	AnalyticsValidationError,
 	applyValidationFailurePolicy,
 	resolveEvent,
+	resolveReplayEvent,
+	type ResolvedEvent,
 	type ValidationConfig,
 } from "@/core/events/validation.js";
 
-export const serverAnalyticsRegistry: unique symbol = Symbol(
-	"trakoo.serverAnalytics.registry",
+export const serverAnalyticsReplay: unique symbol = Symbol(
+	"trakoo.serverAnalytics.replay",
 );
 
-export interface ServerAnalyticsRegistryAccess<
-	TRegistry extends EventRegistry<EventDefinitions>,
-> {
-	readonly [serverAnalyticsRegistry]: TRegistry;
+export interface ServerAnalyticsReplayAccess<TUserTraits extends object> {
+	readonly [serverAnalyticsReplay]: (
+		eventName: string,
+		properties: unknown,
+		options: ServerTrackOptions<TUserTraits> | undefined,
+	) => Promise<void>;
 }
 
 export interface ServerTrackOptions<TUserTraits extends object> {
@@ -83,7 +86,8 @@ interface NormalizedProviderConfig {
 export class ServerAnalytics<
 	TRegistry extends EventRegistry<EventDefinitions>,
 	TUserTraits extends object = Record<string, unknown>,
-> {
+> implements ServerAnalyticsReplayAccess<TUserTraits>
+{
 	private providerConfigs: NormalizedProviderConfig[] = [];
 	private initialized = false;
 	private readonly registry: TRegistry;
@@ -133,11 +137,6 @@ export class ServerAnalytics<
 		this.enabled = config.enabled !== false;
 		this.defaultContext = config.defaultContext;
 		this.providerConfigs = this.normalizeProviders(config.providers);
-		Object.defineProperty(this, serverAnalyticsRegistry, {
-			value: config.events,
-			enumerable: false,
-			writable: false,
-		});
 	}
 
 	/**
@@ -564,13 +563,13 @@ export class ServerAnalytics<
 
 		const argumentValues: readonly unknown[] = args;
 		const eventName = args[0];
-		const definition = getEventDefinition(this.registry, eventName);
+		const classification = getEventClassification(this.registry, eventName);
 		const secondArgument = argumentValues[1];
 		let input = secondArgument;
 		let inputProvided = args.length > 1;
 		let options: ServerTrackOptions<TUserTraits> | undefined;
 
-		if (definition && isNoPropertiesMarker(definition.properties)) {
+		if (classification?.kind === "none") {
 			if (
 				args.length === 2 &&
 				isServerTrackOptions<TUserTraits>(secondArgument)
@@ -581,8 +580,25 @@ export class ServerAnalytics<
 			} else if (args.length === 1) {
 				input = undefined;
 				inputProvided = false;
+			} else if (args.length === 3 && secondArgument === undefined) {
+				const thirdArgument = argumentValues[2];
+				if (thirdArgument === undefined) {
+					input = undefined;
+					inputProvided = false;
+				} else if (isServerTrackOptions<TUserTraits>(thirdArgument)) {
+					options = thirdArgument;
+					input = undefined;
+					inputProvided = false;
+				} else {
+					await applyValidationFailurePolicy(
+						new AnalyticsValidationError("invalid_options", eventName),
+						this.validation,
+						this.debug,
+					);
+					return;
+				}
 			}
-		} else if (definition) {
+		} else if (classification) {
 			const thirdArgument = argumentValues[2];
 			if (thirdArgument === undefined) {
 				options = undefined;
@@ -590,7 +606,7 @@ export class ServerAnalytics<
 				options = thirdArgument;
 			} else {
 				await applyValidationFailurePolicy(
-					new AnalyticsValidationError("invalid_properties", eventName),
+					new AnalyticsValidationError("invalid_options", eventName),
 					this.validation,
 					this.debug,
 				);
@@ -608,6 +624,47 @@ export class ServerAnalytics<
 		);
 		if (!resolved) return;
 
+		await this.dispatchResolvedEvent(resolved, options);
+	}
+
+	/**
+	 * Replays an already-validated proxy event through the shared dispatch
+	 * path. Internal entry point used by `ingestProxyEvents`; the replayed
+	 * properties are the client's post-transform validator output, so they
+	 * are resolved via `resolveReplayEvent` instead of being re-validated.
+	 */
+	async [serverAnalyticsReplay](
+		eventName: string,
+		properties: unknown,
+		options: ServerTrackOptions<TUserTraits> | undefined,
+	): Promise<void> {
+		if (!this.enabled) return;
+
+		if (!this.initialized) {
+			console.warn("[Analytics] Not initialized. Call initialize() first.");
+			return;
+		}
+
+		const resolved = await resolveReplayEvent(
+			this.registry,
+			eventName as EventName<TRegistry>,
+			properties,
+			this.validation,
+			this.debug,
+		);
+		if (!resolved) return;
+
+		await this.dispatchResolvedEvent(resolved, options);
+	}
+
+	/**
+	 * Shared dispatch tail for track() and the proxy replay entry point:
+	 * builds the BaseEvent, merges context, and fans out to providers.
+	 */
+	private async dispatchResolvedEvent<TName extends EventName<TRegistry>>(
+		resolved: ResolvedEvent<TRegistry, TName>,
+		options: ServerTrackOptions<TUserTraits> | undefined,
+	): Promise<void> {
 		const event: BaseEvent<EventOutputMap<TRegistry>[TName]> = {
 			action: resolved.name,
 			category: resolved.category,
@@ -629,7 +686,7 @@ export class ServerAnalytics<
 			.filter(
 				(config) =>
 					this.shouldCallMethod(config, "track") &&
-					this.shouldTrackEvent(config, eventName),
+					this.shouldTrackEvent(config, resolved.name),
 			)
 			.map(async (config) => {
 				try {

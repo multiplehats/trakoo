@@ -43,6 +43,16 @@ interface NormalizedProviderConfig {
 	eventPatterns?: RegExp[];
 }
 
+/**
+ * Drop keys whose value is `undefined` so a partial update merges into the
+ * stored context instead of erasing fields it never mentioned.
+ */
+function definedFields<T extends object>(value: T): Partial<T> {
+	return Object.fromEntries(
+		Object.entries(value).filter(([, field]) => field !== undefined),
+	) as Partial<T>;
+}
+
 export class BrowserAnalytics<
 	TRegistry extends EventRegistry<EventDefinitions>,
 	TUserTraits extends object = Record<string, unknown>,
@@ -327,11 +337,7 @@ export class BrowserAnalytics<
 
 		// Set browser context
 		this.updateContext({
-			page: {
-				path: window.location.pathname,
-				title: document.title,
-				referrer: document.referrer,
-			},
+			page: this.getPageContext(),
 			device: {
 				type: this.getDeviceType(),
 				os: this.getOS(),
@@ -675,11 +681,7 @@ export class BrowserAnalytics<
 	pageView(properties?: Record<string, unknown>): void {
 		if (!this.enabled) return;
 
-		const page = {
-			path: window.location.pathname,
-			title: document.title,
-			referrer: document.referrer,
-		};
+		const page = this.getPageContext();
 		this.updateContext({ page });
 
 		const propertiesSnapshot = properties;
@@ -965,6 +967,13 @@ export class BrowserAnalytics<
 			...context,
 			page: context.page
 				? {
+						...this.context.page,
+						// Only fields the caller actually supplied may overwrite the
+						// stored snapshot. Spreading raw would let an `undefined` in a
+						// partial update erase a field, and `search` is legitimately
+						// "" on a URL with no query string, so it cannot use a truthy
+						// fallback without resurrecting the previous page's params.
+						...definedFields(context.page),
 						path:
 							context.page.path ||
 							this.context.page?.path ||
@@ -986,6 +995,29 @@ export class BrowserAnalytics<
 
 	private generateSessionId(): string {
 		return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+	}
+
+	/**
+	 * Snapshot the current page for event context.
+	 *
+	 * `url` carries the full `location.href`, query string included, because
+	 * that is where campaign parameters live. Providers that report a URL
+	 * (OpenPanel, Bento, EmitKit, the proxy) read `page.url` and fall back to
+	 * `page.path`; sending only the pathname silently dropped every `utm_*`
+	 * parameter before it left the browser, so campaign traffic arrived
+	 * unattributed. OpenPanel's own SDK defaults `screenView()` to
+	 * `location.href` for the same reason.
+	 */
+	private getPageContext(): NonNullable<EventContext<TUserTraits>["page"]> {
+		return {
+			path: window.location.pathname,
+			url: window.location.href,
+			search: window.location.search,
+			host: window.location.host,
+			protocol: window.location.protocol,
+			title: document.title,
+			referrer: document.referrer,
+		};
 	}
 
 	private getDeviceType(): string {

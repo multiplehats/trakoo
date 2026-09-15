@@ -399,6 +399,41 @@ describe("Client Analytics", () => {
 		);
 	});
 
+	it("keeps campaign parameters in the page URL it reports", async () => {
+		const original = window.location;
+		Object.defineProperty(window, "location", {
+			value: {
+				pathname: "/product",
+				search: "?utm_source=landing.gallery&utm_medium=ad",
+				href: "https://example.com/product?utm_source=landing.gallery&utm_medium=ad",
+				host: "example.com",
+				protocol: "https:",
+			},
+			writable: true,
+		});
+
+		try {
+			analytics.pageView();
+			await vi.waitFor(() => {
+				expect(mockProvider.calls.pageView).toHaveLength(1);
+			});
+
+			const page = mockProvider.calls.pageView[0].context?.page;
+			// Providers report `page.url` and fall back to `page.path`, so the
+			// query string has to survive or every utm_* parameter is lost.
+			expect(page?.url).toBe(
+				"https://example.com/product?utm_source=landing.gallery&utm_medium=ad",
+			);
+			expect(page?.search).toBe("?utm_source=landing.gallery&utm_medium=ad");
+			expect(page?.path).toBe("/product");
+		} finally {
+			Object.defineProperty(window, "location", {
+				value: original,
+				writable: true,
+			});
+		}
+	});
+
 	it("resets the session and clears user context", async () => {
 		analytics.identify("user-123", { email: "test@example.com" });
 		await analytics.track("before_reset");

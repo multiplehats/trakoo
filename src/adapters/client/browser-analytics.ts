@@ -327,11 +327,7 @@ export class BrowserAnalytics<
 
 		// Set browser context
 		this.updateContext({
-			page: {
-				path: window.location.pathname,
-				title: document.title,
-				referrer: document.referrer,
-			},
+			page: this.getPageContext(),
 			device: {
 				type: this.getDeviceType(),
 				os: this.getOS(),
@@ -675,11 +671,7 @@ export class BrowserAnalytics<
 	pageView(properties?: Record<string, unknown>): void {
 		if (!this.enabled) return;
 
-		const page = {
-			path: window.location.pathname,
-			title: document.title,
-			referrer: document.referrer,
-		};
+		const page = this.getPageContext();
 		this.updateContext({ page });
 
 		const propertiesSnapshot = properties;
@@ -986,6 +978,29 @@ export class BrowserAnalytics<
 
 	private generateSessionId(): string {
 		return `${Date.now()}-${Math.random().toString(36).substring(2, 11)}`;
+	}
+
+	/**
+	 * Snapshot the current page for event context.
+	 *
+	 * `url` carries the full `location.href`, query string included, because
+	 * that is where campaign parameters live. Providers that report a URL
+	 * (OpenPanel, Bento, EmitKit, the proxy) read `page.url` and fall back to
+	 * `page.path`; sending only the pathname silently dropped every `utm_*`
+	 * parameter before it left the browser, so campaign traffic arrived
+	 * unattributed. OpenPanel's own SDK defaults `screenView()` to
+	 * `location.href` for the same reason.
+	 */
+	private getPageContext(): NonNullable<EventContext<TUserTraits>["page"]> {
+		return {
+			path: window.location.pathname,
+			url: window.location.href,
+			search: window.location.search,
+			host: window.location.host,
+			protocol: window.location.protocol,
+			title: document.title,
+			referrer: document.referrer,
+		};
 	}
 
 	private getDeviceType(): string {

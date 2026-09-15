@@ -434,6 +434,79 @@ describe("Client Analytics", () => {
 		}
 	});
 
+	it("keeps the page URL in stored context for later events", async () => {
+		const original = window.location;
+		Object.defineProperty(window, "location", {
+			value: {
+				pathname: "/product",
+				search: "?utm_source=landing.gallery",
+				href: "https://example.com/product?utm_source=landing.gallery",
+				host: "example.com",
+				protocol: "https:",
+			},
+			writable: true,
+		});
+
+		try {
+			analytics.pageView();
+			analytics.track("button_clicked", {
+				buttonId: "cta",
+				label: "Start",
+			});
+			await vi.waitFor(() => {
+				expect(mockProvider.calls.track).toHaveLength(1);
+			});
+
+			// pageView() substitutes its own local snapshot, so it would pass even
+			// if updateContext dropped the field. track() and pageLeave() read the
+			// stored context, which is the half that actually regressed.
+			expect(mockProvider.calls.track[0].context?.page?.url).toBe(
+				"https://example.com/product?utm_source=landing.gallery",
+			);
+		} finally {
+			Object.defineProperty(window, "location", {
+				value: original,
+				writable: true,
+			});
+		}
+	});
+
+	it("merges partial page updates without erasing or staling fields", async () => {
+		analytics.updateContext({
+			page: {
+				path: "/a",
+				url: "https://example.com/a?ref=x",
+				search: "?ref=x",
+				title: "A",
+			},
+		});
+
+		// A partial update must not erase url just by omitting it.
+		analytics.updateContext({ page: { path: "/a", title: "A renamed" } });
+		analytics.track("test_event", { test: true });
+		await vi.waitFor(() => {
+			expect(mockProvider.calls.track).toHaveLength(1);
+		});
+		expect(mockProvider.calls.track[0].context?.page?.url).toBe(
+			"https://example.com/a?ref=x",
+		);
+		expect(mockProvider.calls.track[0].context?.page?.title).toBe("A renamed");
+
+		// An empty search is a real value, not a missing one: navigating to a URL
+		// with no query string must not keep the previous page's parameters.
+		analytics.updateContext({
+			page: { path: "/b", url: "https://example.com/b", search: "" },
+		});
+		analytics.track("test_event", { test: true });
+		await vi.waitFor(() => {
+			expect(mockProvider.calls.track).toHaveLength(2);
+		});
+		expect(mockProvider.calls.track[1].context?.page?.search).toBe("");
+		expect(mockProvider.calls.track[1].context?.page?.url).toBe(
+			"https://example.com/b",
+		);
+	});
+
 	it("resets the session and clears user context", async () => {
 		analytics.identify("user-123", { email: "test@example.com" });
 		await analytics.track("before_reset");

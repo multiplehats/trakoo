@@ -43,6 +43,16 @@ interface NormalizedProviderConfig {
 	eventPatterns?: RegExp[];
 }
 
+/**
+ * Drop keys whose value is `undefined` so a partial update merges into the
+ * stored context instead of erasing fields it never mentioned.
+ */
+function definedFields<T extends object>(value: T): Partial<T> {
+	return Object.fromEntries(
+		Object.entries(value).filter(([, field]) => field !== undefined),
+	) as Partial<T>;
+}
+
 export class BrowserAnalytics<
 	TRegistry extends EventRegistry<EventDefinitions>,
 	TUserTraits extends object = Record<string, unknown>,
@@ -957,6 +967,13 @@ export class BrowserAnalytics<
 			...context,
 			page: context.page
 				? {
+						...this.context.page,
+						// Only fields the caller actually supplied may overwrite the
+						// stored snapshot. Spreading raw would let an `undefined` in a
+						// partial update erase a field, and `search` is legitimately
+						// "" on a URL with no query string, so it cannot use a truthy
+						// fallback without resurrecting the previous page's params.
+						...definedFields(context.page),
 						path:
 							context.page.path ||
 							this.context.page?.path ||

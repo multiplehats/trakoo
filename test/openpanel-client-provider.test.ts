@@ -172,6 +172,26 @@ describe("OpenPanelClientProvider", () => {
 		});
 	});
 
+	it("sends the full page URL so campaign parameters reach OpenPanel", async () => {
+		const provider = new OpenPanelClientProvider({ clientId: "client-id" });
+		await provider.initialize();
+
+		const url = "https://example.com/product?utm_source=landing.gallery";
+		provider.pageView(undefined, {
+			page: { path: "/product", url, title: "Product" },
+		});
+
+		await vi.waitFor(() => {
+			expect(sdk.screenView).toHaveBeenCalledOnce();
+		});
+		// `page.url` wins over `page.path`: OpenPanel resolves the path and
+		// domain server-side, and only the full URL carries the utm_* values.
+		expect(sdk.screenView).toHaveBeenCalledWith(
+			url,
+			expect.objectContaining({ __path: url }),
+		);
+	});
+
 	it("tracks events with OpenPanel and Trakoo context", async () => {
 		const provider = new OpenPanelClientProvider({ clientId: "client-id" });
 		await provider.initialize();

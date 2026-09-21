@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import {
 	dirname,
 	extname,
@@ -41,6 +41,48 @@ function relativeJavaScriptImports(source, importerPath, distDirectory) {
 	return imports;
 }
 
+/**
+ * Every relative type import in the packed declarations must resolve to a file
+ * that was actually emitted.
+ *
+ * `vite build` exits 0 when the declaration plugin rejects a source file, so a
+ * module that fails `isolatedDeclarations` is silently dropped from `dist`
+ * while the importers that reference it are still published. Consumers then
+ * see `any` where a real type should be, and only at their own type-check.
+ */
+export function assertDeclarationImportsResolve(distDirectory) {
+	for (const declarationPath of declarationFiles(distDirectory)) {
+		const source = readFileSync(declarationPath, "utf8");
+		for (const match of source.matchAll(staticImportPattern)) {
+			const specifier = match[1];
+			if (!specifier?.startsWith(".")) continue;
+
+			const importedPath = resolve(
+				dirname(declarationPath),
+				specifier.split(/[?#]/, 1)[0],
+			);
+			if (!isInside(distDirectory, importedPath)) continue;
+
+			const declaration = importedPath.replace(/\.js$/, ".d.ts");
+			if (!existsSync(declaration)) {
+				throw new Error(
+					`${relative(distDirectory, declarationPath)} imports ${specifier}, but ${relative(distDirectory, declaration)} was not emitted`,
+				);
+			}
+		}
+	}
+}
+
+function declarationFiles(directory) {
+	const found = [];
+	for (const entry of readdirSync(directory, { withFileTypes: true })) {
+		const entryPath = resolve(directory, entry.name);
+		if (entry.isDirectory()) found.push(...declarationFiles(entryPath));
+		else if (entry.name.endsWith(".d.ts")) found.push(entryPath);
+	}
+	return found;
+}
+
 export function assertRootBundleNeutral(
 	entryPath,
 	distDirectory,
@@ -66,8 +108,6 @@ export function assertRootBundleNeutral(
 			}
 		}
 
-		pending.push(
-			...relativeJavaScriptImports(source, filePath, distDirectory),
-		);
+		pending.push(...relativeJavaScriptImports(source, filePath, distDirectory));
 	}
 }

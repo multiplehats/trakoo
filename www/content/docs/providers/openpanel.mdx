@@ -100,6 +100,26 @@ serverAnalytics.shutdown();
 
 The provider clears OpenPanel's local identity state after server-side `identify()` and on `shutdown()`, so it never reuses the identity from another request.
 
+### Geo and device attribution
+
+A server event carries your server's IP and user agent, not the caller's, so without request context OpenPanel attributes every one of them to your datacenter. Pass the caller's address and user agent as `context.server` and the provider forwards them as the `openpanel-client-ip` and `user-agent` headers OpenPanel resolves geo and device from:
+
+```typescript
+await serverAnalytics.track('api_request', { route: '/v1/generations' }, {
+  userId: 'user_123',
+  context: {
+    server: {
+      ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim(),
+      userAgent: request.headers.get('user-agent') ?? undefined
+    }
+  }
+});
+```
+
+Each event is attributed to its own caller, so one long-lived provider can serve concurrent requests. `context.device` is used as a fallback when `context.server` is absent. The IP travels as a header only — it is never stored as an event property, and a `device.ip` you pass is removed from the properties once it has been promoted.
+
+Resolve the caller's address with whatever your platform vouches for (`x-forwarded-for` behind a trusted proxy, `x-real-ip`, or a framework helper). Forwarding a spoofable header you do not control attributes events to whatever the caller claims.
+
 ## Identifying users
 
 Client identification persists until `analytics.reset()`. OpenPanel's standard `firstName`, `lastName`, `email`, and `avatar` traits are sent as profile fields. Other traits are stored as custom profile properties.

@@ -1,4 +1,5 @@
 import { OpenPanelServerProvider } from "@/providers/openpanel/server.js";
+import { REQUEST_CONTEXT } from "@/providers/openpanel/transport.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { constructorSpy, sdk } = vi.hoisted(() => ({
@@ -184,6 +185,105 @@ describe("OpenPanelServerProvider", () => {
 			device: { userAgent: "test-agent" },
 			user_email: "user@example.com",
 			user_traits: { plan: "pro" },
+			[REQUEST_CONTEXT]: { userAgent: "test-agent" },
+		});
+	});
+
+	it("carries the request IP and user agent for delivery to promote", async () => {
+		const provider = new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "secret",
+		});
+		await provider.initialize();
+
+		await provider.track(
+			{
+				action: "api_request",
+				category: "engagement",
+				properties: { route: "/v1/generations" },
+			},
+			{
+				server: { ip: "203.0.113.4", userAgent: "acme-sdk/1.2" },
+			},
+		);
+
+		expect(sdk.track).toHaveBeenCalledWith("api_request", {
+			route: "/v1/generations",
+			category: "engagement",
+			[REQUEST_CONTEXT]: {
+				ip: "203.0.113.4",
+				userAgent: "acme-sdk/1.2",
+			},
+		});
+	});
+
+	it("keeps a device the event declared itself, IP included", async () => {
+		const provider = new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "secret",
+		});
+		await provider.initialize();
+
+		await provider.track(
+			{
+				action: "probe_reported",
+				category: "engagement",
+				// `device` here is the event's own schema-defined property, not
+				// context, so the request IP says nothing about it.
+				properties: { device: { ip: "192.0.2.10", id: "probe-7" } },
+			},
+			{ server: { ip: "203.0.113.4" } },
+		);
+
+		expect(sdk.track).toHaveBeenCalledWith("probe_reported", {
+			category: "engagement",
+			device: { ip: "192.0.2.10", id: "probe-7" },
+			[REQUEST_CONTEXT]: { ip: "203.0.113.4" },
+		});
+	});
+
+	it("falls back to device context and keeps the IP out of the properties", async () => {
+		const provider = new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "secret",
+		});
+		await provider.initialize();
+
+		await provider.track(
+			{ action: "api_request", category: "engagement", properties: {} },
+			{ device: { ip: "203.0.113.4", type: "server" } },
+		);
+		await provider.track(
+			{ action: "ip_only", category: "engagement", properties: {} },
+			{ device: { ip: "203.0.113.9" } },
+		);
+
+		expect(sdk.track).toHaveBeenNthCalledWith(1, "api_request", {
+			category: "engagement",
+			device: { type: "server" },
+			[REQUEST_CONTEXT]: { ip: "203.0.113.4" },
+		});
+		// A device object that held nothing but the IP is dropped, not emptied.
+		expect(sdk.track).toHaveBeenNthCalledWith(2, "ip_only", {
+			category: "engagement",
+			[REQUEST_CONTEXT]: { ip: "203.0.113.9" },
+		});
+	});
+
+	it("leaves events without request context unchanged", async () => {
+		const provider = new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "secret",
+		});
+		await provider.initialize();
+
+		await provider.track(
+			{ action: "api_request", category: "engagement", properties: {} },
+			{ server: { requestId: "req-1" } },
+		);
+
+		expect(sdk.track).toHaveBeenCalledWith("api_request", {
+			category: "engagement",
 		});
 	});
 

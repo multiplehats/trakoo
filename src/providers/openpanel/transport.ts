@@ -34,6 +34,36 @@ export type OpenPanelDeliveryFailureHandler = (
 	failure: OpenPanelDeliveryFailure,
 ) => void;
 
+/**
+ * Request attributes OpenPanel reads from headers rather than from the event
+ * body: the caller's IP resolves geo, and the user agent resolves the device.
+ */
+export interface OpenPanelRequestContext {
+	readonly ip?: string;
+	readonly userAgent?: string;
+}
+
+/**
+ * Where the server provider parks {@link OpenPanelRequestContext} on the
+ * payload it hands the SDK.
+ *
+ * OpenPanel's own server integrations build a fresh client per request and
+ * call `api.addHeader()` on it. A trakoo provider is long-lived and shared by
+ * every concurrent request, so mutating those headers would attribute one
+ * caller's event to another caller's IP. Carrying the values on the payload
+ * keeps them bound to the single event they describe and survives the SDK's
+ * internal queue, which spreads the properties object.
+ *
+ * The key is a symbol, so no event property can impersonate it and turn
+ * tracked data into request headers. It also cannot be serialized:
+ * `JSON.stringify` drops symbol keys, so the carrier never reaches OpenPanel
+ * as a property even when this transport is not installed.
+ */
+export const REQUEST_CONTEXT = Symbol("trakoo.openpanel.requestContext");
+
+const CLIENT_IP_HEADER = "openpanel-client-ip";
+const USER_AGENT_HEADER = "user-agent";
+
 const DEFAULT_INITIAL_RETRY_DELAY_MS = 500;
 const DEFAULT_MAX_RETRIES = 3;
 const SUCCESS_STATUSES = new Set([200, 202]);
@@ -122,6 +152,7 @@ async function deliver(
 ): Promise<unknown> {
 	const url = `${api.baseUrl}${path}`;
 	const payloadType = payloadTypeOf(data);
+	const headers = requestHeadersOf(data);
 	const maxRetries = nonNegativeNumber(api.maxRetries, DEFAULT_MAX_RETRIES);
 	const retryDelay = nonNegativeNumber(
 		api.initialRetryDelay,
@@ -129,7 +160,7 @@ async function deliver(
 	);
 
 	for (let attempt = 0; ; attempt += 1) {
-		const outcome = await attemptDelivery(api, url, data, options);
+		const outcome = await attemptDelivery(api, url, data, options, headers);
 		if (outcome.ok) return outcome.body;
 
 		// A rejected key is rejected for every retry, so it is reported at once.
@@ -154,11 +185,12 @@ async function attemptDelivery(
 	url: string,
 	data: unknown,
 	options: RequestInit | undefined,
+	requestHeaders: Record<string, string>,
 ): Promise<DeliveryAttempt> {
 	try {
 		const response = await fetch(url, {
 			method: "POST",
-			headers: await resolveHeaders(api.headers),
+			headers: { ...(await resolveHeaders(api.headers)), ...requestHeaders },
 			body: data ? JSON.stringify(data) : undefined,
 			keepalive: true,
 			...options,
@@ -187,6 +219,33 @@ async function resolveHeaders(
 		if (header !== null) resolved[key] = header;
 	}
 	return resolved;
+}
+
+/**
+ * Turns any {@link OpenPanelRequestContext} carried by the payload into this
+ * one request's headers. The payload itself is left untouched — the carrier is
+ * symbol-keyed, so it is already invisible to `JSON.stringify`.
+ */
+function requestHeadersOf(data: unknown): Record<string, string> {
+	const requestContext = propertiesOf(data)?.[REQUEST_CONTEXT];
+	if (!requestContext || typeof requestContext !== "object") return {};
+
+	const { ip, userAgent } = requestContext as OpenPanelRequestContext;
+
+	return {
+		...(typeof ip === "string" && ip && { [CLIENT_IP_HEADER]: ip }),
+		...(typeof userAgent === "string" &&
+			userAgent && { [USER_AGENT_HEADER]: userAgent }),
+	};
+}
+
+function propertiesOf(data: unknown): Record<PropertyKey, unknown> | undefined {
+	if (!data || typeof data !== "object") return undefined;
+	const payload = (data as { payload?: unknown }).payload;
+	if (!payload || typeof payload !== "object") return undefined;
+	const properties = (payload as { properties?: unknown }).properties;
+	if (!properties || typeof properties !== "object") return undefined;
+	return properties as Record<PropertyKey, unknown>;
 }
 
 function payloadTypeOf(data: unknown): string | undefined {

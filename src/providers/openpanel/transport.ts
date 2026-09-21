@@ -51,11 +51,15 @@ export interface OpenPanelRequestContext {
  * call `api.addHeader()` on it. A trakoo provider is long-lived and shared by
  * every concurrent request, so mutating those headers would attribute one
  * caller's event to another caller's IP. Carrying the values on the payload
- * keeps them bound to the single event they describe, survives the SDK's
- * internal queue, and is removed again before the request is sent — the
- * attributes reach OpenPanel as headers and are never stored as properties.
+ * keeps them bound to the single event they describe and survives the SDK's
+ * internal queue, which spreads the properties object.
+ *
+ * The key is a symbol, so no event property can impersonate it and turn
+ * tracked data into request headers. It also cannot be serialized:
+ * `JSON.stringify` drops symbol keys, so the carrier never reaches OpenPanel
+ * as a property even when this transport is not installed.
  */
-export const REQUEST_CONTEXT_PROPERTY = "__trakooRequestContext";
+export const REQUEST_CONTEXT = Symbol("trakoo.openpanel.requestContext");
 
 const CLIENT_IP_HEADER = "openpanel-client-ip";
 const USER_AGENT_HEADER = "user-agent";
@@ -76,11 +80,6 @@ interface OpenPanelApi {
 	headers: Record<string, string | Promise<string | null>>;
 	initialRetryDelay?: number;
 	maxRetries?: number;
-}
-
-interface PreparedDelivery {
-	readonly body: unknown;
-	readonly headers: Record<string, string>;
 }
 
 type DeliveryAttempt =
@@ -153,7 +152,7 @@ async function deliver(
 ): Promise<unknown> {
 	const url = `${api.baseUrl}${path}`;
 	const payloadType = payloadTypeOf(data);
-	const { body, headers } = prepareDelivery(data);
+	const headers = requestHeadersOf(data);
 	const maxRetries = nonNegativeNumber(api.maxRetries, DEFAULT_MAX_RETRIES);
 	const retryDelay = nonNegativeNumber(
 		api.initialRetryDelay,
@@ -161,7 +160,7 @@ async function deliver(
 	);
 
 	for (let attempt = 0; ; attempt += 1) {
-		const outcome = await attemptDelivery(api, url, body, options, headers);
+		const outcome = await attemptDelivery(api, url, data, options, headers);
 		if (outcome.ok) return outcome.body;
 
 		// A rejected key is rejected for every retry, so it is reported at once.
@@ -223,41 +222,30 @@ async function resolveHeaders(
 }
 
 /**
- * Moves any {@link OpenPanelRequestContext} off the payload and onto this one
- * request's headers. The payload is copied rather than mutated: the SDK can
- * hold on to the object it passed in, and delivery must not change it.
+ * Turns any {@link OpenPanelRequestContext} carried by the payload into this
+ * one request's headers. The payload itself is left untouched — the carrier is
+ * symbol-keyed, so it is already invisible to `JSON.stringify`.
  */
-function prepareDelivery(data: unknown): PreparedDelivery {
-	const properties = propertiesOf(data);
-	const requestContext = properties?.[REQUEST_CONTEXT_PROPERTY];
-	if (!properties || !requestContext || typeof requestContext !== "object") {
-		return { body: data, headers: {} };
-	}
+function requestHeadersOf(data: unknown): Record<string, string> {
+	const requestContext = propertiesOf(data)?.[REQUEST_CONTEXT];
+	if (!requestContext || typeof requestContext !== "object") return {};
 
 	const { ip, userAgent } = requestContext as OpenPanelRequestContext;
-	const { [REQUEST_CONTEXT_PROPERTY]: _carrier, ...rest } = properties;
-	const envelope = data as { payload: Record<string, unknown> };
 
 	return {
-		body: {
-			...envelope,
-			payload: { ...envelope.payload, properties: rest },
-		},
-		headers: {
-			...(typeof ip === "string" && ip && { [CLIENT_IP_HEADER]: ip }),
-			...(typeof userAgent === "string" &&
-				userAgent && { [USER_AGENT_HEADER]: userAgent }),
-		},
+		...(typeof ip === "string" && ip && { [CLIENT_IP_HEADER]: ip }),
+		...(typeof userAgent === "string" &&
+			userAgent && { [USER_AGENT_HEADER]: userAgent }),
 	};
 }
 
-function propertiesOf(data: unknown): Record<string, unknown> | undefined {
+function propertiesOf(data: unknown): Record<PropertyKey, unknown> | undefined {
 	if (!data || typeof data !== "object") return undefined;
 	const payload = (data as { payload?: unknown }).payload;
 	if (!payload || typeof payload !== "object") return undefined;
 	const properties = (payload as { properties?: unknown }).properties;
 	if (!properties || typeof properties !== "object") return undefined;
-	return properties as Record<string, unknown>;
+	return properties as Record<PropertyKey, unknown>;
 }
 
 function payloadTypeOf(data: unknown): string | undefined {

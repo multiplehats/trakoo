@@ -1,4 +1,5 @@
 import { OpenPanelServerProvider } from "@/providers/openpanel/server.js";
+import { REQUEST_CONTEXT } from "@/providers/openpanel/transport.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { constructorSpy, sdk } = vi.hoisted(() => ({
@@ -184,7 +185,7 @@ describe("OpenPanelServerProvider", () => {
 			device: { userAgent: "test-agent" },
 			user_email: "user@example.com",
 			user_traits: { plan: "pro" },
-			__trakooRequestContext: { userAgent: "test-agent" },
+			[REQUEST_CONTEXT]: { userAgent: "test-agent" },
 		});
 	});
 
@@ -209,10 +210,35 @@ describe("OpenPanelServerProvider", () => {
 		expect(sdk.track).toHaveBeenCalledWith("api_request", {
 			route: "/v1/generations",
 			category: "engagement",
-			__trakooRequestContext: {
+			[REQUEST_CONTEXT]: {
 				ip: "203.0.113.4",
 				userAgent: "acme-sdk/1.2",
 			},
+		});
+	});
+
+	it("keeps a device the event declared itself, IP included", async () => {
+		const provider = new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "secret",
+		});
+		await provider.initialize();
+
+		await provider.track(
+			{
+				action: "probe_reported",
+				category: "engagement",
+				// `device` here is the event's own schema-defined property, not
+				// context, so the request IP says nothing about it.
+				properties: { device: { ip: "192.0.2.10", id: "probe-7" } },
+			},
+			{ server: { ip: "203.0.113.4" } },
+		);
+
+		expect(sdk.track).toHaveBeenCalledWith("probe_reported", {
+			category: "engagement",
+			device: { ip: "192.0.2.10", id: "probe-7" },
+			[REQUEST_CONTEXT]: { ip: "203.0.113.4" },
 		});
 	});
 
@@ -235,12 +261,12 @@ describe("OpenPanelServerProvider", () => {
 		expect(sdk.track).toHaveBeenNthCalledWith(1, "api_request", {
 			category: "engagement",
 			device: { type: "server" },
-			__trakooRequestContext: { ip: "203.0.113.4" },
+			[REQUEST_CONTEXT]: { ip: "203.0.113.4" },
 		});
 		// A device object that held nothing but the IP is dropped, not emptied.
 		expect(sdk.track).toHaveBeenNthCalledWith(2, "ip_only", {
 			category: "engagement",
-			__trakooRequestContext: { ip: "203.0.113.9" },
+			[REQUEST_CONTEXT]: { ip: "203.0.113.9" },
 		});
 	});
 

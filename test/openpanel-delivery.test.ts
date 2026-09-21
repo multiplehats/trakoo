@@ -1,6 +1,6 @@
 import { OpenPanelServerProvider } from "@/providers/openpanel/server.js";
 import {
-	REQUEST_CONTEXT_PROPERTY,
+	REQUEST_CONTEXT,
 	createDeliveryFailureReporter,
 	instrumentOpenPanelDelivery,
 } from "@/providers/openpanel/transport.js";
@@ -156,7 +156,7 @@ describe("OpenPanel delivery reporting", () => {
 				name: "api_request",
 				properties: {
 					route: "/v1/generations",
-					[REQUEST_CONTEXT_PROPERTY]: {
+					[REQUEST_CONTEXT]: {
 						ip: "203.0.113.4",
 						userAgent: "acme-sdk/1.2",
 					},
@@ -170,7 +170,7 @@ describe("OpenPanel delivery reporting", () => {
 			"openpanel-client-ip": "203.0.113.4",
 			"user-agent": "acme-sdk/1.2",
 		});
-		// The carrier is transport-only: it never reaches OpenPanel as a property.
+		// The carrier is symbol-keyed, so it cannot be serialized into the body.
 		expect(JSON.parse(String(request.body))).toEqual({
 			type: "track",
 			payload: {
@@ -189,7 +189,7 @@ describe("OpenPanel delivery reporting", () => {
 			payload: {
 				name: "api_request",
 				properties: {
-					[REQUEST_CONTEXT_PROPERTY]: { ip: "203.0.113.4" },
+					[REQUEST_CONTEXT]: { ip: "203.0.113.4" },
 				},
 			},
 		};
@@ -200,9 +200,9 @@ describe("OpenPanel delivery reporting", () => {
 
 		const [, second] = fetchMock.mock.calls[1] as [string, RequestInit];
 		expect(second.headers).toEqual({ "openpanel-client-id": "client-id" });
-		// Delivery copies the payload; the SDK's own object is left intact.
-		expect(envelope.payload.properties).toEqual({
-			[REQUEST_CONTEXT_PROPERTY]: { ip: "203.0.113.4" },
+		// Delivery does not mutate the object the SDK handed it.
+		expect(envelope.payload.properties[REQUEST_CONTEXT]).toEqual({
+			ip: "203.0.113.4",
 		});
 	});
 
@@ -216,14 +216,14 @@ describe("OpenPanel delivery reporting", () => {
 			type: "track",
 			payload: {
 				name: "a",
-				properties: { [REQUEST_CONTEXT_PROPERTY]: { ip: "203.0.113.4" } },
+				properties: { [REQUEST_CONTEXT]: { ip: "203.0.113.4" } },
 			},
 		});
 		await client.api.fetch("/track", {
 			type: "track",
 			payload: {
 				name: "b",
-				properties: { [REQUEST_CONTEXT_PROPERTY]: "not-an-object" },
+				properties: { [REQUEST_CONTEXT]: "not-an-object" },
 			},
 		});
 
@@ -235,6 +235,31 @@ describe("OpenPanel delivery reporting", () => {
 
 		const [, malformed] = fetchMock.mock.calls[1] as [string, RequestInit];
 		expect(malformed.headers).toEqual({ "openpanel-client-id": "client-id" });
+	});
+
+	it("does not let event properties forge the request context", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(response(202));
+		vi.stubGlobal("fetch", fetchMock);
+		const client = createClient();
+
+		instrumentOpenPanelDelivery(client, vi.fn());
+		await client.api.fetch("/track", {
+			type: "track",
+			payload: {
+				name: "api_request",
+				properties: {
+					// A tracked property, however it is named, is data — never a
+					// header, and never silently dropped from the event.
+					__trakooRequestContext: { ip: "203.0.113.4", userAgent: "spoofed" },
+				},
+			},
+		});
+
+		const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(request.headers).toEqual({ "openpanel-client-id": "client-id" });
+		expect(JSON.parse(String(request.body)).payload.properties).toEqual({
+			__trakooRequestContext: { ip: "203.0.113.4", userAgent: "spoofed" },
+		});
 	});
 
 	it("leaves clients without a recognizable transport untouched", () => {

@@ -1,7 +1,7 @@
 import type { BaseEvent, EventContext } from "@/core/events/types.js";
 import {
 	type OpenPanelRequestContext,
-	REQUEST_CONTEXT_PROPERTY,
+	REQUEST_CONTEXT,
 } from "@/providers/openpanel/transport.js";
 import type { IdentifyPayload } from "@openpanel/sdk";
 
@@ -100,8 +100,8 @@ export function buildRequestContext(
 /**
  * Parks the request attributes on the payload for the delivery transport to
  * move onto this one request's headers, and drops the IP from the `device`
- * property it leaves behind: geo belongs to the request, and a raw address
- * stored on every event is a liability the header avoids.
+ * property when that is where it was read from: geo belongs to the request,
+ * and a raw address stored on every event is a liability the header avoids.
  *
  * Only the server provider applies this. A browser sends its own headers, and
  * `user-agent` is forbidden to `fetch()` there.
@@ -113,15 +113,20 @@ export function withRequestContext(
 	const requestContext = buildRequestContext(context);
 	if (!requestContext) return properties;
 
-	const { device: _original, ...rest } = properties;
-	const device = requestContext.ip
-		? withoutIp(properties.device)
-		: properties.device;
+	// Only the address copied out of `context.device` is removed. A `device`
+	// the event declared itself is its own data, and an IP promoted from
+	// `context.server` says nothing about it.
+	if (typeof context?.device?.ip !== "string") {
+		return { ...properties, [REQUEST_CONTEXT]: requestContext };
+	}
+
+	const { device: _contextDevice, ...rest } = properties;
+	const device = withoutIp(properties.device);
 
 	return {
 		...rest,
 		...(device !== undefined && { device }),
-		[REQUEST_CONTEXT_PROPERTY]: requestContext,
+		[REQUEST_CONTEXT]: requestContext,
 	};
 }
 

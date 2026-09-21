@@ -51,7 +51,12 @@ describe("OpenPanelServerProvider with the node SDK", () => {
 
 		const body = JSON.parse(String(request.body));
 		expect(body.payload.properties.route).toBe("/v1/generations");
-		expect(body.payload.properties.__trakooRequestContext).toBeUndefined();
+		// Nothing named after the carrier survives serialization, whatever the
+		// key: the symbol is invisible to JSON.stringify.
+		expect(Object.keys(body.payload.properties)).not.toContain(
+			"__trakooRequestContext",
+		);
+		expect(JSON.stringify(body)).not.toContain("acme-sdk/1.2");
 		expect(String(request.body)).not.toContain("203.0.113.4");
 	});
 

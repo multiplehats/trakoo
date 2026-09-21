@@ -184,6 +184,80 @@ describe("OpenPanelServerProvider", () => {
 			device: { userAgent: "test-agent" },
 			user_email: "user@example.com",
 			user_traits: { plan: "pro" },
+			__trakooRequestContext: { userAgent: "test-agent" },
+		});
+	});
+
+	it("carries the request IP and user agent for delivery to promote", async () => {
+		const provider = new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "secret",
+		});
+		await provider.initialize();
+
+		await provider.track(
+			{
+				action: "api_request",
+				category: "engagement",
+				properties: { route: "/v1/generations" },
+			},
+			{
+				server: { ip: "203.0.113.4", userAgent: "acme-sdk/1.2" },
+			},
+		);
+
+		expect(sdk.track).toHaveBeenCalledWith("api_request", {
+			route: "/v1/generations",
+			category: "engagement",
+			__trakooRequestContext: {
+				ip: "203.0.113.4",
+				userAgent: "acme-sdk/1.2",
+			},
+		});
+	});
+
+	it("falls back to device context and keeps the IP out of the properties", async () => {
+		const provider = new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "secret",
+		});
+		await provider.initialize();
+
+		await provider.track(
+			{ action: "api_request", category: "engagement", properties: {} },
+			{ device: { ip: "203.0.113.4", type: "server" } },
+		);
+		await provider.track(
+			{ action: "ip_only", category: "engagement", properties: {} },
+			{ device: { ip: "203.0.113.9" } },
+		);
+
+		expect(sdk.track).toHaveBeenNthCalledWith(1, "api_request", {
+			category: "engagement",
+			device: { type: "server" },
+			__trakooRequestContext: { ip: "203.0.113.4" },
+		});
+		// A device object that held nothing but the IP is dropped, not emptied.
+		expect(sdk.track).toHaveBeenNthCalledWith(2, "ip_only", {
+			category: "engagement",
+			__trakooRequestContext: { ip: "203.0.113.9" },
+		});
+	});
+
+	it("leaves events without request context unchanged", async () => {
+		const provider = new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "secret",
+		});
+		await provider.initialize();
+
+		await provider.track(
+			{ action: "api_request", category: "engagement", properties: {} },
+			{ server: { requestId: "req-1" } },
+		);
+
+		expect(sdk.track).toHaveBeenCalledWith("api_request", {
+			category: "engagement",
 		});
 	});
 

@@ -1,5 +1,6 @@
 import { OpenPanelServerProvider } from "@/providers/openpanel/server.js";
 import {
+	REQUEST_CONTEXT_PROPERTY,
 	createDeliveryFailureReporter,
 	instrumentOpenPanelDelivery,
 } from "@/providers/openpanel/transport.js";
@@ -141,6 +142,99 @@ describe("OpenPanel delivery reporting", () => {
 
 		const [, replayRequest] = fetchMock.mock.calls[1] as [string, RequestInit];
 		expect(replayRequest.keepalive).toBe(false);
+	});
+
+	it("moves the request context onto this one request's headers", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(response(202));
+		vi.stubGlobal("fetch", fetchMock);
+		const client = createClient();
+
+		instrumentOpenPanelDelivery(client, vi.fn());
+		await client.api.fetch("/track", {
+			type: "track",
+			payload: {
+				name: "api_request",
+				properties: {
+					route: "/v1/generations",
+					[REQUEST_CONTEXT_PROPERTY]: {
+						ip: "203.0.113.4",
+						userAgent: "acme-sdk/1.2",
+					},
+				},
+			},
+		});
+
+		const [, request] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(request.headers).toEqual({
+			"openpanel-client-id": "client-id",
+			"openpanel-client-ip": "203.0.113.4",
+			"user-agent": "acme-sdk/1.2",
+		});
+		// The carrier is transport-only: it never reaches OpenPanel as a property.
+		expect(JSON.parse(String(request.body))).toEqual({
+			type: "track",
+			payload: {
+				name: "api_request",
+				properties: { route: "/v1/generations" },
+			},
+		});
+	});
+
+	it("does not let one request's context leak onto the next", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(response(202));
+		vi.stubGlobal("fetch", fetchMock);
+		const client = createClient();
+		const envelope = {
+			type: "track",
+			payload: {
+				name: "api_request",
+				properties: {
+					[REQUEST_CONTEXT_PROPERTY]: { ip: "203.0.113.4" },
+				},
+			},
+		};
+
+		instrumentOpenPanelDelivery(client, vi.fn());
+		await client.api.fetch("/track", envelope);
+		await client.api.fetch("/track", trackEnvelope);
+
+		const [, second] = fetchMock.mock.calls[1] as [string, RequestInit];
+		expect(second.headers).toEqual({ "openpanel-client-id": "client-id" });
+		// Delivery copies the payload; the SDK's own object is left intact.
+		expect(envelope.payload.properties).toEqual({
+			[REQUEST_CONTEXT_PROPERTY]: { ip: "203.0.113.4" },
+		});
+	});
+
+	it("sends partial request context and ignores a malformed carrier", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(response(202));
+		vi.stubGlobal("fetch", fetchMock);
+		const client = createClient();
+
+		instrumentOpenPanelDelivery(client, vi.fn());
+		await client.api.fetch("/track", {
+			type: "track",
+			payload: {
+				name: "a",
+				properties: { [REQUEST_CONTEXT_PROPERTY]: { ip: "203.0.113.4" } },
+			},
+		});
+		await client.api.fetch("/track", {
+			type: "track",
+			payload: {
+				name: "b",
+				properties: { [REQUEST_CONTEXT_PROPERTY]: "not-an-object" },
+			},
+		});
+
+		const [, withIp] = fetchMock.mock.calls[0] as [string, RequestInit];
+		expect(withIp.headers).toEqual({
+			"openpanel-client-id": "client-id",
+			"openpanel-client-ip": "203.0.113.4",
+		});
+
+		const [, malformed] = fetchMock.mock.calls[1] as [string, RequestInit];
+		expect(malformed.headers).toEqual({ "openpanel-client-id": "client-id" });
 	});
 
 	it("leaves clients without a recognizable transport untouched", () => {

@@ -4,6 +4,7 @@ import {
 	buildEventProperties,
 	buildIdentifyPayload,
 	buildTrackedEventProperties,
+	withRequestContext,
 } from "@/providers/openpanel/shared.js";
 import {
 	createDeliveryFailureReporter,
@@ -150,7 +151,7 @@ export class OpenPanelServerProvider extends BaseAnalyticsProvider {
 
 		await client.track(
 			event.action,
-			buildTrackedEventProperties(event, context),
+			withRequestContext(buildTrackedEventProperties(event, context), context),
 		);
 		this.log("Tracked event");
 	}
@@ -165,10 +166,13 @@ export class OpenPanelServerProvider extends BaseAnalyticsProvider {
 
 		await client.track(
 			"screen_view",
-			buildEventProperties(properties, context, {
-				category: "navigation",
-				userId: context?.user?.userId,
-			}),
+			withRequestContext(
+				buildEventProperties(properties, context, {
+					category: "navigation",
+					userId: context?.user?.userId,
+				}),
+				context,
+			),
 		);
 		this.log("Tracked page view");
 	}

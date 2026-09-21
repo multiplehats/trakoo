@@ -1,4 +1,8 @@
 import type { BaseEvent, EventContext } from "@/core/events/types.js";
+import {
+	type OpenPanelRequestContext,
+	REQUEST_CONTEXT_PROPERTY,
+} from "@/providers/openpanel/transport.js";
 import type { IdentifyPayload } from "@openpanel/sdk";
 
 const PROFILE_FIELDS = ["firstName", "lastName", "email", "avatar"] as const;
@@ -72,4 +76,65 @@ export function buildTrackedEventProperties(
 		userId: event.userId ?? context?.user?.userId,
 		sessionId: event.sessionId,
 	});
+}
+
+/**
+ * Collects the attributes OpenPanel resolves from request headers rather than
+ * from the event body: the caller's IP for geo, its user agent for the device.
+ * `server` is the request-scoped source a server caller populates; `device` is
+ * the fallback for callers that already put the visitor there.
+ */
+export function buildRequestContext(
+	context: EventContext | undefined,
+): OpenPanelRequestContext | undefined {
+	const ip = firstString(context?.server?.ip, context?.device?.ip);
+	const userAgent = firstString(
+		context?.server?.userAgent,
+		context?.device?.userAgent,
+	);
+	if (!ip && !userAgent) return undefined;
+
+	return { ...(ip && { ip }), ...(userAgent && { userAgent }) };
+}
+
+/**
+ * Parks the request attributes on the payload for the delivery transport to
+ * move onto this one request's headers, and drops the IP from the `device`
+ * property it leaves behind: geo belongs to the request, and a raw address
+ * stored on every event is a liability the header avoids.
+ *
+ * Only the server provider applies this. A browser sends its own headers, and
+ * `user-agent` is forbidden to `fetch()` there.
+ */
+export function withRequestContext(
+	properties: Record<string, unknown>,
+	context: EventContext | undefined,
+): Record<string, unknown> {
+	const requestContext = buildRequestContext(context);
+	if (!requestContext) return properties;
+
+	const { device: _original, ...rest } = properties;
+	const device = requestContext.ip
+		? withoutIp(properties.device)
+		: properties.device;
+
+	return {
+		...rest,
+		...(device !== undefined && { device }),
+		[REQUEST_CONTEXT_PROPERTY]: requestContext,
+	};
+}
+
+function withoutIp(device: unknown): unknown {
+	if (!device || typeof device !== "object") return device;
+
+	const { ip: _promoted, ...rest } = device as Record<string, unknown>;
+	return Object.keys(rest).length > 0 ? rest : undefined;
+}
+
+function firstString(...values: unknown[]): string | undefined {
+	for (const value of values) {
+		if (typeof value === "string" && value) return value;
+	}
+	return undefined;
 }

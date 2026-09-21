@@ -167,6 +167,22 @@ new OpenPanelServerProvider({
 });
 ```
 
+A server event carries the server's own IP and user agent, so OpenPanel attributes it to the datacenter unless the caller's request context is passed. Put the caller's address and user agent on `context.server` and the provider forwards them as the `openpanel-client-ip` and `user-agent` headers OpenPanel resolves geo and device from:
+
+```ts
+await analytics.track("api_request", { route: "/v1/generations" }, {
+	userId,
+	context: {
+		server: {
+			ip: clientIpFrom(request),
+			userAgent: request.headers.get("user-agent") ?? undefined,
+		},
+	},
+});
+```
+
+Attribution is per event, so one long-lived provider serves concurrent requests correctly. `context.device` is the fallback when `context.server` is absent. The IP is sent as a header only and never stored as an event property. Resolve the address from a header the deployment's trusted proxies actually set; forwarding an unvalidated one attributes events to whatever the caller claims.
+
 OpenPanel's SDKs drop events rejected with HTTP 401 without throwing, retrying or logging, so a wrong key, a rotated secret or a browser origin the project does not allow stops analytics silently. `onDeliveryFailure` reports those rejections; without a handler trakoo logs them. It carries the envelope type, status and ingestion URL, never event properties. Delivery never throws, so a rejected event never becomes an application error.
 
 Browser events are rejected with the same 401 when the page origin is not on the project's allowed origins, so a client ID that works in production can be refused from `localhost`.

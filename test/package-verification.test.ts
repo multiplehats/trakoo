@@ -1,8 +1,11 @@
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { assertRootBundleNeutral } from "../scripts/package-verification.mjs";
+import {
+	assertDeclarationImportsResolve,
+	assertRootBundleNeutral,
+} from "../scripts/package-verification.mjs";
 import * as packageVerifier from "../scripts/verify-package.mjs";
 
 const {
@@ -222,6 +225,61 @@ describe("optional provider peer verification", () => {
 			).toThrow("bento-node-sdk-abc123.js");
 		} finally {
 			rmSync(distDirectory, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("declaration import verification", () => {
+	const withDist = (files: Record<string, string>) => {
+		const dist = mkdtempSync(join(tmpdir(), "trakoo-dts-"));
+		for (const [relativePath, contents] of Object.entries(files)) {
+			const target = join(dist, relativePath);
+			mkdirSync(join(target, ".."), { recursive: true });
+			writeFileSync(target, contents);
+		}
+		return dist;
+	};
+
+	it("accepts declarations whose relative imports were emitted", () => {
+		const dist = withDist({
+			"providers/client.d.ts":
+				'export type { A } from "./openpanel/transport.js";',
+			"providers/openpanel/transport.d.ts": "export type A = string;",
+		});
+
+		try {
+			expect(() => assertDeclarationImportsResolve(dist)).not.toThrow();
+		} finally {
+			rmSync(dist, { recursive: true, force: true });
+		}
+	});
+
+	it("rejects a declaration the build silently dropped", () => {
+		// `vite build` exits 0 when a source file fails isolatedDeclarations, so
+		// the importer ships while the type it names does not.
+		const dist = withDist({
+			"providers/client.d.ts":
+				'export type { A } from "./openpanel/transport.js";',
+		});
+
+		try {
+			expect(() => assertDeclarationImportsResolve(dist)).toThrow(
+				/transport\.d\.ts was not emitted/,
+			);
+		} finally {
+			rmSync(dist, { recursive: true, force: true });
+		}
+	});
+
+	it("ignores bare package imports", () => {
+		const dist = withDist({
+			"index.d.ts": 'import type { OpenPanel } from "@openpanel/sdk";',
+		});
+
+		try {
+			expect(() => assertDeclarationImportsResolve(dist)).not.toThrow();
+		} finally {
+			rmSync(dist, { recursive: true, force: true });
 		}
 	});
 });

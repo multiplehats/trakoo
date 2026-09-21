@@ -59,7 +59,9 @@ export interface OpenPanelRequestContext {
  * `JSON.stringify` drops symbol keys, so the carrier never reaches OpenPanel
  * as a property even when this transport is not installed.
  */
-export const REQUEST_CONTEXT = Symbol("trakoo.openpanel.requestContext");
+export const REQUEST_CONTEXT: unique symbol = Symbol(
+	"trakoo.openpanel.requestContext",
+);
 
 const CLIENT_IP_HEADER = "openpanel-client-ip";
 const USER_AGENT_HEADER = "user-agent";

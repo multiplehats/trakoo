@@ -10,7 +10,10 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { assertRootBundleNeutral } from "./package-verification.mjs";
+import {
+	assertDeclarationImportsResolve,
+	assertRootBundleNeutral,
+} from "./package-verification.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const invokedAsScript =
@@ -220,6 +223,7 @@ if (invokedAsScript) {
 			"server/index.d.ts",
 			"adapters/server/server-analytics.d.ts",
 		]);
+		assertDeclarationImportsResolve(join(root, "dist"));
 		const packResult = JSON.parse(run("npm", ["pack", "--json"]));
 		tarballPath = resolve(root, packResult[0].filename);
 

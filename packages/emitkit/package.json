@@ -1,0 +1,46 @@
+{
+	"name": "@trakoo/emitkit",
+	"version": "0.0.0",
+	"description": "EmitKit provider for trakoo",
+	"type": "module",
+	"exports": {
+		"./server": {
+			"types": "./dist/server.d.ts",
+			"import": "./dist/server.js",
+			"default": "./dist/server.js"
+		}
+	},
+	"files": ["dist", "README.md", "LICENSE"],
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"keywords": ["analytics", "trakoo", "emitkit", "typescript"],
+	"author": "Chris Jayden <https://github.com/multiplehats>",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/multiplehats/trakoo.git",
+		"directory": "packages/emitkit"
+	},
+	"bugs": {
+		"url": "https://github.com/multiplehats/trakoo/issues"
+	},
+	"homepage": "https://trakoo.co/docs/providers/emitkit",
+	"publishConfig": {
+		"access": "public"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"peerDependencies": {
+		"trakoo": "workspace:^",
+		"@emitkit/js": "^2.1.0"
+	},
+	"devDependencies": {
+		"trakoo": "workspace:*",
+		"@emitkit/js": "^2.1.0"
+	}
+}

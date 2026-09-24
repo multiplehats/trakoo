@@ -17,7 +17,7 @@ export default defineConfig({
 		root: "content/docs",
 	},
 	deployment: {
-		site: "https://stacksee-analytics.vercel.app",
+		site: "https://www.trakoo.co",
 	},
 	navigation: {
 		sidebar: {

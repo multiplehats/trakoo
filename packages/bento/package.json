@@ -1,0 +1,46 @@
+{
+	"name": "@trakoo/bento",
+	"version": "0.0.0",
+	"description": "Bento provider for trakoo",
+	"type": "module",
+	"exports": {
+		"./server": {
+			"types": "./dist/server.d.ts",
+			"import": "./dist/server.js",
+			"default": "./dist/server.js"
+		}
+	},
+	"files": ["dist", "README.md", "LICENSE"],
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"keywords": ["analytics", "trakoo", "bento", "typescript"],
+	"author": "Chris Jayden <https://github.com/multiplehats>",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/multiplehats/trakoo.git",
+		"directory": "packages/bento"
+	},
+	"bugs": {
+		"url": "https://github.com/multiplehats/trakoo/issues"
+	},
+	"homepage": "https://trakoo.co/docs/providers/bento",
+	"publishConfig": {
+		"access": "public"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"peerDependencies": {
+		"trakoo": "workspace:^",
+		"@bentonow/bento-node-sdk": "^0.2.1 || ^2.0.0"
+	},
+	"devDependencies": {
+		"trakoo": "workspace:*",
+		"@bentonow/bento-node-sdk": "^2.0.0"
+	}
+}

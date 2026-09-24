@@ -15,8 +15,10 @@ EmitKit is not a product-analytics dashboard. Pair it with a provider like [Post
 
 ## Installation
 
+The EmitKit provider ships in the `@trakoo/emitkit` package and uses the EmitKit JavaScript SDK.
+
 ```bash
-pnpm install @emitkit/js
+pnpm add trakoo @trakoo/emitkit @emitkit/js
 ```
 
 ## Client-side usage
@@ -27,7 +29,7 @@ EmitKit is server-only — its SDK has no browser package. To capture browser ev
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from "trakoo/server";
-import { EmitKitServerProvider } from "trakoo/providers/server";
+import { EmitKitServerProvider } from "@trakoo/emitkit/server";
 import { appEvents } from "@/lib/events";
 
 export const serverAnalytics = createServerAnalytics({
@@ -42,6 +44,8 @@ export const serverAnalytics = createServerAnalytics({
 ```
 
 Server provider instances are stateless. Calling `identify()` updates the remote EmitKit profile, but does not set local identity for later events. Pass the current request's user id or email with every attributed server event and page view.
+
+EmitKit replaces a profile's stored properties on every identify call instead of merging them, so pass every trait you want to keep. When you call `identify()` without traits, trakoo leaves the properties field out rather than sending an empty set.
 
 Track events with properties and optional user context. EmitKit accepts multiple identifiers per user, including an id, email, or username.
 
@@ -97,9 +101,43 @@ await serverAnalytics.track("large_payment", {
 });
 ```
 
-## Titles and icons
+## What EmitKit receives
 
-EmitKit turns event names into readable titles (`user_signed_up` becomes "User Signed Up") and assigns an icon based on the event category, so feeds stay legible without extra configuration.
+Each tracked event becomes one EmitKit event:
+
+- **Title**: the event name in title case, so `user_signed_up` becomes "User Signed Up".
+- **Icon**: chosen from the event category, so feeds stay legible without extra configuration.
+- **Description**: the event's `description` property, or a short default for the built-in categories. Values over EmitKit's 5,000-character limit are shortened.
+- **Tags**: the event category plus a `tags` property made of strings. trakoo drops duplicates and tags over 50 characters, and keeps the first 20, which is EmitKit's limit.
+- **Metadata**: the event properties without `__emitkit_channel`, plus `category`, `timestamp`, `sessionId`, and the page, device, UTM, and server context. trakoo removes `ip` from the device and server context, so the visitor IP address that proxy ingestion records never reaches your feeds. User traits are not attached to events.
+- **User**: the email from the current call's user context, then its user id, then the event's `userId`.
+- **Source**: `trakoo`.
+
+The original `description` and `tags` values stay in metadata, so shortening them loses nothing.
+
+## Page views
+
+`pageView()` sends a silent "Page View" event (`notify: false`, displayed as a message) to the `__emitkit_channel` in its properties, the channel mapped to the `navigation` category, or the default `channelName`, in that order.
+
+EmitKit allows 100 requests per minute per API key by default. Page views forwarded through the proxy can use up the budget your signup and payment events need. If you only want explicit events in EmitKit, exclude page views with [routing](/docs/providers#routing):
+
+```typescript
+export const serverAnalytics = createServerAnalytics({
+  events: appEvents,
+  providers: [
+    {
+      provider: new EmitKitServerProvider({
+        apiKey: process.env.EMITKIT_API_KEY!,
+      }),
+      exclude: ["pageView"],
+    },
+  ],
+});
+```
+
+## Errors and rate limits
+
+The EmitKit SDK does not retry, so a request that hits the rate limit (HTTP 429) or times out is not delivered. A failed `track()` is logged by trakoo without affecting other providers. Failed `identify()` and `pageView()` calls are logged and do not reject. The provider's log line names the EmitKit error class, status code, and request id, so you can tell an invalid API key (401) from a validation error (400) or a rate limit (429). The SDK reports a timeout as status 408 and a network failure as status 0.
 
 ## Browser events via proxy
 
@@ -120,10 +158,8 @@ await analytics.track("button_clicked", { buttonId: "signup" });
 
 ```typescript title="app/api/analytics/route.ts"
 import { createServerAnalytics } from "trakoo/server";
-import {
-  EmitKitServerProvider,
-  ingestProxyEvents,
-} from "trakoo/providers/server";
+import { ingestProxyEvents } from "trakoo/providers/server";
+import { EmitKitServerProvider } from "@trakoo/emitkit/server";
 import { appEvents } from "@/lib/events";
 
 const serverAnalytics = createServerAnalytics({
@@ -150,6 +186,12 @@ export async function POST(request: Request) {
       type: "string",
       required: true,
       description: "Your EmitKit API key. Starts with 'emitkit_'.",
+    },
+    timeout: {
+      type: "number",
+      default: "5000",
+      description:
+        "Request timeout in milliseconds. A request that times out is not retried.",
     },
     channelName: {
       type: "string",
@@ -189,7 +231,8 @@ export async function POST(request: Request) {
 - Route by category with `categoryChannelMap` and reserve `__emitkit_channel` for the few events that need a dedicated channel.
 - Name channels by domain — `payments`, `user-signups`, `team-alerts` — so feeds stay scannable.
 - `identify()` updates a remote profile only; provide the current request's user id or email on every attributed server event and page view.
-- Include email and username in user traits so events resolve to the same person across identifiers.
+- Include email and username in user traits so events resolve to the same person across identifiers, and send the full trait set each time because EmitKit replaces stored properties.
+- Exclude `pageView` unless you want every page view in a feed. Page views count against the same rate limit as your important events.
 - Run EmitKit alongside an analytics provider: EmitKit for feeds and notifications, PostHog or Pirsch for dashboards. See [routing](/docs/providers#routing) to control which events reach each provider.
 
 ## Resources

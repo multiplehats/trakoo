@@ -16,7 +16,7 @@ Give your coding agent Trakoo-specific integration guidance for typed events, cl
 npx skills add multiplehats/trakoo --skill trakoo
 ```
 
-The source is [`skills/trakoo/SKILL.md`](./skills/trakoo/SKILL.md) and follows the portable Agent Skills format used by skills.sh-compatible agents. See the [Agent Skill docs](https://stacksee-analytics.vercel.app/docs/agent-skill) for agent targeting, global installs, and manual setup.
+The source is [`skills/trakoo/SKILL.md`](./skills/trakoo/SKILL.md) and follows the portable Agent Skills format used by skills.sh-compatible agents. See the [Agent Skill docs](https://trakoo.co/docs/agent-skill) for agent targeting, global installs, and manual setup.
 
 ## Features
 
@@ -30,16 +30,25 @@ The source is [`skills/trakoo/SKILL.md`](./skills/trakoo/SKILL.md) and follows t
 ## Installation
 
 ```bash
-pnpm install trakoo
+pnpm add trakoo
 ```
 
-Trakoo core does not auto-install provider SDKs. Install only the SDKs required by the providers you use. For example:
+Core trakoo has no provider SDK dependencies. Providers that need no SDK ship with it: Bento's browser provider, Pirsch, Visitors, and the Proxy. Providers that wrap a vendor SDK are separate `@trakoo/*` packages. Install the provider package with only the SDK for the side you use:
+
+| Provider | Package | Browser SDK | Server SDK |
+|---|---|---|---|
+| PostHog | `@trakoo/posthog` | `posthog-js` | `posthog-node` |
+| OpenPanel | `@trakoo/openpanel` | `@openpanel/web` | `@openpanel/sdk` |
+| Bento (server) | `@trakoo/bento` | — | `@bentonow/bento-node-sdk` |
+| EmitKit | `@trakoo/emitkit` | — | `@emitkit/js` |
 
 ```bash
-pnpm install posthog-js posthog-node
-```
+# PostHog in the browser
+pnpm add trakoo @trakoo/posthog posthog-js
 
-The aggregate `trakoo/providers/client` and `trakoo/providers/server` entry points are safe to import before an SDK is installed. Constructing a provider is also safe; initializing it without its optional peer SDK throws a clear package-specific error.
+# PostHog on the server
+pnpm add trakoo @trakoo/posthog posthog-node
+```
 
 ## Quick start
 
@@ -85,7 +94,7 @@ Factories and providers come from environment-specific subpaths. Pass the regist
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 import { appEvents } from './events';
 
 export const analytics = createClientAnalytics({
@@ -118,7 +127,7 @@ The registry drives autocomplete and rejects misspelled names, missing propertie
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import { PostHogServerProvider } from 'trakoo/providers/server';
+import { PostHogServerProvider } from '@trakoo/posthog/server';
 import { appEvents } from './events';
 
 export const serverAnalytics = createServerAnalytics({
@@ -229,6 +238,13 @@ Client analytics remembers the identified user until `reset()`. Server analytics
 ## Multiple providers and routing
 
 ```typescript
+import { createClientAnalytics } from 'trakoo/client';
+import {
+  BentoClientProvider,
+  VisitorsClientProvider
+} from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
+
 const analytics = createClientAnalytics({
   events: appEvents,
   providers: [
@@ -279,13 +295,17 @@ See [Creating Custom Providers](https://trakoo.co/docs/providers/custom) for the
 
 | Import | Contents |
 |---|---|
-| `trakoo` | `defineEvents`, `typed`, `noProperties`, validation error, and shared types |
+| `trakoo` | `defineEvents`, `typed`, `noProperties`, `BaseAnalyticsProvider`, validation error, and shared types |
 | `trakoo/client` | Client factory, browser analytics class, client-safe base provider exports |
 | `trakoo/server` | Server factory, server analytics class, server-safe base provider exports |
-| `trakoo/providers/client` | Browser provider implementations |
-| `trakoo/providers/server` | Server provider implementations |
+| `trakoo/providers/client` | Browser providers without an SDK: Bento, Pirsch, Visitors, Proxy |
+| `trakoo/providers/server` | Server providers without an SDK: Pirsch, proxy ingestion helpers |
+| `@trakoo/posthog/client`, `@trakoo/posthog/server` | PostHog providers |
+| `@trakoo/openpanel/client`, `@trakoo/openpanel/server` | OpenPanel providers |
+| `@trakoo/bento/server` | Bento server provider |
+| `@trakoo/emitkit/server` | EmitKit server provider |
 
-Do not import factories from the root or use a combined provider entry point.
+Do not import factories from the root or use a combined provider entry point. Provider packages have no root entry; import from their `/client` or `/server` subpath.
 
 ## API summary
 

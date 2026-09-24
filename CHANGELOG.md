@@ -98,13 +98,13 @@
 
 ### Patch Changes
 
-- Add `default` export condition to all subpath exports so CJS resolvers (e.g. tsx, esbuild) can find them ([`f69b4ec`](https://github.com/stackseehq/analytics/commit/f69b4ec79fc4c6211fbb8d8d522bbe68a45905f8))
+- Add `default` export condition to all subpath exports so CJS resolvers (e.g. tsx, esbuild) can find them ([`f69b4ec`](https://github.com/multiplehats/trakoo/commit/f69b4ec79fc4c6211fbb8d8d522bbe68a45905f8))
 
 ## 0.14.4
 
 ### Patch Changes
 
-- fix(pirsch): rewrite client provider to use CDN script injection ([`7fd6d17`](https://github.com/stackseehq/analytics/commit/7fd6d17f7adcd3f022bf797e7d7064038610a6ba))
+- fix(pirsch): rewrite client provider to use CDN script injection ([`7fd6d17`](https://github.com/multiplehats/trakoo/commit/7fd6d17f7adcd3f022bf797e7d7064038610a6ba))
 
   The previous `PirschClientProvider` incorrectly used `pirsch-sdk` (a
   Node.js npm package) to instantiate a `PirschWebClient` class in the
@@ -124,7 +124,7 @@
 
 ### Patch Changes
 
-- fix(pirsch): externalize pirsch-sdk from library build ([`3d9938f`](https://github.com/stackseehq/analytics/commit/3d9938f49907f4d54da6a9b8bedaacd9d61dddb2))
+- fix(pirsch): externalize pirsch-sdk from library build ([`3d9938f`](https://github.com/multiplehats/trakoo/commit/3d9938f49907f4d54da6a9b8bedaacd9d61dddb2))
 
   `pirsch-sdk` was not listed in `rollupOptions.external`, causing Vite to bundle it into an internal chunk (`web-D-ZwlgeQ.js`) and load it via a relative dynamic import. When consumers re-bundled the library (e.g. with Vite/Astro), the relative path broke and `PirschClientProvider.initialize()` failed with `Cannot destructure property 'Pirsch' of undefined`.
 
@@ -134,7 +134,7 @@
 
 ### Patch Changes
 
-- Fix `VisitorsClientProvider` 429 Too Many Requests errors in production. ([`ef8cc4e`](https://github.com/stackseehq/analytics/commit/ef8cc4e66990f36950267632e11af10e61d61b41))
+- Fix `VisitorsClientProvider` 429 Too Many Requests errors in production. ([`ef8cc4e`](https://github.com/multiplehats/trakoo/commit/ef8cc4e66990f36950267632e11af10e61d61b41))
 
   **Concurrent init race**: `initialize()` now coalesces concurrent calls onto a single in-flight Promise instead of checking a boolean flag that is only set after async work completes. Previously, two callers entering simultaneously each injected the script and triggered duplicate automatic page-view POSTs to `e.visitors.now/e`.
 
@@ -144,13 +144,13 @@
 
 ### Patch Changes
 
-- Add `persist` option to `VisitorsClientProvider`. When `persist: true`, the `data-persist` attribute is set on the injected script tag, enabling the visitor cookie required for cross-session tracking and Stripe revenue attribution via `getVisitorId()`. ([`c4f43ca`](https://github.com/stackseehq/analytics/commit/c4f43caf722e23d2ecf302c59a48f6dfe152bd67))
+- Add `persist` option to `VisitorsClientProvider`. When `persist: true`, the `data-persist` attribute is set on the injected script tag, enabling the visitor cookie required for cross-session tracking and Stripe revenue attribution via `getVisitorId()`. ([`c4f43ca`](https://github.com/multiplehats/trakoo/commit/c4f43caf722e23d2ecf302c59a48f6dfe152bd67))
 
 ## 0.14.0
 
 ### Minor Changes
 
-- Add `VisitorsClientProvider` for [visitors.now](https://visitors.now) analytics. ([`d3bb7e6`](https://github.com/stackseehq/analytics/commit/d3bb7e615783b982f82c5277c53be2b87a72a1fb))
+- Add `VisitorsClientProvider` for [visitors.now](https://visitors.now) analytics. ([`d3bb7e6`](https://github.com/multiplehats/trakoo/commit/d3bb7e615783b982f82c5277c53be2b87a72a1fb))
 
   - Dynamically loads `cdn.visitors.now/v.js` with your project token — no npm dependency required
   - Supports `track()`, `identify()`, `pageLeave()` (page views are handled automatically by the script)
@@ -161,7 +161,7 @@
 
 ### Patch Changes
 
-- Fix fire-and-forget pageView/identify causing AbortError on Vercel ([`3910b5a`](https://github.com/stackseehq/analytics/commit/3910b5ac8aa4b0c5fdbe76fb23b6153b742fe95f))
+- Fix fire-and-forget pageView/identify causing AbortError on Vercel ([`3910b5a`](https://github.com/multiplehats/trakoo/commit/3910b5ac8aa4b0c5fdbe76fb23b6153b742fe95f))
 
   On Vercel (and other serverless platforms), when an API route returns its HTTP
   response, the Node.js process is frozen immediately. Any pending async work that
@@ -186,7 +186,7 @@
 
 ### Patch Changes
 
-- Fix Pirsch server provider for full API compliance ([`95628d8`](https://github.com/stackseehq/analytics/commit/95628d80448fb698854946506054c7bbb21785fc))
+- Fix Pirsch server provider for full API compliance ([`95628d8`](https://github.com/multiplehats/trakoo/commit/95628d80448fb698854946506054c7bbb21785fc))
 
   - Fix `event_meta` to use string values only (API requirement)
   - Remove invalid fallback URLs in `buildHit()`
@@ -198,7 +198,7 @@
 
 ### Minor Changes
 
-- Add flexible channel routing to EmitKit provider ([`f999368`](https://github.com/stackseehq/analytics/commit/f999368550187429f9470164dadbd89850258823))
+- Add flexible channel routing to EmitKit provider ([`f999368`](https://github.com/multiplehats/trakoo/commit/f999368550187429f9470164dadbd89850258823))
 
   Adds powerful channel routing capabilities to the EmitKit provider, allowing users to organize events across different EmitKit channels (similar to Slack channels) automatically.
 
@@ -265,7 +265,7 @@
 
 ### Minor Changes
 
-- Add event-level provider routing system ([`fa7278f`](https://github.com/stackseehq/analytics/commit/fa7278f96e46eb6dd7ba361f4fa6293acefc57b4))
+- Add event-level provider routing system ([`fa7278f`](https://github.com/multiplehats/trakoo/commit/fa7278f96e46eb6dd7ba361f4fa6293acefc57b4))
 
   Extends the existing provider routing system with event-level filtering, solving the "1-to-50 problem" where you need to route specific events to specific providers without excluding 49 other events.
 
@@ -316,7 +316,7 @@
 
 ### Patch Changes
 
-- Fix proxy provider queue flushing and add manual flush support ([`3b0c775`](https://github.com/stackseehq/analytics/commit/3b0c7750f04f28d695f3f413e69391994f58a048))
+- Fix proxy provider queue flushing and add manual flush support ([`3b0c775`](https://github.com/multiplehats/trakoo/commit/3b0c7750f04f28d695f3f413e69391994f58a048))
 
   **Bug Fixes:**
 
@@ -349,7 +349,7 @@
 
 ### Minor Changes
 
-- feat: add EmitKit server provider ([`b4d5561`](https://github.com/stackseehq/analytics/commit/b4d55618e362f8fd4b7f6e6e0275298c19bd7738))
+- feat: add EmitKit server provider ([`b4d5561`](https://github.com/multiplehats/trakoo/commit/b4d55618e362f8fd4b7f6e6e0275298c19bd7738))
 
   Adds support for EmitKit as a server-side analytics provider. EmitKit is a notification and event tracking service that allows you to send events to channels with rich metadata.
 
@@ -389,7 +389,7 @@
 
 ### Minor Changes
 
-- Add provider routing system for selective method control ([`e9af485`](https://github.com/stackseehq/analytics/commit/e9af485523a433f946035661939370d389435bca))
+- Add provider routing system for selective method control ([`e9af485`](https://github.com/multiplehats/trakoo/commit/e9af485523a433f946035661939370d389435bca))
 
   Introduces a new provider routing system that allows fine-grained control over which methods are called on specific providers. This enables scenarios like using Bento only for user identification and custom events while excluding page views to reduce noise.
 
@@ -483,16 +483,16 @@
 
 ### Patch Changes
 
-- Release version 0.9.1 ([`d7b9f69`](https://github.com/stackseehq/analytics/commit/d7b9f69c4e23414ca6371c661a8df417af719fe2))
+- Release version 0.9.1 ([`d7b9f69`](https://github.com/multiplehats/trakoo/commit/d7b9f69c4e23414ca6371c661a8df417af719fe2))
 
 ## 0.4.2
 
 ### Patch Changes
 
-- Fix build configuration to properly handle Node.js modules by externalizing posthog dependencies ([`3fbd302`](https://github.com/stackseehq/analytics/commit/3fbd30279e8b0fbde9ec26c3c25b98b6decb551e))
+- Fix build configuration to properly handle Node.js modules by externalizing posthog dependencies ([`3fbd302`](https://github.com/multiplehats/trakoo/commit/3fbd30279e8b0fbde9ec26c3c25b98b6decb551e))
 
 ## 0.2.0
 
 ### Minor Changes
 
-- Initial version ([`9ff5477`](https://github.com/stackseehq/analytics/commit/9ff54778beb3a4b2e32e61619c6e4e7c467fb9cf))
+- Initial version ([`9ff5477`](https://github.com/multiplehats/trakoo/commit/9ff54778beb3a4b2e32e61619c6e4e7c467fb9cf))

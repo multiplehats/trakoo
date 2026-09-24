@@ -61,9 +61,10 @@ describe("trakoo exports", () => {
 		expect(Analytics).not.toHaveProperty("flush");
 	});
 
-	it("should export provider classes (client only)", () => {
-		expect(Analytics.BaseAnalyticsProvider).toBeDefined();
-		expect(Analytics.PostHogClientProvider).toBeDefined();
+	it("exports the base provider without SDK-backed providers", () => {
+		expect(Trakoo.BaseAnalyticsProvider).toBeDefined();
+		expect(Analytics.BaseAnalyticsProvider).toBe(Trakoo.BaseAnalyticsProvider);
+		expect(Analytics).not.toHaveProperty("PostHogClientProvider");
 	});
 
 	it("should export analytics classes", () => {

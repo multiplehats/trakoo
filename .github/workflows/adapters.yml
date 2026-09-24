@@ -1,0 +1,109 @@
+name: Adapter compatibility
+
+# Tests every adapter against the oldest and newest SDK release its peer range
+# claims. The weekly run catches an SDK release that breaks a supported version
+# before users do, and opens an issue when it fails.
+
+on:
+    push:
+        branches:
+            - main
+        paths:
+            - "packages/**"
+            - "src/**"
+            - "scripts/adapter-*.mjs"
+            - ".github/workflows/adapters.yml"
+    pull_request:
+        paths:
+            - "packages/**"
+            - "src/**"
+            - "scripts/adapter-*.mjs"
+            - ".github/workflows/adapters.yml"
+    schedule:
+        - cron: "17 6 * * 1"
+    workflow_dispatch:
+
+concurrency:
+    group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+    cancel-in-progress: true
+
+permissions:
+    contents: read
+
+jobs:
+    matrix:
+        name: Plan SDK versions
+        runs-on: ubuntu-latest
+        outputs:
+            include: ${{ steps.matrix.outputs.include }}
+        steps:
+            - uses: actions/checkout@v6
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: 22
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile --prefer-offline
+
+            - name: List supported SDK versions
+              id: matrix
+              run: echo "include=$(node scripts/adapter-upkeep.mjs matrix)" >> "$GITHUB_OUTPUT"
+
+    test:
+        name: ${{ matrix.adapter }} with ${{ matrix.sdk }}@${{ matrix.version }} (${{ matrix.label }})
+        needs: matrix
+        runs-on: ubuntu-latest
+        strategy:
+            fail-fast: false
+            matrix:
+                include: ${{ fromJSON(needs.matrix.outputs.include) }}
+        env:
+            ADAPTER: ${{ matrix.adapter }}
+            SDK: ${{ matrix.sdk }}
+            SDK_VERSION: ${{ matrix.version }}
+        steps:
+            - uses: actions/checkout@v6
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: 22
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile --prefer-offline
+
+            - name: Install the SDK version under test
+              run: pnpm --filter "$ADAPTER" add --save-dev --save-exact "$SDK@$SDK_VERSION"
+
+            - name: Typecheck
+              run: pnpm --filter "$ADAPTER" typecheck
+
+            - name: Test
+              run: pnpm --filter "$ADAPTER" test
+
+    report:
+        name: Report a failing scheduled run
+        needs: [matrix, test]
+        if: failure() && github.event_name == 'schedule'
+        runs-on: ubuntu-latest
+        permissions:
+            issues: write
+        env:
+            GH_TOKEN: ${{ github.token }}
+            GH_REPO: ${{ github.repository }}
+            RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        steps:
+            - name: Open or update the tracking issue
+              run: |
+                  title="Adapter compatibility check is failing"
+                  body="The weekly adapter compatibility run failed: $RUN_URL
+
+                  An SDK release inside a supported peer range no longer passes. Fix the adapter, or narrow its peer range and release it."
+                  number=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+                  if [ -n "$number" ]; then
+                      gh issue comment "$number" --body "$body"
+                  else
+                      gh issue create --title "$title" --body "$body"
+                  fi

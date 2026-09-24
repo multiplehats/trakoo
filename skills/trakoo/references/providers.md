@@ -2,19 +2,21 @@
 
 Read the selected provider's installed constructor types and official Trakoo provider page before generating final code. Install only dependencies required by the selected side.
 
+Core `trakoo` declares no provider SDK. Providers that need no SDK ship in `trakoo/providers/client` and `trakoo/providers/server`. SDK-backed providers ship as separate adapter packages with `/client` and `/server` subpaths; install the adapter next to only the SDK for the side that uses it, for example `pnpm add @trakoo/posthog posthog-node` for server-only PostHog.
+
 Import the shared runtime registry into every analytics module and pass `events: appEvents` to each client or server factory. Provider routing selects delivery targets; it does not replace registry validation.
 
 ## Capability and dependency matrix
 
-| Provider | Browser | Server | Extra dependency | Use and constraints |
-|---|---:|---:|---|---|
-| PostHog | Yes | Yes | Browser: `posthog-js`; server: `posthog-node` | General product analytics. Keep the server key out of browser code. |
-| OpenPanel | Yes | Yes | Browser: `@openpanel/web`; server: `@openpanel/sdk` | Product and web analytics across both runtimes. |
-| Bento | Yes | Yes | Browser: none; server: `@bentonow/bento-node-sdk` | Browser page views may be anonymous. Email is required for identification, identified lifecycle events, and server events. |
-| Pirsch | Yes | Yes | None | Privacy-first analytics. Server hits require the visitor IP address and User-Agent request context. |
-| EmitKit | No | Yes | `@emitkit/js` when required by the installed version | Server-side event notifications; verify its current constructor from installed types. |
-| Visitors | Yes | No | None | Privacy-friendly web analytics. `identify()` does not itself require persistence; persistence enables cross-session tracking and revenue attribution. Page views are automatic. |
-| Proxy | Yes | Ingestion helpers | None | First-party batching from `ProxyProvider` to `createProxyHandler` or `ingestProxyEvents`. It is transport, not an analytics vendor. |
+| Provider | Browser | Server | Import from | Install beside `trakoo` | Use and constraints |
+|---|---:|---:|---|---|---|
+| PostHog | Yes | Yes | `@trakoo/posthog/client`, `@trakoo/posthog/server` | `@trakoo/posthog` plus browser `posthog-js` and/or server `posthog-node` | General product analytics. Keep the server key out of browser code. |
+| OpenPanel | Yes | Yes | `@trakoo/openpanel/client`, `@trakoo/openpanel/server` | `@trakoo/openpanel` plus browser `@openpanel/web` and/or server `@openpanel/sdk` | Product and web analytics across both runtimes. |
+| Bento | Yes | Yes | Browser: `trakoo/providers/client`; server: `@trakoo/bento/server` | Browser: none; server: `@trakoo/bento` and `@bentonow/bento-node-sdk` | Browser page views may be anonymous. Email is required for identification, identified lifecycle events, and server events. |
+| Pirsch | Yes | Yes | `trakoo/providers/client`, `trakoo/providers/server` | None | Privacy-first analytics. Server hits require the visitor IP address and User-Agent request context. |
+| EmitKit | No | Yes | `@trakoo/emitkit/server` | `@trakoo/emitkit` and `@emitkit/js` | Server-side event notifications; verify its current constructor from installed types. |
+| Visitors | Yes | No | `trakoo/providers/client` | None | Privacy-friendly web analytics. `identify()` does not itself require persistence; persistence enables cross-session tracking and revenue attribution. Page views are automatic. |
+| Proxy | Yes | Ingestion helpers | `trakoo/providers/client`, `trakoo/providers/server` | None | First-party batching from `ProxyProvider` to `createProxyHandler` or `ingestProxyEvents`. It is transport, not an analytics vendor. |
 
 ## Choose by event semantics
 
@@ -49,8 +51,8 @@ Both PostHog constructors take a project capture credential (project API key), n
 Map the browser-public project key to client `token` and the deployment's server value to server `apiKey`:
 
 ```ts
-import { PostHogClientProvider } from "trakoo/providers/client";
-import { PostHogServerProvider } from "trakoo/providers/server";
+import { PostHogClientProvider } from "@trakoo/posthog/client";
+import { PostHogServerProvider } from "@trakoo/posthog/server";
 
 const clientProvider = new PostHogClientProvider({
 	token: import.meta.env.VITE_POSTHOG_PROJECT_KEY,
@@ -85,7 +87,7 @@ The current server constructor is `BentoServerProvider({ siteUuid, authenticatio
 
 ```ts
 import { createServerAnalytics } from "trakoo/server";
-import { BentoServerProvider } from "trakoo/providers/server";
+import { BentoServerProvider } from "@trakoo/bento/server";
 import { appEvents } from "./events";
 
 export async function createBentoAnalytics() {
@@ -131,7 +133,7 @@ EmitKit is server-only. Construct `EmitKitServerProvider` with the server-only `
 
 ```ts
 import { createServerAnalytics } from "trakoo/server";
-import { EmitKitServerProvider } from "trakoo/providers/server";
+import { EmitKitServerProvider } from "@trakoo/emitkit/server";
 import { appEvents } from "./events";
 
 export async function createEmitKitAnalytics() {
@@ -157,7 +159,7 @@ For request-scoped ownership, create a fresh provider and analytics pair and shu
 `OpenPanelClientProvider({ clientId })` in the browser and `OpenPanelServerProvider({ clientId, clientSecret })` on the server. The client ID is browser-public; the client secret is server-only.
 
 ```ts
-import { OpenPanelServerProvider } from "trakoo/providers/server";
+import { OpenPanelServerProvider } from "@trakoo/openpanel/server";
 
 new OpenPanelServerProvider({
 	clientId: process.env.OPENPANEL_CLIENT_ID!,
@@ -219,7 +221,7 @@ Pass the same `appEvents` registry to the browser analytics factory and the inge
 
 ## Custom providers
 
-Extend `BaseAnalyticsProvider` from the environment-specific provider export and implement the `AnalyticsProvider` contract. Preserve Trakoo's event `action`, properties, and context; do not put vendor-specific behavior into shared event definitions.
+Extend `BaseAnalyticsProvider` from the environment-specific export (`trakoo/client` or `trakoo/server`), or from the root `trakoo` entry for a provider package shared by both runtimes, and implement the `AnalyticsProvider` contract. Preserve Trakoo's event `action`, properties, and context; do not put vendor-specific behavior into shared event definitions.
 
 ## Verification
 

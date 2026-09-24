@@ -340,7 +340,7 @@ export class PirschServerProvider extends BaseAnalyticsProvider {
 		const hit: PirschHit = {
 			url: `https://${this.config.hostname}/identify`,
 			ip: "0.0.0.0",
-			user_agent: "stacksee-analytics",
+			user_agent: "trakoo",
 			...(this.config.disableBotFilter && { disable_bot_filter: true }),
 		};
 
@@ -445,7 +445,7 @@ export class PirschServerProvider extends BaseAnalyticsProvider {
 		const hit: PirschHit = {
 			url: `https://${this.config.hostname}/session-reset`,
 			ip: "0.0.0.0",
-			user_agent: "stacksee-analytics",
+			user_agent: "trakoo",
 			...(this.config.disableBotFilter && { disable_bot_filter: true }),
 		};
 

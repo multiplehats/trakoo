@@ -8,10 +8,10 @@ This guide starts with a local console provider, then switches to PostHog and ad
 ## 1. Install
 
 ```bash
-pnpm install trakoo
+pnpm add trakoo
 ```
 
-See [Installation](/docs/installation) for npm, yarn, bun, and the provider SDK matrix.
+See [Installation](/docs/installation) for npm, yarn, bun, and the provider package matrix.
 
 ## 2. Define your events
 
@@ -165,13 +165,15 @@ The console provider receives an event whose `action` is `button_clicked` and wh
 
 ## 5. Connect a real provider
 
+Install the PostHog provider package with PostHog's browser SDK:
+
 ```bash
-pnpm install posthog-js
+pnpm add @trakoo/posthog posthog-js
 ```
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 import { appEvents } from './events';
 
 export const analytics = createClientAnalytics({
@@ -209,9 +211,15 @@ See [Identifying Users](/docs/core-concepts/identifying-users) to type custom tr
 
 ## 7. Track critical events on the server
 
+The server provider uses PostHog's Node SDK:
+
+```bash
+pnpm add posthog-node
+```
+
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import { PostHogServerProvider } from 'trakoo/providers/server';
+import { PostHogServerProvider } from '@trakoo/posthog/server';
 import { appEvents } from './events';
 
 export function createRequestAnalytics() {
@@ -278,9 +286,9 @@ The schema input controls accepted call-site values; its validated output is wha
 ```typescript
 import {
   BentoClientProvider,
-  PostHogClientProvider,
   VisitorsClientProvider
 } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 
 export const analytics = createClientAnalytics({
   events: appEvents,

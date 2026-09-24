@@ -33,17 +33,17 @@ Providers translate trakoo events into the APIs of the services you already use.
 
 ## Support matrix
 
-| Provider | Client import | Server import | Best for |
-|----------|---------------|---------------|----------|
-| PostHog | `PostHogClientProvider` | `PostHogServerProvider` | Product analytics across browser and backend |
-| OpenPanel | `OpenPanelClientProvider` | `OpenPanelServerProvider` | Open-source web and product analytics |
-| Bento | `BentoClientProvider` | `BentoServerProvider` | Identified lifecycle events and email automation |
-| Pirsch | `PirschClientProvider` | `PirschServerProvider` | Privacy-friendly page views and lightweight events |
-| EmitKit | — | `EmitKitServerProvider` | Notifications and activity channels |
-| Visitors | `VisitorsClientProvider` | — | Lightweight web analytics and revenue attribution |
-| Proxy | `ProxyProvider` | `ingestProxyEvents`, `createProxyHandler` | Sending browser events through your own API |
+| Provider | Client import | Server import | Package | Best for |
+|----------|---------------|---------------|---------|----------|
+| PostHog | `PostHogClientProvider` | `PostHogServerProvider` | `@trakoo/posthog` | Product analytics across browser and backend |
+| OpenPanel | `OpenPanelClientProvider` | `OpenPanelServerProvider` | `@trakoo/openpanel` | Open-source web and product analytics |
+| Bento | `BentoClientProvider` | `BentoServerProvider` | Client: `trakoo`; server: `@trakoo/bento` | Identified lifecycle events and email automation |
+| Pirsch | `PirschClientProvider` | `PirschServerProvider` | `trakoo` | Privacy-friendly page views and lightweight events |
+| EmitKit | — | `EmitKitServerProvider` | `@trakoo/emitkit` | Notifications and activity channels |
+| Visitors | `VisitorsClientProvider` | — | `trakoo` | Lightweight web analytics and revenue attribution |
+| Proxy | `ProxyProvider` | `ingestProxyEvents`, `createProxyHandler` | `trakoo` | Sending browser events through your own API |
 
-Use client providers from `trakoo/providers/client` and server providers from `trakoo/providers/server`.
+Providers included in `trakoo` import from `trakoo/providers/client` and `trakoo/providers/server`. Providers that wrap a vendor SDK ship as their own package; import them from its `/client` or `/server` subpath, such as `@trakoo/posthog/client`, and install only the SDK for that side. See [Installation](/docs/installation#provider-packages).
 
 ## One event, multiple destinations
 
@@ -51,9 +51,9 @@ Use client providers from `trakoo/providers/client` and server providers from `t
 import { createClientAnalytics } from 'trakoo/client';
 import {
   BentoClientProvider,
-  PostHogClientProvider,
   VisitorsClientProvider
 } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 import { appEvents } from '@/lib/events';
 
 const analytics = createClientAnalytics({
@@ -89,10 +89,8 @@ Some providers should not receive every call. Bento is usually better for identi
 
 ```typescript
 import { createClientAnalytics } from 'trakoo/client';
-import {
-  BentoClientProvider,
-  PostHogClientProvider
-} from 'trakoo/providers/client';
+import { BentoClientProvider } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 import { appEvents } from '@/lib/events';
 
 const analytics = createClientAnalytics({
@@ -144,10 +142,8 @@ export const analytics = createClientAnalytics({
 
 ```typescript title="app/api/events/route.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import {
-  EmitKitServerProvider,
-  createProxyHandler
-} from 'trakoo/providers/server';
+import { createProxyHandler } from 'trakoo/providers/server';
+import { EmitKitServerProvider } from '@trakoo/emitkit/server';
 import { appEvents } from '@/lib/events';
 
 const serverAnalytics = createServerAnalytics({

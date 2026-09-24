@@ -37,10 +37,10 @@
 	},
 	"peerDependencies": {
 		"trakoo": "workspace:^",
-		"@bentonow/bento-node-sdk": "^0.2.1"
+		"@bentonow/bento-node-sdk": "^0.2.1 || ^2.0.0"
 	},
 	"devDependencies": {
 		"trakoo": "workspace:*",
-		"@bentonow/bento-node-sdk": "^0.2.1"
+		"@bentonow/bento-node-sdk": "^2.0.0"
 	}
 }

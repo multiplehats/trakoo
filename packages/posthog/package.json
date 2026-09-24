@@ -55,7 +55,7 @@
 	},
 	"devDependencies": {
 		"trakoo": "workspace:*",
-		"posthog-js": "^1.408.1",
-		"posthog-node": "^5.46.1"
+		"posthog-js": "^1.434.12",
+		"posthog-node": "^5.53.0"
 	}
 }

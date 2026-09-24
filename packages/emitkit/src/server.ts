@@ -5,6 +5,23 @@ import {
 } from "trakoo";
 import type { EmitKit } from "@emitkit/js";
 
+const DEFAULT_TIMEOUT = 5000;
+
+/** Identifies trakoo as the sender of each event in EmitKit. */
+const EVENT_SOURCE = "trakoo";
+
+// EmitKit rejects the whole event (HTTP 400) when a field exceeds these limits.
+// https://api.emitkit.com/api/openapi.json, CreateEventRequest
+const MAX_TAGS = 20;
+const MAX_TAG_LENGTH = 50;
+const MAX_DESCRIPTION_LENGTH = 5000;
+
+const EMITKIT_ERROR_NAMES = new Set([
+	"EmitKitError",
+	"RateLimitError",
+	"ValidationError",
+]);
+
 /**
  * Configuration for EmitKit server provider
  */
@@ -101,7 +118,7 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 			const { EmitKit } = await import("@emitkit/js");
 
 			this.client = new EmitKit(this.config.apiKey, {
-				...(this.config.timeout && { timeout: this.config.timeout }),
+				timeout: this.config.timeout ?? DEFAULT_TIMEOUT,
 			});
 
 			this.initialized = true;
@@ -120,8 +137,9 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 	): Promise<void> {
 		if (!this.isEnabled() || !this.initialized || !this.client) return;
 
-		// Extract email from traits
-		const email = (traits?.email as string | undefined) || userId;
+		// Extract email from traits; EmitKit rejects non-string aliases.
+		const email =
+			typeof traits?.email === "string" && traits.email ? traits.email : userId;
 
 		// Build aliases array - EmitKit supports multiple identifiers
 		const aliases: string[] = [];
@@ -144,7 +162,9 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 		try {
 			const result = await this.client.identify({
 				user_id: userId,
-				properties: traits || {},
+				// EmitKit replaces the stored properties on every identify call, so
+				// only send them when the caller supplied traits.
+				...(traits && { properties: traits }),
 				aliases: aliases.length > 0 ? aliases : undefined,
 			});
 
@@ -160,7 +180,7 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 			}
 		} catch (error) {
 			console.error(
-				`[EmitKit-Server] Failed to identify user (${this.getErrorClass(error)})`,
+				`[EmitKit-Server] Failed to identify user (${this.describeError(error)})`,
 			);
 		}
 	}
@@ -184,20 +204,7 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 			category: event.category,
 			timestamp: event.timestamp || Date.now(),
 			...(event.sessionId && { sessionId: event.sessionId }),
-			...(context?.page && {
-				page: {
-					url: context.page.url,
-					host: context.page.host,
-					path: context.page.path,
-					title: context.page.title,
-					protocol: context.page.protocol,
-					referrer: context.page.referrer,
-					...(context.page.search && { search: context.page.search }),
-				},
-			}),
-			...(context?.device && { device: context.device }),
-			...(context?.utm && { utm: context.utm }),
-			...(context?.server && { server: context.server }),
+			...this.getContextMetadata(context),
 		};
 
 		// Extract tags from category
@@ -215,6 +222,12 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 			tags.push(...(cleanProperties.tags as string[]));
 		}
 
+		// Keep tags within EmitKit's limits; the raw `tags` property stays in
+		// metadata.
+		const validTags = [
+			...new Set(tags.filter((tag) => tag.length <= MAX_TAG_LENGTH)),
+		].slice(0, MAX_TAGS);
+
 		// Determine channel name using resolution logic
 		const channelName = this.resolveChannelName(event);
 
@@ -224,18 +237,18 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 				title,
 				description: this.getEventDescription(event, context),
 				icon: this.getEventIcon(event.category),
-				tags: tags.length > 0 ? tags : undefined,
+				tags: validTags.length > 0 ? validTags : undefined,
 				metadata,
 				userId: userId || null,
 				notify: this.config.notify ?? true,
 				displayAs: this.config.displayAs || "notification",
-				source: "stacksee-analytics",
+				source: EVENT_SOURCE,
 			});
 
 			this.log("Tracked event");
 		} catch (error) {
 			console.error(
-				`[EmitKit-Server] Failed to track event (${this.getErrorClass(error)})`,
+				`[EmitKit-Server] Failed to track event (${this.describeError(error)})`,
 			);
 			throw error;
 		}
@@ -257,20 +270,7 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 		const metadata: Record<string, unknown> = {
 			...cleanProperties,
 			date: new Date().toISOString(),
-			...(context?.page && {
-				page: {
-					url: context.page.url,
-					host: context.page.host,
-					path: context.page.path,
-					title: context.page.title,
-					protocol: context.page.protocol,
-					referrer: context.page.referrer,
-					...(context.page.search && { search: context.page.search }),
-				},
-			}),
-			...(context?.device && { device: context.device }),
-			...(context?.utm && { utm: context.utm }),
-			...(context?.server && { server: context.server }),
+			...this.getContextMetadata(context),
 		};
 
 		// Create a synthetic event for channel resolution
@@ -295,13 +295,13 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 				userId: userId || null,
 				notify: false, // Don't notify for page views by default
 				displayAs: "message",
-				source: "stacksee-analytics",
+				source: EVENT_SOURCE,
 			});
 
 			this.log("Tracked page view");
 		} catch (error) {
 			console.error(
-				`[EmitKit-Server] Failed to track page view (${this.getErrorClass(error)})`,
+				`[EmitKit-Server] Failed to track page view (${this.describeError(error)})`,
 			);
 		}
 	}
@@ -325,6 +325,59 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 	// ============================================================================
 
 	/**
+	 * Request context attached to event metadata. EmitKit shows metadata in
+	 * team feeds and notifications, so the visitor IP address (which proxy
+	 * ingestion adds to `device`) is never forwarded.
+	 */
+	private getContextMetadata(context?: EventContext): Record<string, unknown> {
+		const device = context?.device && withoutIp(context.device);
+		const server = context?.server && withoutIp(context.server);
+
+		return {
+			...(context?.page && {
+				page: {
+					url: context.page.url,
+					host: context.page.host,
+					path: context.page.path,
+					title: context.page.title,
+					protocol: context.page.protocol,
+					referrer: context.page.referrer,
+					...(context.page.search && { search: context.page.search }),
+				},
+			}),
+			...(device && Object.keys(device).length > 0 && { device }),
+			...(context?.utm && { utm: context.utm }),
+			...(server && Object.keys(server).length > 0 && { server }),
+		};
+	}
+
+	/**
+	 * Describe an SDK failure for logs. EmitKit errors add their status code and
+	 * request id, which tell auth, validation, and rate-limit failures apart; the
+	 * message and response body are never logged.
+	 */
+	private describeError(error: unknown): string {
+		const errorClass = this.getErrorClass(error);
+		try {
+			if (!(error instanceof Error) || !EMITKIT_ERROR_NAMES.has(error.name)) {
+				return errorClass;
+			}
+			const statusCode = Reflect.get(error, "statusCode");
+			const requestId = Reflect.get(error, "requestId");
+			return [
+				error.name,
+				typeof statusCode === "number" ? statusCode : undefined,
+				typeof requestId === "string" ? `request ${requestId}` : undefined,
+			]
+				.filter((part) => part !== undefined)
+				.join(" ");
+		} catch {
+			// Error description must never replace the original failure.
+			return errorClass;
+		}
+	}
+
+	/**
 	 * Format event action into a human-readable title
 	 * Converts: "user_signed_up" -> "User Signed Up"
 	 */
@@ -342,12 +395,13 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 		event: BaseEvent,
 		context?: EventContext,
 	): string | undefined {
-		// Use explicit description from properties if available
+		// Use explicit description from properties if available. The full value
+		// stays in metadata.
 		if (
 			event.properties?.description &&
 			typeof event.properties.description === "string"
 		) {
-			return event.properties.description;
+			return truncate(event.properties.description, MAX_DESCRIPTION_LENGTH);
 		}
 
 		// Generate default description based on category
@@ -408,4 +462,20 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 		// Priority 3: Use default channel
 		return defaultChannel || this.config.channelName || "general";
 	}
+}
+
+function withoutIp<T extends { ip?: unknown }>(block: T): Omit<T, "ip"> {
+	const { ip: _ip, ...rest } = block;
+	return rest;
+}
+
+/**
+ * Cut a string to at most `maxLength` UTF-16 code units without leaving half
+ * of a surrogate pair at the end.
+ */
+function truncate(value: string, maxLength: number): string {
+	if (value.length <= maxLength) return value;
+	const cut = value.slice(0, maxLength);
+	const last = cut.charCodeAt(cut.length - 1);
+	return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
 }

@@ -34,6 +34,8 @@ export const serverAnalytics = createServerAnalytics({
 
 EmitKit is server-only. To send browser events to it, forward them through trakoo's [Proxy provider](https://trakoo.co/docs/providers/proxy).
 
+The provider also sends page views, as silent events. EmitKit allows 100 requests per minute per API key by default, so if you only want explicit events in your feeds, register it as `{ provider: new EmitKitServerProvider({ ... }), exclude: ['pageView'] }`.
+
 ## Documentation
 
 https://trakoo.co/docs/providers/emitkit

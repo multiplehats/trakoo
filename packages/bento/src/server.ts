@@ -116,12 +116,19 @@ export class BentoServerProvider extends BaseAnalyticsProvider {
 			return;
 		}
 
-		// Add subscriber with traits using the V1 API
-		const fields = traits ? { ...traits } : {};
-		fields.email = undefined; // Remove email from fields since it's passed separately
+		// Update the subscriber's fields. Bento creates the subscriber when needed.
+		// V1.addSubscriber is not used: it sends $subscribe, which subscribes the
+		// person to marketing email and re-runs subscribe automations on every call.
+		const { email: _email, ...fields } = traits ?? {};
 
 		try {
-			await this.client.V1.addSubscriber({ email, fields });
+			const queued = await this.client.V1.updateFields({ email, fields });
+			if (!queued) {
+				console.error(
+					"[Bento-Server] Failed to identify user (not queued by Bento)",
+				);
+				return;
+			}
 			this.log("Identified user");
 		} catch (error) {
 			console.error(
@@ -178,12 +185,21 @@ export class BentoServerProvider extends BaseAnalyticsProvider {
 		const fields = context?.user?.traits || {};
 
 		try {
-			await this.client.V1.track({
+			const queued = await this.client.V1.track({
 				email,
 				type: `$${event.action}`,
 				details,
 				fields,
+				...(event.timestamp !== undefined && {
+					date: new Date(event.timestamp),
+				}),
 			});
+			if (!queued) {
+				console.error(
+					"[Bento-Server] Failed to track event (not queued by Bento)",
+				);
+				return;
+			}
 
 			this.log("Tracked event");
 		} catch (error) {
@@ -237,7 +253,18 @@ export class BentoServerProvider extends BaseAnalyticsProvider {
 		const fields = context?.user?.traits || {};
 
 		try {
-			await this.client.V1.track({ email, type: "$view", details, fields });
+			const queued = await this.client.V1.track({
+				email,
+				type: "$view",
+				details,
+				fields,
+			});
+			if (!queued) {
+				console.error(
+					"[Bento-Server] Failed to track page view (not queued by Bento)",
+				);
+				return;
+			}
 			this.log("Tracked page view");
 		} catch (error) {
 			console.error(

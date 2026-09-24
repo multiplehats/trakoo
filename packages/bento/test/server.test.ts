@@ -2,7 +2,7 @@ import { BentoServerProvider } from "../src/server.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { sdk } = vi.hoisted(() => ({
-	sdk: { addSubscriber: vi.fn(), track: vi.fn() },
+	sdk: { updateFields: vi.fn(), track: vi.fn() },
 }));
 
 vi.mock("@bentonow/bento-node-sdk", () => ({
@@ -16,8 +16,8 @@ describe("BentoServerProvider", () => {
 
 	beforeEach(() => {
 		for (const mock of Object.values(sdk)) mock.mockReset();
-		sdk.addSubscriber.mockResolvedValue({});
-		sdk.track.mockResolvedValue({});
+		sdk.updateFields.mockResolvedValue(true);
+		sdk.track.mockResolvedValue(true);
 		warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 	});
 
@@ -36,9 +36,9 @@ describe("BentoServerProvider", () => {
 		await provider.initialize();
 
 		await provider.identify("first@example.com", { plan: "pro" });
-		expect(sdk.addSubscriber).toHaveBeenCalledWith({
+		expect(sdk.updateFields).toHaveBeenCalledWith({
 			email: "first@example.com",
-			fields: { plan: "pro", email: undefined },
+			fields: { plan: "pro" },
 		});
 
 		await provider.track({

@@ -44,6 +44,13 @@ await serverAnalytics.track('subscription_renewed', { plan: 'pro' }, {
 });
 ```
 
+## What reaches Bento
+
+- `identify()` sends `$update_fields`, so traits become subscriber fields. It does not send `$subscribe`. To subscribe someone, call the Bento SDK's `V1.addSubscriber()` directly.
+- `track()` sends `$<event name>`. For example, `subscription_renewed` arrives as `$subscription_renewed`. The event timestamp becomes the Bento event `date`.
+- `pageView()` sends `$view`.
+- Failed requests, and events Bento does not queue, are logged without the event payload and are not thrown. Set `logErrors: true` to have the Bento SDK log the HTTP response of failed requests.
+
 ## Documentation
 
 https://trakoo.co/docs/providers/bento

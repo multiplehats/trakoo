@@ -39,7 +39,7 @@ Import from `trakoo/client` and create one instance for the session.
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 import { appEvents } from './events';
 
 export const analytics = createClientAnalytics({
@@ -122,7 +122,7 @@ Import from `trakoo/server`. The server API is stateless: user state is never re
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import { PostHogServerProvider } from 'trakoo/providers/server';
+import { PostHogServerProvider } from '@trakoo/posthog/server';
 import { appEvents } from './events';
 
 export function createRequestAnalytics() {
@@ -142,7 +142,7 @@ Each request creates a fresh analytics/provider pair, uses it inside `try`, and 
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import { PostHogServerProvider } from 'trakoo/providers/server';
+import { PostHogServerProvider } from '@trakoo/posthog/server';
 import { appEvents } from './events';
 
 export const processAnalytics = createServerAnalytics({
@@ -280,7 +280,7 @@ You get client context — where they clicked, how long they took — alongside 
 
 ## Import paths
 
-Use the environment-specific entry points. The root `trakoo` package exports shared types plus environment-neutral helpers such as `defineEvents`, `typed`, and `noProperties`. Factories stay on `trakoo/client` and `trakoo/server`, and there is no combined `trakoo/providers` export.
+Use the environment-specific entry points. The root `trakoo` package exports shared types plus environment-neutral helpers such as `defineEvents`, `typed`, and `noProperties`. Factories stay on `trakoo/client` and `trakoo/server`, and there is no combined `trakoo/providers` export. Provider packages such as `@trakoo/posthog` follow the same split and have no root export: import from their `/client` or `/server` subpath.
 
 <Tabs>
 <Tab title="Client">
@@ -288,12 +288,12 @@ Use the environment-specific entry points. The root `trakoo` package exports sha
 ```typescript
 // Correct — browser-safe code only.
 import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 
 // Avoid — factories are environment-specific.
 import { createClientAnalytics } from 'trakoo';
-// Avoid — there is no provider aggregate export.
-import { PostHogClientProvider } from 'trakoo/providers';
+// Avoid — provider packages have no root export.
+import { PostHogClientProvider } from '@trakoo/posthog';
 ```
 
 </Tab>
@@ -302,12 +302,12 @@ import { PostHogClientProvider } from 'trakoo/providers';
 ```typescript
 // Correct — Node and edge code only.
 import { createServerAnalytics } from 'trakoo/server';
-import { PostHogServerProvider } from 'trakoo/providers/server';
+import { PostHogServerProvider } from '@trakoo/posthog/server';
 
 // Avoid — factories are environment-specific.
 import { createServerAnalytics } from 'trakoo';
-// Avoid — there is no provider aggregate export.
-import { PostHogServerProvider } from 'trakoo/providers';
+// Avoid — provider packages have no root export.
+import { PostHogServerProvider } from '@trakoo/posthog';
 ```
 
 </Tab>

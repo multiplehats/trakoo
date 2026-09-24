@@ -2,15 +2,6 @@ import { resolve } from "node:path";
 import { defineConfig } from "vite";
 import dts from "vite-plugin-dts";
 
-const providerSdkPackages = [
-	"@bentonow/bento-node-sdk",
-	"@emitkit/js",
-	"@openpanel/sdk",
-	"@openpanel/web",
-	"posthog-js",
-	"posthog-node",
-] as const;
-
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
 	return {
@@ -25,9 +16,6 @@ export default defineConfig(({ mode }) => {
 					"providers/server": resolve(__dirname, "src/providers/server.ts"),
 				},
 				formats: ["es"],
-			},
-			rollupOptions: {
-				external: providerSdkPackages,
 			},
 			ssr: false,
 		},

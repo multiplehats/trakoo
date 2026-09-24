@@ -11,10 +11,10 @@ trakoo runs the same in the browser and on the server, which maps onto SvelteKit
 <Step title="Install trakoo and your provider SDK">
 
 ```bash
-npm install trakoo posthog-js posthog-node
+npm install trakoo @trakoo/posthog posthog-js posthog-node
 ```
 
-PostHog ships separate browser and Node packages. Other providers differ — see [Providers](/docs/providers) for each one's requirements.
+`@trakoo/posthog` contains the PostHog providers. PostHog ships separate browser and Node SDKs; this guide uses both. Other providers differ — see [Providers](/docs/providers) for each one's requirements.
 
 </Step>
 <Step title="Set environment variables">
@@ -85,7 +85,7 @@ Create one stateful client instance and import it wherever you track in the brow
 
 ```typescript title="src/lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 import { PUBLIC_POSTHOG_KEY, PUBLIC_POSTHOG_HOST } from '$env/static/public';
 import { appEvents } from './events';
 
@@ -184,7 +184,7 @@ Server analytics is stateless and edge-ready: pass user context with each call. 
 
 ```typescript title="src/lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import { PostHogServerProvider } from 'trakoo/providers/server';
+import { PostHogServerProvider } from '@trakoo/posthog/server';
 import { POSTHOG_API_KEY } from '$env/static/private';
 import { PUBLIC_POSTHOG_HOST } from '$env/static/public';
 import { appEvents } from './events';

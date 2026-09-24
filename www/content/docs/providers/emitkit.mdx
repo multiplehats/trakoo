@@ -15,8 +15,10 @@ EmitKit is not a product-analytics dashboard. Pair it with a provider like [Post
 
 ## Installation
 
+The EmitKit provider ships in the `@trakoo/emitkit` package and uses the EmitKit JavaScript SDK.
+
 ```bash
-pnpm install @emitkit/js
+pnpm add trakoo @trakoo/emitkit @emitkit/js
 ```
 
 ## Client-side usage
@@ -27,7 +29,7 @@ EmitKit is server-only — its SDK has no browser package. To capture browser ev
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from "trakoo/server";
-import { EmitKitServerProvider } from "trakoo/providers/server";
+import { EmitKitServerProvider } from "@trakoo/emitkit/server";
 import { appEvents } from "@/lib/events";
 
 export const serverAnalytics = createServerAnalytics({
@@ -120,10 +122,8 @@ await analytics.track("button_clicked", { buttonId: "signup" });
 
 ```typescript title="app/api/analytics/route.ts"
 import { createServerAnalytics } from "trakoo/server";
-import {
-  EmitKitServerProvider,
-  ingestProxyEvents,
-} from "trakoo/providers/server";
+import { ingestProxyEvents } from "trakoo/providers/server";
+import { EmitKitServerProvider } from "@trakoo/emitkit/server";
 import { appEvents } from "@/lib/events";
 
 const serverAnalytics = createServerAnalytics({

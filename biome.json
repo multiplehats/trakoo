@@ -9,6 +9,7 @@
 		"ignoreUnknown": false,
 		"ignore": [
 			"dist/*",
+			"packages/*/dist/*",
 			"node_modules/*",
 			"coverage/*",
 			"www/.next/*",

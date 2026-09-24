@@ -38,18 +38,22 @@
 		"LICENSE"
 	],
 	"scripts": {
-		"test": "vitest run",
+		"test": "vitest run && pnpm test:adapters",
+		"test:core": "vitest run",
+		"test:adapters": "pnpm --filter \"./packages/*\" test",
 		"test:watch": "vitest",
 		"test:e2e": "node e2e/pirsch.test.js",
 		"test:e2e:server": "node e2e/test-app/server.js",
 		"test:e2e:visitors": "node e2e/visitors.test.js",
 		"test:e2e:visitors:server": "node e2e/visitors-test-app/server.js",
-		"build": "vite build",
+		"build": "pnpm build:core && pnpm build:adapters",
+		"build:core": "vite build",
+		"build:adapters": "pnpm --filter \"./packages/*\" build",
 		"verify:package": "node scripts/verify-package.mjs",
 		"dev": "pnpm --filter @stacksee/docs dev",
 		"build:docs": "pnpm --filter @stacksee/docs build",
 		"deploy": "npm publish",
-		"typecheck": "tsc --noEmit",
+		"typecheck": "tsc --noEmit && pnpm --filter \"./packages/*\" typecheck",
 		"ci:publish": "pnpm build && changeset publish",
 		"lint": "biome lint .",
 		"format": "biome format --write .",
@@ -76,54 +80,21 @@
 	},
 	"homepage": "https://github.com/multiplehats/trakoo#readme",
 	"devDependencies": {
-		"@bentonow/bento-node-sdk": "^0.2.1",
 		"@biomejs/biome": "1.9.4",
 		"@changesets/cli": "^2.31.1",
-		"@emitkit/js": "^2.1.0",
-		"@openpanel/sdk": "^1.3.1",
-		"@openpanel/web": "^1.4.1",
 		"@svitejs/changesets-changelog-github-compact": "^1.2.0",
 		"@types/node": "^20.19.43",
 		"@vitest/coverage-v8": "3.1.4",
 		"globals": "^15.15.0",
 		"jsdom": "^26.1.0",
 		"playwright": "^1.62.0",
-		"posthog-js": "^1.408.1",
-		"posthog-node": "^5.46.1",
 		"prettier": "^3.9.6",
+		"semver": "^7.8.5",
 		"typescript": "~5.5.4",
 		"vite": "^6.4.3",
 		"vite-plugin-dts": "^4.5.4",
 		"vitest": "3.1.4",
 		"zod": "^4.4.3"
-	},
-	"peerDependencies": {
-		"@bentonow/bento-node-sdk": "^0.2.1",
-		"@emitkit/js": "^2.1.0",
-		"@openpanel/sdk": "^1.3.1",
-		"@openpanel/web": "^1.4.1",
-		"posthog-js": "^1.268.2",
-		"posthog-node": "^5.9.0"
-	},
-	"peerDependenciesMeta": {
-		"@bentonow/bento-node-sdk": {
-			"optional": true
-		},
-		"@emitkit/js": {
-			"optional": true
-		},
-		"@openpanel/sdk": {
-			"optional": true
-		},
-		"@openpanel/web": {
-			"optional": true
-		},
-		"posthog-js": {
-			"optional": true
-		},
-		"posthog-node": {
-			"optional": true
-		}
 	},
 	"engines": {
 		"pnpm": ">=9.0.0",

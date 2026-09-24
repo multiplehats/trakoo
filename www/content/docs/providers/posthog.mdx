@@ -15,19 +15,23 @@ If you only need lightweight page views, a privacy-friendly option like [Pirsch]
 
 ## Installation
 
-Install trakoo alongside the PostHog SDKs you need — `posthog-js` for the client, `posthog-node` for the server.
+The PostHog providers ship in the `@trakoo/posthog` package. Install it alongside trakoo and only the PostHog SDK for the side you use — `posthog-js` for the client, `posthog-node` for the server.
 
 ```bash
-pnpm install trakoo posthog-js posthog-node
+# Client
+pnpm add trakoo @trakoo/posthog posthog-js
+
+# Server
+pnpm add trakoo @trakoo/posthog posthog-node
 ```
 
 ## Client-side usage
 
-Use `PostHogClientProvider` from `trakoo/providers/client`. It accepts every option from the PostHog JS SDK, so anything you can pass to `posthog.init()` works here.
+Use `PostHogClientProvider` from `@trakoo/posthog/client`. It accepts every option from the PostHog JS SDK, so anything you can pass to `posthog.init()` works here.
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from "trakoo/client";
-import { PostHogClientProvider } from "trakoo/providers/client";
+import { PostHogClientProvider } from "@trakoo/posthog/client";
 import { appEvents } from "@/lib/events";
 
 export const analytics = createClientAnalytics({
@@ -65,11 +69,11 @@ do not make browser identity disposable across normal navigation or reloads.
 
 ## Server-side usage
 
-Use `PostHogServerProvider` from `trakoo/providers/server`. Server analytics is stateless, so pass user context with each call.
+Use `PostHogServerProvider` from `@trakoo/posthog/server`. Server analytics is stateless, so pass user context with each call.
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from "trakoo/server";
-import { PostHogServerProvider } from "trakoo/providers/server";
+import { PostHogServerProvider } from "@trakoo/posthog/server";
 import { appEvents } from "@/lib/events";
 
 export function createRequestAnalytics() {

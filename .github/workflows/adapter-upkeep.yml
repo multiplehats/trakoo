@@ -1,0 +1,96 @@
+name: Adapter upkeep
+
+# Moves each adapter onto its SDKs' latest releases and opens one pull request
+# per adapter. A release outside the peer range widens it and adds a changeset.
+#
+# Pull requests opened with the default GITHUB_TOKEN do not trigger other
+# workflows, so this job runs the adapter's checks itself and opens a draft
+# when they fail. Set an ADAPTER_UPKEEP_TOKEN secret (a fine-grained token or
+# GitHub App token with contents and pull-requests write access) to have CI run
+# on these pull requests as well.
+
+on:
+    schedule:
+        - cron: "37 6 * * 1"
+    workflow_dispatch:
+
+permissions:
+    contents: read
+
+jobs:
+    plan:
+        name: Find SDK releases
+        runs-on: ubuntu-latest
+        outputs:
+            adapters: ${{ steps.plan.outputs.adapters }}
+        steps:
+            - uses: actions/checkout@v6
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: 22
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile --prefer-offline
+
+            - name: List adapters with newer SDK releases
+              id: plan
+              run: echo "adapters=$(node scripts/adapter-upkeep.mjs plan)" >> "$GITHUB_OUTPUT"
+
+    update:
+        name: Update ${{ matrix.adapter }}
+        needs: plan
+        if: needs.plan.outputs.adapters != '[]'
+        runs-on: ubuntu-latest
+        permissions:
+            contents: write
+            pull-requests: write
+        strategy:
+            fail-fast: false
+            matrix:
+                adapter: ${{ fromJSON(needs.plan.outputs.adapters) }}
+        env:
+            ADAPTER: ${{ matrix.adapter }}
+        steps:
+            - uses: actions/checkout@v6
+            - uses: pnpm/action-setup@v4
+            - uses: actions/setup-node@v6
+              with:
+                  node-version: 22
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile --prefer-offline
+
+            - name: Move to the latest SDK releases
+              id: apply
+              run: node scripts/adapter-upkeep.mjs apply "$ADAPTER"
+
+            - name: Update the lockfile
+              if: steps.apply.outputs.changed == 'true'
+              run: pnpm install --no-frozen-lockfile
+
+            - name: Typecheck, test, and verify packed consumers
+              id: verify
+              if: steps.apply.outputs.changed == 'true'
+              continue-on-error: true
+              run: |
+                  pnpm --filter "$ADAPTER" typecheck
+                  pnpm --filter "$ADAPTER" test
+                  pnpm verify:package
+
+            - name: Open or update the pull request
+              if: steps.apply.outputs.changed == 'true'
+              uses: peter-evans/create-pull-request@v7
+              with:
+                  token: ${{ secrets.ADAPTER_UPKEEP_TOKEN || github.token }}
+                  branch: ${{ steps.apply.outputs.branch }}
+                  delete-branch: true
+                  commit-message: ${{ steps.apply.outputs.title }}
+                  title: ${{ steps.apply.outputs.title }}
+                  draft: ${{ steps.verify.outcome == 'failure' }}
+                  body: |
+                      ${{ steps.apply.outputs.body }}
+
+                      Checks run by [this upkeep run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}): **${{ steps.verify.outcome == 'success' && 'passed' || 'failed' }}**. ${{ steps.verify.outcome == 'failure' && 'This pull request stays a draft until the adapter works with the new release.' || '' }}

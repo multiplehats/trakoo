@@ -1,33 +1,24 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { readAdapterPackages } from "../scripts/adapter-packages.mjs";
 import {
 	assertDeclarationImportsResolve,
 	assertRootBundleNeutral,
+	referencedPackages,
 } from "../scripts/package-verification.mjs";
-import * as packageVerifier from "../scripts/verify-package.mjs";
-
-const {
+import {
+	assertCoreDeclaresNoProviderSdks,
 	assertDeclarationTargetsExist,
 	assertMitPackageLicense,
-	assertNoBundledProviderChunks,
-	assertOptionalProviderPeers,
+	assertPackedAdapterManifest,
 	assertProviderSdksAbsent,
-} = packageVerifier as typeof packageVerifier & {
-	assertNoBundledProviderChunks: (
-		distDirectory: string,
-		forbiddenNameFragments: string[],
-	) => void;
-	assertOptionalProviderPeers: (
-		manifest: Record<string, unknown>,
-		providerPackages: string[],
-	) => void;
-	assertProviderSdksAbsent: (
-		nodeModulesDirectory: string,
-		providerPackages: string[],
-	) => void;
-};
+	ownedDiagnostics,
+} from "../scripts/verify-package.mjs";
+
+const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 const providerPackages = [
 	"@bentonow/bento-node-sdk",
@@ -119,50 +110,101 @@ describe("packed root bundle verification", () => {
 	});
 });
 
-describe("optional provider peer verification", () => {
-	it("accepts SDKs only when every peer is marked optional", () => {
-		const manifest = {
-			peerDependencies: Object.fromEntries(
-				providerPackages.map((packageName) => [packageName, "^1.0.0"]),
-			),
-			peerDependenciesMeta: Object.fromEntries(
-				providerPackages.map((packageName) => [
-					packageName,
-					{ optional: true },
-				]),
-			),
-		};
-
+describe("core manifest verification", () => {
+	it("accepts a manifest that names no provider SDK", () => {
 		expect(() =>
-			assertOptionalProviderPeers(manifest, providerPackages),
+			assertCoreDeclaresNoProviderSdks(
+				{ dependencies: { "@standard-schema/spec": "^1.1.0" } },
+				providerPackages,
+			),
 		).not.toThrow();
 	});
 
-	it("rejects a provider SDK that is missing optional peer metadata", () => {
+	it.each([
+		"dependencies",
+		"optionalDependencies",
+		"peerDependencies",
+		"peerDependenciesMeta",
+	])("rejects a provider SDK in %s", (field) => {
 		expect(() =>
-			assertOptionalProviderPeers(
-				{
-					peerDependencies: { "posthog-node": "^5.9.0" },
-					peerDependenciesMeta: { "posthog-node": { optional: false } },
-				},
-				["posthog-node"],
+			assertCoreDeclaresNoProviderSdks(
+				{ [field]: { "posthog-node": "^5.9.0" } },
+				providerPackages,
 			),
-		).toThrow("posthog-node must be an optional peer dependency");
+		).toThrow(`trakoo must not declare posthog-node in ${field}`);
+	});
+});
+
+describe("packed adapter manifest verification", () => {
+	const packedAdapter = (overrides: Record<string, unknown> = {}) => ({
+		name: "@trakoo/posthog",
+		peerDependencies: {
+			trakoo: "^2.0.0",
+			"posthog-js": "^1.268.2",
+		},
+		peerDependenciesMeta: { "posthog-js": { optional: true } },
+		...overrides,
 	});
 
-	it("rejects provider SDKs from installable dependency fields", () => {
+	it("accepts a concrete trakoo peer range", () => {
 		expect(() =>
-			assertOptionalProviderPeers(
-				{
-					peerDependencies: { "@emitkit/js": "^2.1.0" },
-					peerDependenciesMeta: { "@emitkit/js": { optional: true } },
-					optionalDependencies: { "@emitkit/js": "^2.1.0" },
-				},
-				["@emitkit/js"],
-			),
-		).toThrow("@emitkit/js must not be an optionalDependency");
+			assertPackedAdapterManifest(packedAdapter(), "2.0.0"),
+		).not.toThrow();
 	});
 
+	it("rejects an unpublished workspace protocol", () => {
+		expect(() =>
+			assertPackedAdapterManifest(
+				packedAdapter({
+					peerDependencies: { trakoo: "workspace:^" },
+				}),
+				"2.0.0",
+			),
+		).toThrow("publishes trakoo@workspace:^ in peerDependencies");
+	});
+
+	it("rejects a trakoo peer that does not match the core release", () => {
+		expect(() =>
+			assertPackedAdapterManifest(
+				packedAdapter({ peerDependencies: { trakoo: "^1.2.1" } }),
+				"2.0.0",
+			),
+		).toThrow("must peer on trakoo@^2.0.0, found ^1.2.1");
+	});
+
+	it("rejects an adapter that installs its own SDK", () => {
+		expect(() =>
+			assertPackedAdapterManifest(
+				packedAdapter({ dependencies: { "posthog-js": "^1.268.2" } }),
+				"2.0.0",
+			),
+		).toThrow("must not install its peer posthog-js through dependencies");
+	});
+});
+
+describe("adapter package discovery", () => {
+	it("reads every adapter with its SDK peers", () => {
+		const adapters = readAdapterPackages(repositoryRoot);
+
+		expect(adapters.map((adapter) => adapter.name)).toEqual([
+			"@trakoo/bento",
+			"@trakoo/emitkit",
+			"@trakoo/openpanel",
+			"@trakoo/posthog",
+		]);
+		expect(
+			adapters.flatMap((adapter) => adapter.sdkPeers.map((peer) => peer.name)),
+		).toEqual(providerPackages);
+		for (const adapter of adapters) {
+			expect(adapter.manifest.peerDependencies.trakoo).toBe("workspace:^");
+			for (const peer of adapter.sdkPeers) {
+				expect(peer.testedRange).toBeDefined();
+			}
+		}
+	});
+});
+
+describe("provider SDK absence", () => {
 	it("detects scoped and unscoped provider SDK directories", () => {
 		const nodeModulesDirectory = mkdtempSync(
 			join(tmpdir(), "trakoo-provider-sdk-absence-"),
@@ -195,37 +237,68 @@ describe("optional provider peer verification", () => {
 			rmSync(nodeModulesDirectory, { recursive: true, force: true });
 		}
 	});
+});
 
-	it("rejects provider implementation chunk filenames without scanning imports", () => {
-		const distDirectory = mkdtempSync(
-			join(tmpdir(), "trakoo-provider-chunks-"),
-		);
+describe("entry SDK discovery", () => {
+	it("finds static and dynamic SDK imports across relative modules", () => {
+		const distDirectory = mkdtempSync(join(tmpdir(), "trakoo-entry-sdks-"));
 		try {
-			mkdirSync(join(distDirectory, "chunks"));
 			writeFileSync(
-				join(distDirectory, "providers.js"),
-				'import("@bentonow/bento-node-sdk"); import("@emitkit/js");',
+				join(distDirectory, "server.js"),
+				'import { share } from "./shared.js";\nconst sdk = await import("@openpanel/sdk");',
 			);
-			expect(() =>
-				assertNoBundledProviderChunks(distDirectory, [
-					"bento-node-sdk",
-					"emitkit",
-				]),
-			).not.toThrow();
+			writeFileSync(
+				join(distDirectory, "shared.js"),
+				'import "@openpanel/web/extras";',
+			);
+			writeFileSync(join(distDirectory, "client.js"), 'import("posthog-js");');
 
-			writeFileSync(
-				join(distDirectory, "chunks", "bento-node-sdk-abc123.js"),
-				"export {};",
-			);
-			expect(() =>
-				assertNoBundledProviderChunks(distDirectory, [
-					"bento-node-sdk",
-					"emitkit",
+			expect(
+				referencedPackages(join(distDirectory, "server.js"), distDirectory, [
+					"@openpanel/sdk",
+					"@openpanel/web",
+					"posthog-js",
 				]),
-			).toThrow("bento-node-sdk-abc123.js");
+			).toEqual(["@openpanel/sdk", "@openpanel/web"]);
 		} finally {
 			rmSync(distDirectory, { recursive: true, force: true });
 		}
+	});
+
+	it("does not match a package whose name only shares a prefix", () => {
+		const distDirectory = mkdtempSync(join(tmpdir(), "trakoo-entry-sdks-"));
+		try {
+			writeFileSync(
+				join(distDirectory, "client.js"),
+				'import("posthog-js-lite");',
+			);
+			expect(
+				referencedPackages(join(distDirectory, "client.js"), distDirectory, [
+					"posthog-js",
+				]),
+			).toEqual([]);
+		} finally {
+			rmSync(distDirectory, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("consumer diagnostics", () => {
+	it("keeps consumer and trakoo diagnostics and drops third-party ones", () => {
+		const output = [
+			"node_modules/.pnpm/posthog-node@5.52.5/node_modules/posthog-node/dist/extensions/express.d.ts(2,40): error TS2307: Cannot find module 'express'.",
+			"node_modules/.pnpm/@trakoo+posthog@file+x/node_modules/@trakoo/posthog/dist/client.d.ts(26,37): error TS2307: Cannot find module 'posthog-node'.",
+			"node_modules/trakoo/dist/client/index.d.ts(12,36): error TS2307: Cannot find module 'posthog-js'.",
+			"consumer.ts(3,1): error TS2322: Type 'string' is not assignable to type 'number'.",
+			"  Continuation line for the consumer diagnostic.",
+		].join("\n");
+
+		expect(ownedDiagnostics(output)).toEqual([
+			"node_modules/.pnpm/@trakoo+posthog@file+x/node_modules/@trakoo/posthog/dist/client.d.ts(26,37): error TS2307: Cannot find module 'posthog-node'.",
+			"node_modules/trakoo/dist/client/index.d.ts(12,36): error TS2307: Cannot find module 'posthog-js'.",
+			"consumer.ts(3,1): error TS2322: Type 'string' is not assignable to type 'number'.",
+			"  Continuation line for the consumer diagnostic.",
+		]);
 	});
 });
 

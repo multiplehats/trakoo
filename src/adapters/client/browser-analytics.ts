@@ -84,7 +84,7 @@ export class BrowserAnalytics<
 	 * ```typescript
 	 * import { defineEvents } from 'trakoo';
 	 * import { BrowserAnalytics } from 'trakoo/client';
-	 * import { PostHogClientProvider } from 'trakoo/providers/client';
+	 * import { PostHogClientProvider } from '@trakoo/posthog/client';
 	 *
 	 * const events = defineEvents({});
 	 * const analytics = new BrowserAnalytics({

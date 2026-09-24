@@ -27,11 +27,11 @@ The Bento SDK requires an email address for every event, including page views. E
 
 ## Installation
 
-The client provider loads the Bento script from the CDN, so no package is needed in the browser. The server provider uses the Bento Node SDK.
+`BentoClientProvider` ships with trakoo and loads the Bento script from the CDN, so no extra package is needed in the browser. `BentoServerProvider` ships in the `@trakoo/bento` package and uses the Bento Node SDK.
 
 ```bash
 # Server-side only
-pnpm install @bentonow/bento-node-sdk
+pnpm add trakoo @trakoo/bento @bentonow/bento-node-sdk
 ```
 
 ## Client-side usage
@@ -40,10 +40,8 @@ Route Bento to `identify` and `track`, and let PostHog cover page views and anon
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from "trakoo/client";
-import {
-  BentoClientProvider,
-  PostHogClientProvider,
-} from "trakoo/providers/client";
+import { BentoClientProvider } from "trakoo/providers/client";
+import { PostHogClientProvider } from "@trakoo/posthog/client";
 import { appEvents } from "@/lib/events";
 
 const analytics = createClientAnalytics({
@@ -68,10 +66,8 @@ The same routing applies on the server. Here Pirsch handles page views while Ben
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from "trakoo/server";
-import {
-  BentoServerProvider,
-  PirschServerProvider,
-} from "trakoo/providers/server";
+import { PirschServerProvider } from "trakoo/providers/server";
+import { BentoServerProvider } from "@trakoo/bento/server";
 import { appEvents } from "@/lib/events";
 
 const serverAnalytics = createServerAnalytics({

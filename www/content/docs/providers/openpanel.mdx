@@ -13,19 +13,23 @@ description: Open-source web and product analytics for browser and server events
 
 ## Installation
 
-Install trakoo alongside the OpenPanel SDKs you need: `@openpanel/web` for the client and `@openpanel/sdk` for the server.
+The OpenPanel providers ship in the `@trakoo/openpanel` package. Install it alongside trakoo and only the OpenPanel SDK for the side you use: `@openpanel/web` for the client and `@openpanel/sdk` for the server.
 
 ```bash
-pnpm install trakoo @openpanel/web @openpanel/sdk
+# Client
+pnpm add trakoo @trakoo/openpanel @openpanel/web
+
+# Server
+pnpm add trakoo @trakoo/openpanel @openpanel/sdk
 ```
 
 ## Client-side usage
 
-Use `OpenPanelClientProvider` from `trakoo/providers/client`. Browser code needs only the public OpenPanel client ID.
+Use `OpenPanelClientProvider` from `@trakoo/openpanel/client`. Browser code needs only the public OpenPanel client ID.
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
-import { OpenPanelClientProvider } from 'trakoo/providers/client';
+import { OpenPanelClientProvider } from '@trakoo/openpanel/client';
 import { appEvents } from '@/lib/events';
 
 export const analytics = createClientAnalytics({
@@ -67,11 +71,11 @@ Never put an OpenPanel client secret in browser code. `OpenPanelClientProvider` 
 
 ## Server-side usage
 
-Use `OpenPanelServerProvider` from `trakoo/providers/server`. Server analytics is stateless, so pass user context with each attributed event.
+Use `OpenPanelServerProvider` from `@trakoo/openpanel/server`. Server analytics is stateless, so pass user context with each attributed event.
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import { OpenPanelServerProvider } from 'trakoo/providers/server';
+import { OpenPanelServerProvider } from '@trakoo/openpanel/server';
 import { appEvents } from '@/lib/events';
 
 export const serverAnalytics = createServerAnalytics({

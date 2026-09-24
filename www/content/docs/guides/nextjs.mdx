@@ -14,10 +14,10 @@ This guide wires trakoo into a Next.js App Router project (Next.js 13+). You'll 
 npm install trakoo
 ```
 
-This guide uses PostHog, which needs its own SDKs — one for the browser, one for Node:
+This guide uses PostHog on both sides, so install the `@trakoo/posthog` provider package with both PostHog SDKs — one for the browser, one for Node:
 
 ```bash
-npm install posthog-js posthog-node
+npm install @trakoo/posthog posthog-js posthog-node
 ```
 
 Other providers install different packages (or none). See [Installation](/docs/installation) for the full matrix.
@@ -75,7 +75,7 @@ Create the browser instance from `trakoo/client`. It's stateful: it initializes 
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 import { appEvents } from './events';
 
 export const analytics = createClientAnalytics({
@@ -200,7 +200,7 @@ Use `trakoo/server` for events you cannot afford to lose to an ad-blocker — si
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from 'trakoo/server';
-import { PostHogServerProvider } from 'trakoo/providers/server';
+import { PostHogServerProvider } from '@trakoo/posthog/server';
 import { appEvents } from './events';
 
 export function createRequestAnalytics() {

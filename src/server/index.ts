@@ -28,10 +28,6 @@ export type {
 	ValidationConfig,
 } from "@/core/events/validation.js";
 
-// Server-side providers
-export { PostHogServerProvider } from "@/providers/posthog/server.js";
-export type { PostHogOptions } from "posthog-node";
-
 // Base provider for creating custom providers
 export { BaseAnalyticsProvider } from "@/providers/base.provider.js";
 

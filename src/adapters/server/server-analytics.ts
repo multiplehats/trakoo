@@ -99,7 +99,7 @@ export class ServerAnalytics<
 	 * ```typescript
 	 * import { defineEvents } from 'trakoo';
 	 * import { ServerAnalytics } from 'trakoo/server';
-	 * import { PostHogServerProvider } from 'trakoo/providers/server';
+	 * import { PostHogServerProvider } from '@trakoo/posthog/server';
 	 *
 	 * const events = defineEvents({});
 	 * const analytics = new ServerAnalytics({

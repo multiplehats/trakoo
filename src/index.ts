@@ -34,6 +34,9 @@ export type {
 	TypeMarker,
 } from "@/core/events/schema.js";
 
+// Base provider for provider packages and custom providers
+export { BaseAnalyticsProvider } from "@/providers/base.provider.js";
+
 export { AnalyticsValidationError } from "@/core/events/validation.js";
 export type {
 	AnalyticsValidationErrorCode,

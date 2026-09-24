@@ -90,13 +90,18 @@ export class PostHogClientProvider extends BaseAnalyticsProvider {
 	track(event: BaseEvent, context?: EventContext): void {
 		if (!this.isEnabled() || !this.initialized || !this.posthog) return;
 
+		// `$current_url` is left to posthog-js, which reads the live location on
+		// every capture. The page context is only refreshed by pageView, and a
+		// caller's property would override the SDK's full URL.
+		//
+		// The time stays a property: posthog-js sends any capture that has an
+		// options argument, such as `timestamp`, outside its batch queue.
 		const properties = {
 			...event.properties,
 			category: event.category,
 			timestamp: event.timestamp || Date.now(),
 			...(event.userId && { userId: event.userId }),
 			...(event.sessionId && { sessionId: event.sessionId }),
-			...(context?.page && { $current_url: context.page.path }),
 			...(context?.device && { device: context.device }),
 			...(context?.utm && { utm: context.utm }),
 			// Include user email and traits as regular event properties

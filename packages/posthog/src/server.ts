@@ -3,7 +3,44 @@ import {
 	type BaseEvent,
 	type EventContext,
 } from "trakoo";
-import type { PostHog, PostHogOptions } from "posthog-node";
+import type { EventMessage, PostHog, PostHogOptions } from "posthog-node";
+
+const firstString = (...values: unknown[]): string | undefined => {
+	for (const value of values) {
+		if (typeof value === "string" && value) return value;
+	}
+	return undefined;
+};
+
+/**
+ * The `device` context without its IP. The address travels as `$ip`, where
+ * PostHog's project setting to discard client IP data applies; a copy nested
+ * in `device` would escape that setting.
+ */
+const deviceWithoutIp = (
+	device: EventContext["device"],
+): Omit<NonNullable<EventContext["device"]>, "ip"> | undefined => {
+	if (!device) return undefined;
+	const { ip: _ip, ...rest } = device;
+	return Object.keys(rest).length > 0 ? rest : undefined;
+};
+
+/**
+ * The context PostHog reads from its own standard properties: the page URL,
+ * and the campaign fields PostHog attributes traffic by.
+ */
+const standardProperties = (
+	context: EventContext | undefined,
+): Record<string, string> => {
+	const currentUrl = firstString(context?.page?.url, context?.page?.path);
+	const utm = context?.utm;
+	return {
+		...(currentUrl && { $current_url: currentUrl }),
+		...(utm?.source && { utm_source: utm.source }),
+		...(utm?.medium && { utm_medium: utm.medium }),
+		...(utm?.name && { utm_campaign: utm.name }),
+	};
+};
 
 const isMissingPackageError = (
 	error: unknown,
@@ -77,9 +114,10 @@ export class PostHogServerProvider extends BaseAnalyticsProvider {
 			throw error;
 		}
 
+		// The host is left to the SDK, whose default is PostHog's US ingestion
+		// host rather than the legacy app.posthog.com.
 		const { apiKey, ...posthogOptions } = this.config;
 		this.client = new PostHogClient(apiKey, {
-			host: "https://app.posthog.com",
 			flushAt: 20,
 			flushInterval: 10000,
 			...posthogOptions,
@@ -103,28 +141,31 @@ export class PostHogServerProvider extends BaseAnalyticsProvider {
 	track(event: BaseEvent, context?: EventContext): void {
 		if (!this.isEnabled() || !this.initialized || !this.client) return;
 
+		const device = deviceWithoutIp(context?.device);
 		const properties = {
 			...event.properties,
 			category: event.category,
-			timestamp: event.timestamp ? new Date(event.timestamp) : new Date(),
 			...(event.sessionId && { sessionId: event.sessionId }),
 			...(context?.page && {
-				$current_url: context.page.path,
 				$page_title: context.page.title,
 				$referrer: context.page.referrer,
 			}),
-			...(context?.device && { device: context.device }),
+			...(device && { device }),
 			...(context?.utm && { utm: context.utm }),
 			// Include user email and traits as regular event properties
 			...(context?.user?.email && { user_email: context.user.email }),
 			...(context?.user?.traits && { user_traits: context.user.traits }),
 		};
 
-		this.client.capture({
-			distinctId: event.userId || context?.user?.userId || "anonymous",
-			event: event.action,
-			properties,
-		});
+		this.client.capture(
+			this.buildEventMessage({
+				event: event.action,
+				distinctId: event.userId || context?.user?.userId,
+				properties,
+				context,
+				timestamp: event.timestamp,
+			}),
+		);
 
 		this.log("Tracked event");
 	}
@@ -140,16 +181,63 @@ export class PostHogServerProvider extends BaseAnalyticsProvider {
 				referrer: context.page.referrer,
 			}),
 		};
-		const distinctId =
-			context?.user?.userId || context?.user?.email || "anonymous";
 
-		this.client.capture({
-			distinctId,
-			event: "$pageview",
-			properties: pageProperties,
-		});
+		this.client.capture(
+			this.buildEventMessage({
+				event: "$pageview",
+				distinctId: context?.user?.userId || context?.user?.email,
+				properties: pageProperties,
+				context,
+			}),
+		);
 
 		this.log("Tracked page view");
+	}
+
+	/**
+	 * Adds what PostHog reads from its own fields and properties: the event
+	 * time, the visitor's IP and user agent, and the page and campaign. Identity
+	 * comes from this call alone, because one server provider serves many users.
+	 */
+	private buildEventMessage({
+		event,
+		distinctId,
+		properties,
+		context,
+		timestamp,
+	}: {
+		event: string;
+		distinctId: string | undefined;
+		properties: Record<string, unknown>;
+		context: EventContext | undefined;
+		timestamp?: number;
+	}): EventMessage {
+		const ip = firstString(context?.server?.ip, context?.device?.ip);
+		const userAgent = firstString(
+			context?.server?.userAgent,
+			context?.device?.userAgent,
+		);
+
+		return {
+			// An event without a user gets a distinct ID of its own and no person
+			// profile, as PostHog recommends. A shared placeholder ID would merge
+			// every anonymous visitor into one person.
+			distinctId: distinctId || crypto.randomUUID(),
+			event,
+			properties: {
+				...properties,
+				...standardProperties(context),
+				...(ip && { $ip: ip }),
+				...(userAgent && { $raw_user_agent: userAgent }),
+				...(!distinctId && { $process_person_profile: false }),
+			},
+			...(timestamp !== undefined && { timestamp: new Date(timestamp) }),
+			// posthog-node disables GeoIP by default because it would locate the
+			// server. A forwarded visitor IP is the one to locate, unless the app
+			// configured `disableGeoip` itself.
+			...(ip &&
+				this.config.disableGeoip === undefined && { disableGeoip: false }),
+		};
 	}
 
 	async reset(): Promise<void> {

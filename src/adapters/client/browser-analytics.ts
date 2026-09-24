@@ -92,7 +92,7 @@ export class BrowserAnalytics<
 	 *   providers: [
 	 *     new PostHogClientProvider({
 	 *       token: 'your-posthog-api-key',
-	 *       api_host: 'https://app.posthog.com'
+	 *       api_host: 'https://us.i.posthog.com'
 	 *     })
 	 *   ],
 	 *   defaultContext: {

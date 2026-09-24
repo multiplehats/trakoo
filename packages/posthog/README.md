@@ -54,6 +54,10 @@ export function createRequestAnalytics() {
 
 PostHog's Node client queues events. Call `shutdown()` on a request-owned instance before the request ends.
 
+Server events take their distinct ID from each call. An event without a user is sent anonymously, without a person profile. Pass the visitor's IP and user agent as `context.server` so PostHog can locate the visitor and see their browser. The provider sends them as `$ip` and `$raw_user_agent`, and turns GeoIP on for events that carry an IP unless you set `disableGeoip`.
+
+In the browser, PostHog captures page views on its own by default. If you call trakoo's `pageView()`, set `capture_pageview: false` so views aren't counted twice.
+
 ## Documentation
 
 https://trakoo.co/docs/providers/posthog

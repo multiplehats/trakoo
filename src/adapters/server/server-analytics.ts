@@ -107,7 +107,7 @@ export class ServerAnalytics<
 	 *   providers: [
 	 *     new PostHogServerProvider({
 	 *       apiKey: 'your-posthog-api-key',
-	 *       host: 'https://app.posthog.com'
+	 *       host: 'https://us.i.posthog.com'
 	 *     })
 	 *   ],
 	 *   defaultContext: {

@@ -24,6 +24,8 @@ vi.mock("posthog-node", () => ({
 	},
 }));
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
 describe("PostHogServerProvider", () => {
 	beforeEach(() => {
 		constructorSpy.mockReset();
@@ -75,19 +77,31 @@ describe("PostHogServerProvider", () => {
 		expect(sdk.capture).toHaveBeenCalledWith({
 			distinctId: "event-user",
 			event: "invoice_paid",
+			timestamp: new Date(1_700_000_000_000),
 			properties: {
 				amount: 42,
 				category: "conversion",
-				timestamp: new Date(1_700_000_000_000),
 				sessionId: "session-1",
 				$current_url: "/billing",
 				$page_title: "Billing",
 				$referrer: "/account",
 				device: { type: "desktop" },
 				utm: { source: "newsletter" },
+				utm_source: "newsletter",
 				user_email: "user@example.com",
 				user_traits: { plan: "pro" },
 			},
+		});
+	});
+
+	it("leaves the host to the SDK default", async () => {
+		const provider = new PostHogServerProvider({ apiKey: "project-key" });
+
+		await provider.initialize();
+
+		expect(constructorSpy).toHaveBeenCalledWith("project-key", {
+			flushAt: 20,
+			flushInterval: 10000,
 		});
 	});
 
@@ -116,6 +130,7 @@ describe("PostHogServerProvider", () => {
 			properties: {
 				section: "docs",
 				depth: 2,
+				$current_url: "/docs/providers/posthog",
 				path: "/docs/providers/posthog",
 				title: "PostHog",
 				referrer: "/docs/providers",
@@ -146,9 +161,9 @@ describe("PostHogServerProvider", () => {
 		provider.pageView({ section: "home" });
 
 		expect(sdk.capture).toHaveBeenCalledWith({
-			distinctId: "anonymous",
+			distinctId: expect.stringMatching(UUID),
 			event: "$pageview",
-			properties: { section: "home" },
+			properties: { section: "home", $process_person_profile: false },
 		});
 	});
 
@@ -164,9 +179,9 @@ describe("PostHogServerProvider", () => {
 			properties: { plan: "pro" },
 		});
 		expect(sdk.capture).toHaveBeenCalledWith({
-			distinctId: "anonymous",
+			distinctId: expect.stringMatching(UUID),
 			event: "$pageview",
-			properties: { section: "home" },
+			properties: { section: "home", $process_person_profile: false },
 		});
 	});
 
@@ -191,6 +206,10 @@ describe("PostHogServerProvider", () => {
 			{
 				page: { path: "/DO_NOT_LOG_CONTEXT" },
 				user: { email: "DO_NOT_LOG_CONTEXT_EMAIL" },
+				server: {
+					ip: "DO_NOT_LOG_IP",
+					userAgent: "DO_NOT_LOG_USER_AGENT",
+				},
 			},
 		);
 		provider.pageView(

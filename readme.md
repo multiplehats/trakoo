@@ -16,7 +16,7 @@ Give your coding agent Trakoo-specific integration guidance for typed events, cl
 npx skills add multiplehats/trakoo --skill trakoo
 ```
 
-The source is [`skills/trakoo/SKILL.md`](./skills/trakoo/SKILL.md) and follows the portable Agent Skills format used by skills.sh-compatible agents. See the [Agent Skill docs](https://stacksee-analytics.vercel.app/docs/agent-skill) for agent targeting, global installs, and manual setup.
+The source is [`skills/trakoo/SKILL.md`](./skills/trakoo/SKILL.md) and follows the portable Agent Skills format used by skills.sh-compatible agents. See the [Agent Skill docs](https://trakoo.co/docs/agent-skill) for agent targeting, global installs, and manual setup.
 
 ## Features
 

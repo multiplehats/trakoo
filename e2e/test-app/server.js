@@ -66,7 +66,7 @@ const requireEnvironmentVariable = (name) => {
 };
 
 const pirschProvider = new PirschServerProvider({
-  hostname: "test.stacksee.com",
+  hostname: "test.trakoo.co",
   clientId: requireEnvironmentVariable("PIRSCH_CLIENT_ID"),
   clientSecret:
     requireEnvironmentVariable("PIRSCH_CLIENT_SECRET"),

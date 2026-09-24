@@ -119,7 +119,9 @@ export class OpenPanelClientProvider extends BaseAnalyticsProvider {
 				createDeliveryFailureReporter(this.name, onDeliveryFailure),
 			);
 			if (!instrumented) {
-				this.log("Delivery reporting unavailable - unrecognized transport");
+				console.warn(
+					"[OpenPanel-Client] Unrecognized @openpanel/web transport - delivery failure reporting is unavailable",
+				);
 			}
 			// The web override replaces a caller-supplied __path with its last screen view.
 			this.trackEvent = OpenPanelBase.prototype.track.bind(this.client);

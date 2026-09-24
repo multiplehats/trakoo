@@ -99,7 +99,7 @@ await serverAnalytics.track('invoice_paid', {
   }
 });
 
-serverAnalytics.shutdown();
+await serverAnalytics.shutdown();
 ```
 
 The provider clears OpenPanel's local identity state after server-side `identify()` and on `shutdown()`, so it never reuses the identity from another request.
@@ -120,7 +120,9 @@ await serverAnalytics.track('api_request', { route: '/v1/generations' }, {
 });
 ```
 
-Each event is attributed to its own caller, so one long-lived provider can serve concurrent requests. `context.device` is used as a fallback when `context.server` is absent. The IP travels as a header only — it is never stored as an event property, and a `device.ip` you pass is removed from the properties once it has been promoted.
+Each event is attributed to its own caller, so one long-lived provider can serve concurrent requests. `context.device.ip` and `context.device.userAgent` are used for whichever of the two `context.server` does not supply. The IP travels as a header only — it is never stored as an event property, and a `device.ip` you pass is removed from the properties.
+
+A value that cannot be sent as an HTTP header, such as one containing a line break or a character above U+00FF, is skipped and the next source is tried. The event is still delivered, without that attribute.
 
 Resolve the caller's address with whatever your platform vouches for (`x-forwarded-for` behind a trusted proxy, `x-real-ip`, or a framework helper). Forwarding a spoofable header you do not control attributes events to whatever the caller claims.
 
@@ -147,7 +149,7 @@ await serverAnalytics.identify('user_123', {
 });
 ```
 
-Calling server-side `identify()` without traits still sends a profile payload with only the `profileId`.
+OpenPanel only writes a profile when there is something besides the ID, so `identify()` without traits sends nothing. In the browser it still attributes later events to that profile; on the server it has no effect.
 
 ## Configuration
 
@@ -243,6 +245,8 @@ Server options:
   }}
 />
 
+The server provider passes only these options to the SDK. OpenPanel's queueing options, `disabled` and `waitForProfile`, are ignored: one server client is shared by every request, so it would hold anonymous events and release them under whichever request identifies next.
+
 ## Delivery failures
 
 OpenPanel's SDKs answer an HTTP 401 by dropping the event: they do not throw, retry, or log. A wrong client ID, a rotated secret, or a browser origin the project does not allow therefore stops analytics without producing a single error. Both providers report those rejections.
@@ -267,6 +271,17 @@ new OpenPanelServerProvider({
 Without a handler the failure is reported with `console.error`, so a rejected key is visible by default. Delivery never throws either way, so a rejected event cannot turn into an application error.
 
 Browser events are rejected the same way when the page origin is not on the project's allowed origins. That is why the same client ID can work in production and be refused from `localhost`.
+
+Failure reporting, and on the server the caller's IP and user agent, depend on the transport the OpenPanel SDK exposes. If an installed SDK version changes that transport so the provider no longer recognizes it, the provider warns once at initialization with `console.warn`. Events are still delivered, but without failure reporting and, on the server, without caller attribution.
+
+## Reserved property names
+
+OpenPanel's SDK reads two event property names itself instead of storing them:
+
+- `profileId` is the profile the event belongs to. The provider sets it from the event's user ID when there is one.
+- `groups` is a list of OpenPanel group IDs. An array becomes the event's groups rather than a property, a string is split into one-character group IDs, `null` or an empty array is dropped, and a number, boolean or object makes the SDK throw, so the event is not sent.
+
+Give event properties other names unless you mean OpenPanel's own fields.
 
 ## Method mapping
 

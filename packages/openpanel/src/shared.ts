@@ -4,6 +4,14 @@ import type { IdentifyPayload } from "@openpanel/sdk";
 
 const PROFILE_FIELDS = ["firstName", "lastName", "email", "avatar"] as const;
 
+/**
+ * The bytes Node's `fetch` accepts in a header value. It refuses anything else
+ * before the request leaves, and the transport cannot tell that refusal from a
+ * network failure: one malformed attribute would retry and then lose the
+ * whole event. A value outside this set is skipped instead.
+ */
+const HEADER_VALUE = /^[\t\x20-\x7e\x80-\xff]+$/;
+
 export function buildIdentifyPayload(
 	userId: string,
 	traits?: Record<string, unknown>,
@@ -84,8 +92,8 @@ export function buildTrackedEventProperties(
 export function buildRequestContext(
 	context: EventContext | undefined,
 ): OpenPanelRequestContext | undefined {
-	const ip = firstString(context?.server?.ip, context?.device?.ip);
-	const userAgent = firstString(
+	const ip = firstHeaderValue(context?.server?.ip, context?.device?.ip);
+	const userAgent = firstHeaderValue(
 		context?.server?.userAgent,
 		context?.device?.userAgent,
 	);
@@ -96,9 +104,9 @@ export function buildRequestContext(
 
 /**
  * Parks the request attributes on the payload for the delivery transport to
- * move onto this one request's headers, and drops the IP from the `device`
- * property when that is where it was read from: geo belongs to the request,
- * and a raw address stored on every event is a liability the header avoids.
+ * move onto this one request's headers, and drops the IP `context.device`
+ * contributed to the `device` property: geo belongs to the request, and a raw
+ * address stored on every event is a liability the header avoids.
  *
  * Only the server provider applies this. A browser sends its own headers, and
  * `user-agent` is forbidden to `fetch()` there.
@@ -108,23 +116,28 @@ export function withRequestContext(
 	context: EventContext | undefined,
 ): Record<string, unknown> {
 	const requestContext = buildRequestContext(context);
-	if (!requestContext) return properties;
 
 	// Only the address copied out of `context.device` is removed. A `device`
 	// the event declared itself is its own data, and an IP promoted from
-	// `context.server` says nothing about it.
-	if (typeof context?.device?.ip !== "string") {
-		return { ...properties, [REQUEST_CONTEXT]: requestContext };
-	}
+	// `context.server` says nothing about it. The address is removed even when
+	// it could not be promoted, so a malformed one is not stored instead.
+	const stripped =
+		typeof context?.device?.ip === "string"
+			? withoutContextDeviceIp(properties)
+			: properties;
 
+	return requestContext
+		? { ...stripped, [REQUEST_CONTEXT]: requestContext }
+		: stripped;
+}
+
+function withoutContextDeviceIp(
+	properties: Record<string, unknown>,
+): Record<string, unknown> {
 	const { device: _contextDevice, ...rest } = properties;
 	const device = withoutIp(properties.device);
 
-	return {
-		...rest,
-		...(device !== undefined && { device }),
-		[REQUEST_CONTEXT]: requestContext,
-	};
+	return { ...rest, ...(device !== undefined && { device }) };
 }
 
 function withoutIp(device: unknown): unknown {
@@ -134,9 +147,9 @@ function withoutIp(device: unknown): unknown {
 	return Object.keys(rest).length > 0 ? rest : undefined;
 }
 
-function firstString(...values: unknown[]): string | undefined {
+function firstHeaderValue(...values: unknown[]): string | undefined {
 	for (const value of values) {
-		if (typeof value === "string" && value) return value;
+		if (typeof value === "string" && HEADER_VALUE.test(value)) return value;
 	}
 	return undefined;
 }

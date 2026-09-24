@@ -1,18 +1,25 @@
 import { OpenPanelServerProvider } from "../src/server.js";
 import { REQUEST_CONTEXT } from "../src/transport.js";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { constructorSpy, sdk } = vi.hoisted(() => ({
+const { constructorSpy, sdk, transport } = vi.hoisted(() => ({
 	constructorSpy: vi.fn(),
 	sdk: {
 		identify: vi.fn(),
 		track: vi.fn(),
 		clear: vi.fn(),
 	},
+	// The shape the delivery instrumentation recognizes as the SDK's `api`.
+	transport: vi.fn((): unknown => ({
+		baseUrl: "https://api.openpanel.dev",
+		fetch: () => Promise.resolve(null),
+		headers: {},
+	})),
 }));
 
 vi.mock("@openpanel/sdk", () => ({
 	OpenPanel: class {
+		api = transport();
 		identify = sdk.identify;
 		track = sdk.track;
 		clear = sdk.clear;
@@ -29,6 +36,10 @@ describe("OpenPanelServerProvider", () => {
 		for (const mock of Object.values(sdk)) mock.mockReset();
 		sdk.track.mockResolvedValue(null);
 		sdk.identify.mockResolvedValue(null);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
 	});
 
 	it("initializes once with authenticated server options", async () => {
@@ -53,6 +64,59 @@ describe("OpenPanelServerProvider", () => {
 			debug: true,
 			filter,
 		});
+	});
+
+	it("forwards only documented options, whatever an untyped caller passes", async () => {
+		const provider = new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "client-secret",
+			disabled: true,
+			sdk: "custom",
+			sdkVersion: "1.0.0",
+			waitForProfile: true,
+		} as unknown as ConstructorParameters<typeof OpenPanelServerProvider>[0]);
+
+		await provider.initialize();
+
+		expect(constructorSpy).toHaveBeenCalledWith({
+			clientId: "client-id",
+			clientSecret: "client-secret",
+		});
+		expect(Object.keys(constructorSpy.mock.calls[0]?.[0] ?? {})).toEqual([
+			"clientId",
+			"clientSecret",
+		]);
+	});
+
+	it("warns when the SDK transport is not one it can instrument", async () => {
+		const consoleWarn = vi
+			.spyOn(console, "warn")
+			.mockImplementation(() => undefined);
+		transport.mockReturnValueOnce(undefined);
+
+		await new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "client-secret",
+		}).initialize();
+
+		expect(consoleWarn).toHaveBeenCalledOnce();
+		const message = String(consoleWarn.mock.calls[0]?.[0]);
+		expect(message).toContain("[OpenPanel-Server]");
+		expect(message).toContain("attribution");
+		expect(message).not.toContain("client-secret");
+	});
+
+	it("stays quiet when the SDK transport is recognized", async () => {
+		const consoleWarn = vi
+			.spyOn(console, "warn")
+			.mockImplementation(() => undefined);
+
+		await new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "client-secret",
+		}).initialize();
+
+		expect(consoleWarn).not.toHaveBeenCalled();
 	});
 
 	it("validates both credentials and respects disabled mode", async () => {
@@ -267,6 +331,24 @@ describe("OpenPanelServerProvider", () => {
 		expect(sdk.track).toHaveBeenNthCalledWith(2, "ip_only", {
 			category: "engagement",
 			[REQUEST_CONTEXT]: { ip: "203.0.113.9" },
+		});
+	});
+
+	it("never stores a device IP it cannot send as a header", async () => {
+		const provider = new OpenPanelServerProvider({
+			clientId: "client-id",
+			clientSecret: "secret",
+		});
+		await provider.initialize();
+
+		await provider.track(
+			{ action: "api_request", category: "engagement", properties: {} },
+			{ device: { ip: "203.0.113.4\r\n", type: "server" } },
+		);
+
+		expect(sdk.track).toHaveBeenCalledWith("api_request", {
+			category: "engagement",
+			device: { type: "server" },
 		});
 	});
 

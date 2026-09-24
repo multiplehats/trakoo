@@ -108,10 +108,19 @@ export class OpenPanelServerProvider extends BaseAnalyticsProvider {
 			throw error;
 		}
 
-		const { enabled, onDeliveryFailure, ...options } = this.config;
-		void enabled;
+		// Built from the documented options alone. An untyped `disabled` or
+		// `waitForProfile` makes the shared client queue events and release
+		// them under whichever request identifies next.
+		const { apiUrl, clientId, clientSecret, debug, filter, onDeliveryFailure } =
+			this.config;
 
-		this.client = new OpenPanelClient(options);
+		this.client = new OpenPanelClient({
+			clientId,
+			clientSecret,
+			...(apiUrl !== undefined && { apiUrl }),
+			...(debug !== undefined && { debug }),
+			...(filter !== undefined && { filter }),
+		});
 		this.reportDeliveryFailures(onDeliveryFailure);
 		this.initialized = true;
 		this.log("Initialized successfully");
@@ -125,7 +134,10 @@ export class OpenPanelServerProvider extends BaseAnalyticsProvider {
 			createDeliveryFailureReporter(this.name, onDeliveryFailure),
 		);
 		if (!instrumented) {
-			this.log("Delivery reporting unavailable - unrecognized transport");
+			// Attribution rides on this transport, so losing it must not be quiet.
+			console.warn(
+				"[OpenPanel-Server] Unrecognized @openpanel/sdk transport - caller IP and user agent attribution and delivery failure reporting are unavailable",
+			);
 		}
 	}
 

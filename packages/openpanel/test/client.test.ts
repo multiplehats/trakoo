@@ -2,7 +2,7 @@
 import { OpenPanelClientProvider } from "../src/client.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const { constructorSpy, sdk } = vi.hoisted(() => ({
+const { constructorSpy, sdk, transport } = vi.hoisted(() => ({
 	constructorSpy: vi.fn(),
 	sdk: {
 		identify: vi.fn(),
@@ -10,10 +10,18 @@ const { constructorSpy, sdk } = vi.hoisted(() => ({
 		screenView: vi.fn(),
 		clear: vi.fn(),
 	},
+	// The shape the delivery instrumentation recognizes as the SDK's `api`.
+	transport: vi.fn((): unknown => ({
+		baseUrl: "https://api.openpanel.dev",
+		fetch: () => Promise.resolve(null),
+		headers: {},
+	})),
 }));
 
 vi.mock("@openpanel/web", () => {
 	class OpenPanelBase {
+		api = transport();
+
 		track(name: string, properties?: Record<string, unknown>) {
 			return sdk.track(name, properties);
 		}
@@ -107,6 +115,20 @@ describe("OpenPanelClientProvider", () => {
 			trackOutgoingLinks: false,
 			trackScreenViews: false,
 		});
+	});
+
+	it("warns when the SDK transport is not one it can instrument", async () => {
+		const consoleWarn = vi
+			.spyOn(console, "warn")
+			.mockImplementation(() => undefined);
+		transport.mockReturnValueOnce(undefined);
+
+		await new OpenPanelClientProvider({ clientId: "client-id" }).initialize();
+
+		expect(consoleWarn).toHaveBeenCalledOnce();
+		expect(String(consoleWarn.mock.calls[0]?.[0])).toContain(
+			"[OpenPanel-Client]",
+		);
 	});
 
 	it("validates clientId and respects disabled mode", async () => {

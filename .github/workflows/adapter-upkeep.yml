@@ -4,10 +4,10 @@ name: Adapter upkeep
 # per adapter. A release outside the peer range widens it and adds a changeset.
 #
 # Pull requests opened with the default GITHUB_TOKEN do not trigger other
-# workflows, so this job runs the adapter's checks itself and opens a draft
-# when they fail. Set an ADAPTER_UPKEEP_TOKEN secret (a fine-grained token or
-# GitHub App token with contents and pull-requests write access) to have CI run
-# on these pull requests as well.
+# workflows, so this job runs the adapter's checks itself and keeps the pull
+# request a draft while they fail. Set an ADAPTER_UPKEEP_TOKEN secret (a
+# fine-grained token or GitHub App token with contents and pull-requests write
+# access) to have CI run on these pull requests as well.
 
 on:
     schedule:
@@ -81,6 +81,7 @@ jobs:
                   pnpm verify:package
 
             - name: Open or update the pull request
+              id: pull-request
               if: steps.apply.outputs.changed == 'true'
               uses: peter-evans/create-pull-request@v7
               with:
@@ -89,8 +90,21 @@ jobs:
                   delete-branch: true
                   commit-message: ${{ steps.apply.outputs.title }}
                   title: ${{ steps.apply.outputs.title }}
-                  draft: ${{ steps.verify.outcome == 'failure' }}
+                  # `true` only applies when the pull request is created; an
+                  # existing one that starts failing needs `always-true`.
+                  draft: ${{ steps.verify.outcome == 'failure' && 'always-true' || 'false' }}
                   body: |
                       ${{ steps.apply.outputs.body }}
 
                       Checks run by [this upkeep run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}): **${{ steps.verify.outcome == 'success' && 'passed' || 'failed' }}**. ${{ steps.verify.outcome == 'failure' && 'This pull request stays a draft until the adapter works with the new release.' || '' }}
+
+            - name: Mark the pull request ready once its checks pass
+              if: steps.verify.outcome == 'success' && steps.pull-request.outputs.pull-request-number != ''
+              env:
+                  GH_TOKEN: ${{ secrets.ADAPTER_UPKEEP_TOKEN || github.token }}
+                  GH_REPO: ${{ github.repository }}
+                  PR_NUMBER: ${{ steps.pull-request.outputs.pull-request-number }}
+              run: |
+                  if [ "$(gh pr view "$PR_NUMBER" --json isDraft --jq .isDraft)" = "true" ]; then
+                      gh pr ready "$PR_NUMBER"
+                  fi

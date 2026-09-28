@@ -13,18 +13,26 @@ on:
             - "src/**"
             - "scripts/adapter-*.mjs"
             - ".github/workflows/adapters.yml"
+            - "package.json"
+            - "pnpm-lock.yaml"
+            - "pnpm-workspace.yaml"
     pull_request:
         paths:
             - "packages/**"
             - "src/**"
             - "scripts/adapter-*.mjs"
             - ".github/workflows/adapters.yml"
+            - "package.json"
+            - "pnpm-lock.yaml"
+            - "pnpm-workspace.yaml"
     schedule:
         - cron: "17 6 * * 1"
     workflow_dispatch:
 
+# Keyed on the event too, so a push to main never cancels the weekly run on the
+# same commit, which would skip its failure report.
 concurrency:
-    group: ${{ github.workflow }}-${{ github.event.number || github.sha }}
+    group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.event.number || github.sha }}
     cancel-in-progress: true
 
 permissions:

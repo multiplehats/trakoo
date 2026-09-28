@@ -82,8 +82,10 @@ export function applyUpdatesToManifest(manifest, updates) {
 	return next;
 }
 
+const widenedUpdates = (updates) => updates.filter((update) => update.widened);
+
 export function upkeepChangeset(packageName, updates) {
-	const widened = updates.filter((update) => update.widened);
+	const widened = widenedUpdates(updates);
 	if (widened.length === 0) return null;
 
 	const lines = widened.map(
@@ -98,8 +100,7 @@ export function upkeepChangeset(packageName, updates) {
  * that is still waiting to be released.
  */
 export function upkeepChangesetName(slug, updates) {
-	const releases = updates
-		.filter((update) => update.widened)
+	const releases = widenedUpdates(updates)
 		.map(
 			(update) =>
 				`${update.name.replace(/^@/, "").replace(/\//g, "-")}-${update.latest}`,
@@ -115,7 +116,7 @@ function releaseLine(version) {
 }
 
 export function upkeepSummary(packageName, updates) {
-	const widened = updates.filter((update) => update.widened);
+	const widened = widenedUpdates(updates);
 	const title =
 		widened.length > 0
 			? `feat(${packageName}): support ${widened.map((update) => `${update.name}@${update.latest}`).join(", ")}`
@@ -214,7 +215,7 @@ function main([command, adapterName]) {
 			stdio: "ignore",
 		});
 
-		const slug = adapter.relativeDirectory.split("/").pop();
+		const { slug } = adapter;
 		const changeset = upkeepChangeset(adapter.name, updates);
 		if (changeset) {
 			writeFileSync(

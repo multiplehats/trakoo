@@ -1,6 +1,9 @@
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
+export const readJson = (filePath) =>
+	JSON.parse(readFileSync(filePath, "utf8"));
+
 /**
  * Reads every adapter package under `packages/`. An adapter's SDK peers are
  * all of its peer dependencies except `trakoo` itself.
@@ -16,11 +19,11 @@ export function readAdapterPackages(root) {
 		.map((entry) => {
 			const directory = join(packagesDirectory, entry.name);
 			const manifestPath = join(directory, "package.json");
-			const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+			const manifest = readJson(manifestPath);
 			return {
 				name: manifest.name,
+				slug: entry.name,
 				directory,
-				relativeDirectory: `packages/${entry.name}`,
 				manifestPath,
 				manifest,
 				entries: Object.keys(manifest.exports ?? {}).map((subpath) =>

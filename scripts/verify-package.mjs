@@ -10,7 +10,7 @@ import {
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { readAdapterPackages } from "./adapter-packages.mjs";
+import { readAdapterPackages, readJson } from "./adapter-packages.mjs";
 import {
 	assertDeclarationImportsResolve,
 	assertRootBundleNeutral,
@@ -30,6 +30,15 @@ const installableDependencyFields = [
 	"optionalDependencies",
 	"peerDependencies",
 ];
+
+/** The first of `packageNames` that `manifest` declares in one of `fields`. */
+function findDeclaration(manifest, fields, packageNames) {
+	for (const field of fields) {
+		const packageName = packageNames.find((name) => manifest[field]?.[name]);
+		if (packageName) return { field, packageName };
+	}
+	return undefined;
+}
 
 export function assertDeclarationTargetsExist(distDirectory, relativeTargets) {
 	for (const relativeTarget of relativeTargets) {
@@ -59,15 +68,15 @@ export function assertMitPackageLicense(manifest, licenseText) {
  * installing one provider's SDK can conflict with core itself.
  */
 export function assertCoreDeclaresNoProviderSdks(manifest, providerPackages) {
-	for (const field of [
-		...installableDependencyFields,
-		"peerDependenciesMeta",
-	]) {
-		for (const packageName of providerPackages) {
-			if (manifest[field]?.[packageName]) {
-				throw new Error(`trakoo must not declare ${packageName} in ${field}`);
-			}
-		}
+	const declared = findDeclaration(
+		manifest,
+		[...installableDependencyFields, "peerDependenciesMeta"],
+		providerPackages,
+	);
+	if (declared) {
+		throw new Error(
+			`trakoo must not declare ${declared.packageName} in ${declared.field}`,
+		);
 	}
 }
 
@@ -96,14 +105,15 @@ export function assertPackedAdapterManifest(manifest, coreVersion) {
 		throw new Error(`${manifest.name} must not depend on trakoo directly`);
 	}
 
-	for (const packageName of Object.keys(manifest.peerDependencies)) {
-		for (const field of ["dependencies", "optionalDependencies"]) {
-			if (manifest[field]?.[packageName]) {
-				throw new Error(
-					`${manifest.name} must not install its peer ${packageName} through ${field}`,
-				);
-			}
-		}
+	const installedPeer = findDeclaration(
+		manifest,
+		["dependencies", "optionalDependencies"],
+		Object.keys(manifest.peerDependencies),
+	);
+	if (installedPeer) {
+		throw new Error(
+			`${manifest.name} must not install its peer ${installedPeer.packageName} through ${installedPeer.field}`,
+		);
 	}
 }
 
@@ -324,8 +334,8 @@ function verifyCore(tarballPath, consumerDirectory, providerPackages) {
 	assertProviderSdksAbsent(consumerNodeModules, providerPackages);
 	typecheckConsumer(consumerDirectory, coreConsumerSource);
 
-	const installedManifest = JSON.parse(
-		readFileSync(join(consumerNodeModules, "trakoo/package.json"), "utf8"),
+	const installedManifest = readJson(
+		join(consumerNodeModules, "trakoo/package.json"),
 	);
 	assertCoreDeclaresNoProviderSdks(installedManifest, providerPackages);
 	assertMitPackageLicense(
@@ -339,14 +349,15 @@ function verifyCore(tarballPath, consumerDirectory, providerPackages) {
 	}
 
 	const concreteValidators = ["zod", "valibot", "arktype"];
-	for (const field of installableDependencyFields) {
-		for (const packageName of concreteValidators) {
-			if (installedManifest[field]?.[packageName]) {
-				throw new Error(
-					`packed trakoo declares concrete validator ${packageName}`,
-				);
-			}
-		}
+	const validator = findDeclaration(
+		installedManifest,
+		installableDependencyFields,
+		concreteValidators,
+	);
+	if (validator) {
+		throw new Error(
+			`packed trakoo declares concrete validator ${validator.packageName}`,
+		);
 	}
 
 	const installedDist = join(consumerNodeModules, "trakoo/dist");
@@ -379,6 +390,7 @@ function verifyAdapterEntry({
 	coreTarball,
 	adapterTarball,
 	consumerDirectory,
+	typesNodeRange,
 }) {
 	const specifier = `${adapter.name}/${entry}`;
 	const sdkNames = adapter.sdkPeers.map((peer) => peer.name);
@@ -403,7 +415,7 @@ function verifyAdapterEntry({
 			coreTarball,
 			adapterTarball,
 			...sdkInstalls,
-			`@types/node@${readRootDevRange("@types/node")}`,
+			`@types/node@${typesNodeRange}`,
 		],
 		consumerDirectory,
 	);
@@ -416,9 +428,7 @@ function verifyAdapterEntry({
 
 	const installedLicense = join(nodeModules, adapter.name, "LICENSE");
 	assertMitPackageLicense(
-		JSON.parse(
-			readFileSync(join(nodeModules, adapter.name, "package.json"), "utf8"),
-		),
+		readJson(join(nodeModules, adapter.name, "package.json")),
 		existsSync(installedLicense)
 			? readFileSync(installedLicense, "utf8")
 			: undefined,
@@ -440,9 +450,74 @@ function verifyAdapterEntry({
 	return unrelatedSdks;
 }
 
-function readRootDevRange(packageName) {
-	const manifest = JSON.parse(readFileSync(join(root, "package.json"), "utf8"));
-	return manifest.devDependencies[packageName];
+/**
+ * A PostHog client consumer has no posthog-node, so the server entry must fail
+ * with the missing-peer error and without echoing its configuration.
+ */
+function verifyPostHogServerWithoutItsPeer(consumerDirectory, unrelatedSdks) {
+	if (!unrelatedSdks.includes("posthog-node")) {
+		throw new Error("PostHog client consumer installed posthog-node");
+	}
+	runModule(
+		consumerDirectory,
+		String.raw`
+const { PostHogServerProvider } = await import("@trakoo/posthog/server");
+const provider = new PostHogServerProvider({
+	apiKey: "PACKAGE_VERIFICATION_SECRET",
+});
+try {
+	await provider.initialize();
+	throw new Error("PostHog initialized without its optional peer");
+} catch (error) {
+	const message = error instanceof Error ? error.message : "";
+	if (
+		message !==
+		"PostHog server provider requires the optional peer package posthog-node"
+	) {
+		throw error;
+	}
+	if (message.includes("PACKAGE_VERIFICATION_SECRET")) {
+		throw new Error("missing-peer error exposed provider configuration");
+	}
+}
+`,
+	);
+}
+
+/**
+ * Regression: npm rejects an install when any declared peer, optional or not,
+ * conflicts with a version already in the project. An OpenPanel user with an
+ * unrelated posthog-node@4 must still be able to install trakoo.
+ */
+function verifyUnrelatedPeerRegression({
+	adapters,
+	coreTarball,
+	adapterTarballs,
+	consumerDirectory,
+}) {
+	const openPanel = adapters.find(
+		(adapter) => adapter.name === "@trakoo/openpanel",
+	);
+	if (!openPanel) throw new Error("missing @trakoo/openpanel adapter");
+	run(
+		"npm",
+		["install", "--ignore-scripts", "posthog-node@4"],
+		consumerDirectory,
+	);
+	const openPanelServerSdk = openPanel.sdkPeers.find(
+		(peer) => peer.name === "@openpanel/sdk",
+	);
+	run(
+		"npm",
+		[
+			"install",
+			"--ignore-scripts",
+			coreTarball,
+			adapterTarballs.get(openPanel.name),
+			`@openpanel/sdk@${openPanelServerSdk?.testedRange}`,
+		],
+		consumerDirectory,
+	);
 }
 
 if (invokedAsScript) {
@@ -452,9 +527,7 @@ if (invokedAsScript) {
 
 	try {
 		run("pnpm", ["build"]);
-		const coreManifest = JSON.parse(
-			readFileSync(join(root, "package.json"), "utf8"),
-		);
+		const coreManifest = readJson(join(root, "package.json"));
 		const adapters = readAdapterPackages(root);
 		const providerPackages = adapters.flatMap((adapter) =>
 			adapter.sdkPeers.map((peer) => peer.name),
@@ -491,76 +564,30 @@ if (invokedAsScript) {
 					temporaryDirectories,
 					"trakoo-adapter-consumer-",
 				);
-				const absentSdks = verifyAdapterEntry({
+				const unrelatedSdks = verifyAdapterEntry({
 					adapter,
 					entry,
 					coreTarball,
 					adapterTarball,
 					consumerDirectory,
+					typesNodeRange: coreManifest.devDependencies["@types/node"],
 				});
 
 				if (adapter.name === "@trakoo/posthog" && entry === "client") {
-					if (!absentSdks.includes("posthog-node")) {
-						throw new Error("PostHog client consumer installed posthog-node");
-					}
-					runModule(
-						consumerDirectory,
-						String.raw`
-const { PostHogServerProvider } = await import("@trakoo/posthog/server");
-const provider = new PostHogServerProvider({
-	apiKey: "PACKAGE_VERIFICATION_SECRET",
-});
-try {
-	await provider.initialize();
-	throw new Error("PostHog initialized without its optional peer");
-} catch (error) {
-	const message = error instanceof Error ? error.message : "";
-	if (
-		message !==
-		"PostHog server provider requires the optional peer package posthog-node"
-	) {
-		throw error;
-	}
-	if (message.includes("PACKAGE_VERIFICATION_SECRET")) {
-		throw new Error("missing-peer error exposed provider configuration");
-	}
-}
-`,
-					);
+					verifyPostHogServerWithoutItsPeer(consumerDirectory, unrelatedSdks);
 				}
 			}
 		}
 
-		// Regression: npm rejects an install when any declared peer, optional or
-		// not, conflicts with a version already in the project. An OpenPanel user
-		// with an unrelated posthog-node@4 must still be able to install trakoo.
-		const openPanel = adapters.find(
-			(adapter) => adapter.name === "@trakoo/openpanel",
-		);
-		if (!openPanel) throw new Error("missing @trakoo/openpanel adapter");
-		const regressionConsumer = createConsumer(
-			temporaryDirectories,
-			"trakoo-unrelated-peer-consumer-",
-		);
-		run(
-			"npm",
-			["install", "--ignore-scripts", "posthog-node@4"],
-			regressionConsumer,
-		);
-		const openPanelServerSdk = openPanel.sdkPeers.find(
-			(peer) => peer.name === "@openpanel/sdk",
-		);
-		run(
-			"npm",
-			[
-				"install",
-				"--ignore-scripts",
-				coreTarball,
-				adapterTarballs.get(openPanel.name),
-				`@openpanel/sdk@${openPanelServerSdk?.testedRange}`,
-			],
-			regressionConsumer,
-		);
+		verifyUnrelatedPeerRegression({
+			adapters,
+			coreTarball,
+			adapterTarballs,
+			consumerDirectory: createConsumer(
+				temporaryDirectories,
+				"trakoo-unrelated-peer-consumer-",
+			),
+		});
 	} finally {
 		for (const directory of temporaryDirectories) {
 			rmSync(directory, { recursive: true, force: true });

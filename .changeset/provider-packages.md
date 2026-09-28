@@ -15,4 +15,4 @@ Core now declares no provider SDK. Install the adapter for each SDK-backed provi
 | Bento (server) | `trakoo/providers/server` | `@trakoo/bento/server` |
 | EmitKit | `trakoo/providers/server` | `@trakoo/emitkit/server` |
 
-`PostHogConfig`, `PostHogOptions`, the OpenPanel delivery-failure types and `BentoAnalyticsOptions` moved with their providers. Bento's browser provider, Pirsch, Visitors and the proxy need no SDK and stay in `trakoo/providers/*`. `BaseAnalyticsProvider` is now also exported from the root `trakoo` entry.
+The provider config types moved with their providers: `PostHogClientConfig`, `PostHogConfig`, `PostHogOptions`, `OpenPanelClientConfig`, `OpenPanelServerConfig`, the OpenPanel delivery-failure types, `BentoServerConfig`, `BentoAnalyticsOptions` and `EmitKitServerConfig`. Bento's browser provider, Pirsch, Visitors and the proxy need no SDK and stay in `trakoo/providers/*`. `BaseAnalyticsProvider` is now also exported from the root `trakoo` entry.

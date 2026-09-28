@@ -1,6 +1,6 @@
 {
 	"name": "@trakoo/emitkit",
-	"version": "0.0.0",
+	"version": "1.0.0",
 	"description": "EmitKit provider for trakoo",
 	"type": "module",
 	"exports": {
@@ -10,14 +10,23 @@
 			"default": "./dist/server.js"
 		}
 	},
-	"files": ["dist", "README.md", "LICENSE"],
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
 	"sideEffects": false,
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run"
 	},
-	"keywords": ["analytics", "trakoo", "emitkit", "typescript"],
+	"keywords": [
+		"analytics",
+		"trakoo",
+		"emitkit",
+		"typescript"
+	],
 	"author": "Chris Jayden <https://github.com/multiplehats>",
 	"license": "MIT",
 	"repository": {

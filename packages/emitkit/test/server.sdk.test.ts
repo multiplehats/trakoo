@@ -180,33 +180,28 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 		expect(JSON.stringify(fetchMock.mock.calls)).not.toContain("203.0.113.7");
 	});
 
-	it("keeps tags and description within EmitKit's limits instead of losing the event", async () => {
+	it("sends every tag once and the full description", async () => {
 		const fetchMock = stubFetch();
 		const provider = new EmitKitServerProvider({ apiKey: "emitkit_key" });
 		await provider.initialize();
 
-		const longTag = "t".repeat(51);
 		const rawTags = [
 			"conversion",
-			longTag,
+			"t".repeat(51),
 			...Array.from({ length: 25 }, (_, index) => `tag-${index}`),
+			"tag-0",
 		];
-		const rawDescription = `${"d".repeat(4999)}😀`;
+		const rawDescription = "d".repeat(5001);
 		await provider.track({
 			action: "checkout_completed",
 			category: "conversion",
 			properties: { tags: rawTags, description: rawDescription },
 		});
 
+		// EmitKit limits only the stored event's total size, not these fields.
 		const [{ body }] = requests(fetchMock);
-		expect(body.tags).toEqual([
-			"conversion",
-			...Array.from({ length: 19 }, (_, index) => `tag-${index}`),
-		]);
-		// The emoji would straddle the limit, so it is dropped whole.
-		expect(body.description).toBe("d".repeat(4999));
-		expect(body.metadata.tags).toEqual(rawTags);
-		expect(body.metadata.description).toBe(rawDescription);
+		expect(body.tags).toEqual(rawTags.slice(0, -1));
+		expect(body.description).toBe(rawDescription);
 	});
 
 	it("retries a failed event without recording it twice", async () => {

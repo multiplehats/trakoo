@@ -109,13 +109,13 @@ Each tracked event becomes one EmitKit event:
 
 - **Title**: the event name in title case, so `user_signed_up` becomes "User Signed Up".
 - **Icon**: chosen from the event category, so feeds stay legible without extra configuration.
-- **Description**: the event's `description` property, or a short default for the built-in categories. Values over 5,000 characters are shortened.
-- **Tags**: the event category plus a `tags` property made of strings. trakoo drops duplicates and tags over 50 characters, and keeps the first 20.
+- **Description**: the event's `description` property, or a short default for the built-in categories.
+- **Tags**: the event category plus a `tags` property made of strings, without duplicates.
 - **Metadata**: the event properties without `__emitkit_channel`, plus `category`, `timestamp`, `sessionId`, and the page, device, UTM, and server context. trakoo removes `ip` from the device and server context, so the visitor IP address that proxy ingestion records never reaches your feeds. User traits are not attached to events.
 - **User**: the email from the current call's user context, then its user id, then the event's `userId`.
 - **Source**: `trakoo`.
 
-The original `description` and `tags` values stay in metadata, so shortening them loses nothing.
+EmitKit stores at most 16 KB per event across all of these fields, metadata included, and rejects a larger event with `payload_too_large`. The `description` and `tags` properties are also part of the metadata, so they count twice toward that limit.
 
 ## Page views
 

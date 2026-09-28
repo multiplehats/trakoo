@@ -10,12 +10,6 @@ const DEFAULT_TIMEOUT = 5000;
 /** Identifies trakoo as the sender of each event in EmitKit. */
 const EVENT_SOURCE = "trakoo";
 
-// EmitKit has rejected the whole event (HTTP 400) when a field exceeds these
-// limits. The raw values stay in metadata, so keeping within them loses nothing.
-const MAX_TAGS = 20;
-const MAX_TAG_LENGTH = 50;
-const MAX_DESCRIPTION_LENGTH = 5000;
-
 /**
  * Configuration for EmitKit server provider
  */
@@ -208,11 +202,7 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 			tags.push(...(cleanProperties.tags as string[]));
 		}
 
-		// Keep tags within EmitKit's limits; the raw `tags` property stays in
-		// metadata.
-		const validTags = [
-			...new Set(tags.filter((tag) => tag.length <= MAX_TAG_LENGTH)),
-		].slice(0, MAX_TAGS);
+		const uniqueTags = [...new Set(tags)];
 
 		// Determine channel name using resolution logic
 		const channelName = this.resolveChannelName(event);
@@ -223,7 +213,7 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 				title,
 				description: this.getEventDescription(event, context),
 				icon: this.getEventIcon(event.category),
-				tags: validTags.length > 0 ? validTags : undefined,
+				tags: uniqueTags.length > 0 ? uniqueTags : undefined,
 				metadata: asJsonObject(metadata),
 				userId: userId || null,
 				notify: this.config.notify ?? true,
@@ -384,13 +374,12 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 		event: BaseEvent,
 		context?: EventContext,
 	): string | undefined {
-		// Use explicit description from properties if available. The full value
-		// stays in metadata.
+		// Use explicit description from properties if available
 		if (
 			event.properties?.description &&
 			typeof event.properties.description === "string"
 		) {
-			return truncate(event.properties.description, MAX_DESCRIPTION_LENGTH);
+			return event.properties.description;
 		}
 
 		// Generate default description based on category
@@ -464,15 +453,4 @@ function asJsonObject(value: Record<string, unknown>): Record<string, Json> {
 function withoutIp<T extends { ip?: unknown }>(block: T): Omit<T, "ip"> {
 	const { ip: _ip, ...rest } = block;
 	return rest;
-}
-
-/**
- * Cut a string to at most `maxLength` UTF-16 code units without leaving half
- * of a surrogate pair at the end.
- */
-function truncate(value: string, maxLength: number): string {
-	if (value.length <= maxLength) return value;
-	const cut = value.slice(0, maxLength);
-	const last = cut.charCodeAt(cut.length - 1);
-	return last >= 0xd800 && last <= 0xdbff ? cut.slice(0, -1) : cut;
 }

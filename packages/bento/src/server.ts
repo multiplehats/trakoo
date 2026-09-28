@@ -94,9 +94,7 @@ export class BentoServerProvider extends BaseAnalyticsProvider {
 			this.initialized = true;
 			this.log("Initialized successfully");
 		} catch (error) {
-			console.error(
-				`[Bento-Server] Failed to initialize (${this.getErrorClass(error)})`,
-			);
+			this.logFailure("initialize", this.getErrorClass(error));
 			throw error;
 		}
 	}
@@ -124,16 +122,12 @@ export class BentoServerProvider extends BaseAnalyticsProvider {
 		try {
 			const queued = await this.client.V1.updateFields({ email, fields });
 			if (!queued) {
-				console.error(
-					"[Bento-Server] Failed to identify user (not queued by Bento)",
-				);
+				this.logFailure("identify user", "not queued by Bento");
 				return;
 			}
 			this.log("Identified user");
 		} catch (error) {
-			console.error(
-				`[Bento-Server] Failed to identify user (${this.getErrorClass(error)})`,
-			);
+			this.logFailure("identify user", this.getErrorClass(error));
 		}
 	}
 
@@ -195,17 +189,13 @@ export class BentoServerProvider extends BaseAnalyticsProvider {
 				}),
 			});
 			if (!queued) {
-				console.error(
-					"[Bento-Server] Failed to track event (not queued by Bento)",
-				);
+				this.logFailure("track event", "not queued by Bento");
 				return;
 			}
 
 			this.log("Tracked event");
 		} catch (error) {
-			console.error(
-				`[Bento-Server] Failed to track event (${this.getErrorClass(error)})`,
-			);
+			this.logFailure("track event", this.getErrorClass(error));
 		}
 	}
 
@@ -260,16 +250,12 @@ export class BentoServerProvider extends BaseAnalyticsProvider {
 				fields,
 			});
 			if (!queued) {
-				console.error(
-					"[Bento-Server] Failed to track page view (not queued by Bento)",
-				);
+				this.logFailure("track page view", "not queued by Bento");
 				return;
 			}
 			this.log("Tracked page view");
 		} catch (error) {
-			console.error(
-				`[Bento-Server] Failed to track page view (${this.getErrorClass(error)})`,
-			);
+			this.logFailure("track page view", this.getErrorClass(error));
 		}
 	}
 
@@ -285,5 +271,10 @@ export class BentoServerProvider extends BaseAnalyticsProvider {
 		this.client = undefined;
 		this.initialized = false;
 		this.log("Shutdown complete");
+	}
+
+	/** Logs a failed call without the event, its user, or the SDK's message. */
+	private logFailure(action: string, reason: string): void {
+		console.error(`[${this.name}] Failed to ${action} (${reason})`);
 	}
 }

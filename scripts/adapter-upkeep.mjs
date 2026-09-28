@@ -26,8 +26,9 @@ const invokedAsScript =
 
 /**
  * The versions a peer range promises: the oldest published release of each
- * `||` part, and the newest published release overall. Prereleases are never
- * selected.
+ * `||` part, and the newest published release overall. A prerelease is only
+ * selected by a range part that names a prerelease of the same version, such
+ * as `^3.0.0-next.0`.
  */
 export function supportedVersions(range, publishedVersions) {
 	const parts = range.split("||").map((part) => part.trim());

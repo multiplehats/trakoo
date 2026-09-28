@@ -37,10 +37,10 @@
 	},
 	"peerDependencies": {
 		"trakoo": "workspace:^",
-		"@emitkit/js": "^2.1.0"
+		"@emitkit/js": "^3.0.0-next.0"
 	},
 	"devDependencies": {
 		"trakoo": "workspace:*",
-		"@emitkit/js": "^2.1.0"
+		"@emitkit/js": "^3.0.0-next.0"
 	}
 }

@@ -2,21 +2,43 @@ import { EmitKitServerProvider } from "../src/server.js";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { sdk } = vi.hoisted(() => ({
-	sdk: { identify: vi.fn(), createEvent: vi.fn() },
+	sdk: { construct: vi.fn(), identify: vi.fn(), createEvent: vi.fn() },
 }));
 
 vi.mock("@emitkit/js", () => ({
 	EmitKit: class {
 		identify = sdk.identify;
 		events = { create: sdk.createEvent };
+		constructor(...args: unknown[]) {
+			sdk.construct(...args);
+		}
 	},
 }));
 
 describe("EmitKitServerProvider", () => {
 	beforeEach(() => {
 		for (const mock of Object.values(sdk)) mock.mockReset();
-		sdk.identify.mockResolvedValue({ data: { id: "identity-1", aliases: {} } });
-		sdk.createEvent.mockResolvedValue({ data: { id: "event-1" } });
+		sdk.identify.mockResolvedValue({
+			id: "identity-1",
+			userId: "user-a",
+			properties: {},
+			aliases: { created: [] },
+			updatedAt: "2026-09-28T00:00:00.000Z",
+		});
+		sdk.createEvent.mockResolvedValue({ id: "event-1" });
+	});
+
+	it("gives each request the documented 5 second timeout", async () => {
+		await new EmitKitServerProvider({ apiKey: "emitkit_key" }).initialize();
+		await new EmitKitServerProvider({
+			apiKey: "emitkit_key",
+			timeout: 2000,
+		}).initialize();
+
+		expect(sdk.construct.mock.calls).toEqual([
+			[{ apiKey: "emitkit_key", timeout: 5000 }],
+			[{ apiKey: "emitkit_key", timeout: 2000 }],
+		]);
 	});
 
 	it("uses only identity supplied on each server call", async () => {
@@ -25,7 +47,7 @@ describe("EmitKitServerProvider", () => {
 
 		await provider.identify("user-a", { email: "user-a@example.com" });
 		expect(sdk.identify).toHaveBeenCalledWith({
-			user_id: "user-a",
+			userId: "user-a",
 			properties: { email: "user-a@example.com" },
 			aliases: ["user-a", "user-a@example.com"],
 		});

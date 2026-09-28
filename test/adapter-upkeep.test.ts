@@ -40,6 +40,17 @@ describe("supported SDK versions", () => {
 		]);
 	});
 
+	it("tests a prerelease only when the range opts into it", () => {
+		const emitKit = ["2.1.0", "2.1.1", "3.0.0-next.0"];
+		expect(supportedVersions("^3.0.0-next.0", emitKit)).toEqual([
+			{ label: "oldest", version: "3.0.0-next.0" },
+		]);
+		expect(supportedVersions("^2.1.0", emitKit)).toEqual([
+			{ label: "oldest", version: "2.1.0" },
+			{ label: "newest", version: "2.1.1" },
+		]);
+	});
+
 	it("rejects a range no published release satisfies", () => {
 		expect(() => supportedVersions("^7.0.0", published)).toThrow(
 			"no published release satisfies oldest",
@@ -58,6 +69,23 @@ describe("SDK update planning", () => {
 	it("does nothing when the adapter is tested against the latest release", () => {
 		expect(planSdkUpdate(peer, "5.46.1")).toBeNull();
 		expect(planSdkUpdate(peer, "5.40.0")).toBeNull();
+	});
+
+	it("stays on a prerelease while the latest tag points at an older line", () => {
+		const prerelease = {
+			name: "@emitkit/js",
+			range: "^3.0.0-next.0",
+			optional: false,
+			testedRange: "^3.0.0-next.0",
+		};
+		expect(planSdkUpdate(prerelease, "2.1.1")).toBeNull();
+		expect(planSdkUpdate(prerelease, "3.0.0")).toEqual({
+			name: "@emitkit/js",
+			latest: "3.0.0",
+			testedRange: { from: "^3.0.0-next.0", to: "^3.0.0" },
+			range: { from: "^3.0.0-next.0", to: "^3.0.0-next.0" },
+			widened: false,
+		});
 	});
 
 	it("moves the tested release without touching an accepting peer range", () => {

@@ -40,7 +40,7 @@ Core trakoo has no provider SDK dependencies. Providers that need no SDK ship wi
 | PostHog | `@trakoo/posthog` | `posthog-js` | `posthog-node` |
 | OpenPanel | `@trakoo/openpanel` | `@openpanel/web` | `@openpanel/sdk` |
 | Bento (server) | `@trakoo/bento` | — | `@bentonow/bento-node-sdk` |
-| EmitKit | `@trakoo/emitkit` | — | `@emitkit/js` |
+| EmitKit | `@trakoo/emitkit` | — | `@emitkit/js` 3 |
 
 ```bash
 # PostHog in the browser

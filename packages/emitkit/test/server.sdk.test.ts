@@ -26,11 +26,12 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 	};
 
 	const requests = (fetchMock: ReturnType<typeof stubFetch>) =>
-		(fetchMock.mock.calls as unknown as [string, RequestInit][]).map(
+		(fetchMock.mock.calls as unknown as [URL | string, RequestInit][]).map(
 			([url, init]) => ({
-				url,
+				url: String(url),
 				method: init.method,
 				authorization: new Headers(init.headers).get("Authorization"),
+				idempotencyKey: new Headers(init.headers).get("Idempotency-Key"),
 				body: JSON.parse(String(init.body)),
 			}),
 		);
@@ -56,7 +57,7 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 			method: "POST",
 			authorization: "Bearer emitkit_key",
 			body: {
-				user_id: "user-a",
+				userId: "user-a",
 				properties: { email: "user-a@example.com" },
 				aliases: ["user-a", "user-a@example.com"],
 			},
@@ -112,7 +113,7 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 		const [withoutTraits] = requests(fetchMock);
 		expect(withoutTraits.body).not.toHaveProperty("properties");
 		expect(withoutTraits.body).toEqual({
-			user_id: "user-a",
+			userId: "user-a",
 			aliases: ["user-a"],
 		});
 	});
@@ -127,7 +128,7 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 		// EmitKit rejects non-string aliases, which would fail the whole call.
 		const [nonStringEmail] = requests(fetchMock);
 		expect(nonStringEmail.body).toEqual({
-			user_id: "user-b",
+			userId: "user-b",
 			properties: { email: 42, plan: "pro" },
 			aliases: ["user-b"],
 		});
@@ -208,47 +209,58 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 		expect(body.metadata.description).toBe(rawDescription);
 	});
 
-	it("times out after the documented 5 second default", async () => {
+	it("retries a failed event without recording it twice", async () => {
 		vi.useFakeTimers();
-		vi.spyOn(console, "error").mockImplementation(() => {});
-		vi.stubGlobal(
-			"fetch",
-			vi.fn(
-				(_url: string, init: RequestInit) =>
-					new Promise<Response>((_resolve, reject) => {
-						init.signal?.addEventListener("abort", () =>
-							reject(
-								Object.assign(new Error("aborted"), { name: "AbortError" }),
-							),
-						);
-					}),
-			),
+		const fetchMock = stubFetch();
+		fetchMock.mockResolvedValueOnce(
+			new Response(JSON.stringify({ success: false, code: "internal_error" }), {
+				status: 503,
+				headers: { "content-type": "application/json" },
+			}),
 		);
 		const provider = new EmitKitServerProvider({ apiKey: "emitkit_key" });
 		await provider.initialize();
 
-		let settled = false;
-		const outcome = provider
-			.track({ action: "checkout_completed", category: "conversion" })
-			.then(
-				() => "resolved",
-				(error: unknown) => error,
-			)
-			.finally(() => {
-				settled = true;
-			});
-
-		await vi.advanceTimersByTimeAsync(4999);
-		expect(settled).toBe(false);
-		await vi.advanceTimersByTimeAsync(1);
-		expect(settled).toBe(true);
-		await expect(outcome).resolves.toMatchObject({
-			name: "EmitKitError",
-			statusCode: 408,
+		const tracked = provider.track({
+			action: "checkout_completed",
+			category: "conversion",
 		});
+		await vi.advanceTimersByTimeAsync(1000);
+		await expect(tracked).resolves.toBeUndefined();
+
+		const [failed, retried] = requests(fetchMock);
+		expect(requests(fetchMock)).toHaveLength(2);
+		expect(retried.idempotencyKey).toBeTruthy();
+		expect(retried.idempotencyKey).toBe(failed.idempotencyKey);
 	});
 
-	it("logs the EmitKit status code without the response body or API key", async () => {
+	it("logs a request that keeps timing out by its error code", async () => {
+		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+		const fetchMock = vi.fn(
+			(_url: URL, init: RequestInit) =>
+				new Promise<Response>((_resolve, reject) => {
+					init.signal?.addEventListener("abort", () =>
+						reject(init.signal?.reason),
+					);
+				}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		const provider = new EmitKitServerProvider({
+			apiKey: "emitkit_key",
+			timeout: 10,
+		});
+		await provider.initialize();
+
+		await expect(
+			provider.track({ action: "checkout_completed", category: "conversion" }),
+		).rejects.toMatchObject({ name: "EmitKitError", code: "timeout" });
+		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(errorSpy.mock.calls.map((call) => call.join(" "))).toEqual([
+			"[EmitKit-Server] Failed to track event (EmitKitError timeout)",
+		]);
+	});
+
+	it("logs the EmitKit error code and status without the response body or API key", async () => {
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(
@@ -256,6 +268,7 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 					new Response(
 						JSON.stringify({
 							success: false,
+							code: "rate_limited",
 							error: "Rate limit exceeded for user-a@example.com",
 							requestId: "req-429",
 						}),
@@ -263,6 +276,8 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 							status: 429,
 							headers: {
 								"content-type": "application/json",
+								// Over the SDK's 10 second limit, so it does not retry.
+								"Retry-After": "60",
 								"X-RateLimit-Limit": "100",
 								"X-RateLimit-Remaining": "0",
 								"X-RateLimit-Reset": "1733270400",
@@ -280,8 +295,8 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 
 		const logged = errorSpy.mock.calls.map((call) => call.join(" "));
 		expect(logged).toEqual([
-			"[EmitKit-Server] Failed to track page view (RateLimitError 429 request req-429)",
-			"[EmitKit-Server] Failed to identify user (RateLimitError 429 request req-429)",
+			"[EmitKit-Server] Failed to track page view (EmitKitError rate_limited 429 request req-429)",
+			"[EmitKit-Server] Failed to identify user (EmitKitError rate_limited 429 request req-429)",
 		]);
 		expect(logged.join("\n")).not.toContain("emitkit_key");
 		expect(logged.join("\n")).not.toContain("example.com");

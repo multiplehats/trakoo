@@ -5,7 +5,7 @@ EmitKit server provider for [trakoo](https://www.npmjs.com/package/trakoo), the 
 ## Installation
 
 ```bash
-pnpm add trakoo @trakoo/emitkit @emitkit/js
+pnpm add trakoo @trakoo/emitkit @emitkit/js@next
 ```
 
 ## Usage

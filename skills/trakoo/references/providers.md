@@ -14,7 +14,7 @@ Import the shared runtime registry into every analytics module and pass `events:
 | OpenPanel | Yes | Yes | `@trakoo/openpanel/client`, `@trakoo/openpanel/server` | `@trakoo/openpanel` plus browser `@openpanel/web` and/or server `@openpanel/sdk` | Product and web analytics across both runtimes. |
 | Bento | Yes | Yes | Browser: `trakoo/providers/client`; server: `@trakoo/bento/server` | Browser: none; server: `@trakoo/bento` and `@bentonow/bento-node-sdk` | Browser page views may be anonymous. Email is required for identification, identified lifecycle events, and server events. |
 | Pirsch | Yes | Yes | `trakoo/providers/client`, `trakoo/providers/server` | None | Privacy-first analytics. Server hits require the visitor IP address and User-Agent request context. |
-| EmitKit | No | Yes | `@trakoo/emitkit/server` | `@trakoo/emitkit` and `@emitkit/js` | Server-side event notifications; verify its current constructor from installed types. |
+| EmitKit | No | Yes | `@trakoo/emitkit/server` | `@trakoo/emitkit` and `@emitkit/js` 3 | Server-side event notifications; verify its current constructor from installed types. |
 | Visitors | Yes | No | `trakoo/providers/client` | None | Privacy-friendly web analytics. `identify()` does not itself require persistence; persistence enables cross-session tracking and revenue attribution. Page views are automatic. |
 | Proxy | Yes | Ingestion helpers | `trakoo/providers/client`, `trakoo/providers/server` | None | First-party batching from `ProxyProvider` to `createProxyHandler` or `ingestProxyEvents`. It is transport, not an analytics vendor. |
 

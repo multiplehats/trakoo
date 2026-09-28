@@ -66,7 +66,7 @@ Bento's browser provider, Pirsch, Visitors, and the Proxy need no SDK and ship w
 | OpenPanel | Yes | Yes | `@trakoo/openpanel` | `@openpanel/web` (client), `@openpanel/sdk` (server) |
 | Bento | Yes, CDN script | Yes | Client: included in `trakoo`; server: `@trakoo/bento` | `@bentonow/bento-node-sdk` (server) |
 | Pirsch | Yes, CDN script | Yes | Included in `trakoo` | None |
-| EmitKit | No | Yes | `@trakoo/emitkit` | `@emitkit/js` |
+| EmitKit | No | Yes | `@trakoo/emitkit` | `@emitkit/js` 3 |
 | Visitors | Yes, CDN script | No | Included in `trakoo` | None |
 | Proxy | Yes | Server ingest helpers | Included in `trakoo` | None |
 
@@ -119,7 +119,7 @@ trakoo’s Pirsch providers call Pirsch directly or load the browser script at r
 <Tab title="EmitKit">
 
 ```bash
-pnpm add trakoo @trakoo/emitkit @emitkit/js
+pnpm add trakoo @trakoo/emitkit @emitkit/js@next
 ```
 
 EmitKit is server-side only. Use the [Proxy Provider](/docs/providers/proxy) if you need browser events to reach EmitKit.

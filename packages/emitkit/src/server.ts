@@ -3,24 +3,18 @@ import {
 	type BaseEvent,
 	type EventContext,
 } from "trakoo";
-import type { EmitKit } from "@emitkit/js";
+import type { EmitKit, Json } from "@emitkit/js";
 
 const DEFAULT_TIMEOUT = 5000;
 
 /** Identifies trakoo as the sender of each event in EmitKit. */
 const EVENT_SOURCE = "trakoo";
 
-// EmitKit rejects the whole event (HTTP 400) when a field exceeds these limits.
-// https://api.emitkit.com/api/openapi.json, CreateEventRequest
+// EmitKit has rejected the whole event (HTTP 400) when a field exceeds these
+// limits. The raw values stay in metadata, so keeping within them loses nothing.
 const MAX_TAGS = 20;
 const MAX_TAG_LENGTH = 50;
 const MAX_DESCRIPTION_LENGTH = 5000;
-
-const EMITKIT_ERROR_NAMES = new Set([
-	"EmitKitError",
-	"RateLimitError",
-	"ValidationError",
-]);
 
 /**
  * Configuration for EmitKit server provider
@@ -32,7 +26,8 @@ export interface EmitKitServerConfig {
 	apiKey: string;
 
 	/**
-	 * Request timeout in milliseconds
+	 * Timeout for each request attempt in milliseconds. The EmitKit SDK retries
+	 * a timed-out, rate-limited, or failed request twice.
 	 * @default 5000
 	 */
 	timeout?: number;
@@ -117,7 +112,8 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 			// Dynamically import the EmitKit SDK
 			const { EmitKit } = await import("@emitkit/js");
 
-			this.client = new EmitKit(this.config.apiKey, {
+			this.client = new EmitKit({
+				apiKey: this.config.apiKey,
 				timeout: this.config.timeout ?? DEFAULT_TIMEOUT,
 			});
 
@@ -160,24 +156,14 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 		}
 
 		try {
-			const result = await this.client.identify({
-				user_id: userId,
-				// EmitKit replaces the stored properties on every identify call, so
-				// only send them when the caller supplied traits.
-				...(traits && { properties: traits }),
+			await this.client.identify({
+				userId,
+				// EmitKit merges these into the stored properties.
+				...(traits && { properties: asJsonObject(traits) }),
 				aliases: aliases.length > 0 ? aliases : undefined,
 			});
 
 			this.log("Identified user");
-
-			if (
-				result.data.aliases?.failed &&
-				result.data.aliases.failed.length > 0
-			) {
-				console.warn(
-					`[EmitKit-Server] ${result.data.aliases.failed.length} aliases failed to create`,
-				);
-			}
 		} catch (error) {
 			console.error(
 				`[EmitKit-Server] Failed to identify user (${this.describeError(error)})`,
@@ -238,7 +224,7 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 				description: this.getEventDescription(event, context),
 				icon: this.getEventIcon(event.category),
 				tags: validTags.length > 0 ? validTags : undefined,
-				metadata,
+				metadata: asJsonObject(metadata),
 				userId: userId || null,
 				notify: this.config.notify ?? true,
 				displayAs: this.config.displayAs || "notification",
@@ -291,7 +277,7 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 				description: context?.page?.path || "User viewed a page",
 				icon: "👁️",
 				tags: ["page_view", "navigation"],
-				metadata,
+				metadata: asJsonObject(metadata),
 				userId: userId || null,
 				notify: false, // Don't notify for page views by default
 				displayAs: "message",
@@ -352,21 +338,24 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 	}
 
 	/**
-	 * Describe an SDK failure for logs. EmitKit errors add their status code and
-	 * request id, which tell auth, validation, and rate-limit failures apart; the
-	 * message and response body are never logged.
+	 * Describe an SDK failure for logs. EmitKit errors add their error code,
+	 * HTTP status, and request id, which tell auth, validation, and rate-limit
+	 * failures apart; the message and response body are never logged.
 	 */
 	private describeError(error: unknown): string {
 		const errorClass = this.getErrorClass(error);
 		try {
-			if (!(error instanceof Error) || !EMITKIT_ERROR_NAMES.has(error.name)) {
+			if (!(error instanceof Error) || error.name !== "EmitKitError") {
 				return errorClass;
 			}
-			const statusCode = Reflect.get(error, "statusCode");
+			const code = Reflect.get(error, "code");
+			const status = Reflect.get(error, "status");
 			const requestId = Reflect.get(error, "requestId");
 			return [
 				error.name,
-				typeof statusCode === "number" ? statusCode : undefined,
+				typeof code === "string" ? code : undefined,
+				// The SDK reports status 0 when no response arrived.
+				typeof status === "number" && status > 0 ? status : undefined,
 				typeof requestId === "string" ? `request ${requestId}` : undefined,
 			]
 				.filter((part) => part !== undefined)
@@ -462,6 +451,14 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 		// Priority 3: Use default channel
 		return defaultChannel || this.config.channelName || "general";
 	}
+}
+
+/**
+ * The SDK types metadata and properties as JSON values and serializes them
+ * with `JSON.stringify`, so trakoo's properties pass through unchanged.
+ */
+function asJsonObject(value: Record<string, unknown>): Record<string, Json> {
+	return value as Record<string, Json>;
 }
 
 function withoutIp<T extends { ip?: unknown }>(block: T): Omit<T, "ip"> {

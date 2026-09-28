@@ -87,14 +87,18 @@ Event validation happens before fan-out. A validation failure follows the config
 
 ## Import from the right entry point
 
-Providers are split by environment. Import browser providers from `trakoo/providers/client` and server providers from `trakoo/providers/server` so nothing server-only ends up in your browser bundle.
+Providers are split by environment so nothing server-only ends up in your browser bundle. Providers that need no vendor SDK ship with `trakoo`: import browser providers from `trakoo/providers/client` and server providers from `trakoo/providers/server`.
+
+Providers that wrap a vendor SDK — PostHog, OpenPanel, Bento's server provider, and EmitKit — ship as separate `@trakoo/*` packages with the same `/client` and `/server` split. Core trakoo depends on no provider SDK, so you install only the packages and SDKs you use. See [Installation](/docs/installation#provider-packages).
 
 ```typescript
 // Browser
-import { PostHogClientProvider } from 'trakoo/providers/client';
+import { PirschClientProvider } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 
 // Server
-import { PostHogServerProvider } from 'trakoo/providers/server';
+import { PirschServerProvider } from 'trakoo/providers/server';
+import { PostHogServerProvider } from '@trakoo/posthog/server';
 ```
 
 ## Next steps

@@ -22,7 +22,7 @@ If none of these apply, send events straight to a client provider — the Proxy 
 
 ## Installation
 
-The Proxy ships with trakoo, so it has no extra package of its own. Install the SDK for each server provider you forward to—for example, `posthog-node` for PostHog or `@emitkit/js` for [EmitKit](/docs/providers/emitkit). [Pirsch](/docs/providers/pirsch) needs no additional package.
+The Proxy ships with trakoo, so it has no extra package of its own. Install the provider package and server SDK for each server provider you forward to—for example, `@trakoo/posthog` with `posthog-node` for PostHog, or `@trakoo/emitkit` with `@emitkit/js` for [EmitKit](/docs/providers/emitkit). [Pirsch](/docs/providers/pirsch) ships with trakoo and needs no additional package.
 
 ## Client-side usage
 
@@ -98,10 +98,8 @@ Let trakoo own the whole route with `createProxyHandler`. The resolver below rea
 
 ```typescript title="app/api/events/route.ts"
 import { createServerAnalytics } from "trakoo/server";
-import {
-  EmitKitServerProvider,
-  createProxyHandler,
-} from "trakoo/providers/server";
+import { createProxyHandler } from "trakoo/providers/server";
+import { EmitKitServerProvider } from "@trakoo/emitkit/server";
 import { appEvents } from "@/lib/events";
 
 const serverAnalytics = createServerAnalytics({

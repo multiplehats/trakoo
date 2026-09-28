@@ -69,10 +69,8 @@ Create an application-owned analytics instance with the providers you want. Pass
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from 'trakoo/client';
-import {
-  PostHogClientProvider,
-  VisitorsClientProvider
-} from 'trakoo/providers/client';
+import { VisitorsClientProvider } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 import { appEvents } from './events';
 
 export const analytics = createClientAnalytics({
@@ -84,7 +82,7 @@ export const analytics = createClientAnalytics({
 });
 ```
 
-The root `trakoo` import contains shared types and environment-neutral event helpers. Import factories and providers from their client or server subpaths.
+The root `trakoo` import contains shared types and environment-neutral event helpers. Import factories and providers from their client or server subpaths. Providers that wrap a vendor SDK, such as PostHog, come from their own `@trakoo/*` package.
 
 Then track from anywhere. TypeScript knows the valid event names and their required properties:
 
@@ -121,7 +119,7 @@ Add Bento for lifecycle email later, or move browser events through the [Proxy](
     Go from install to your first tracked event in a few minutes.
   </Card>
   <Card title="Installation" href="/docs/installation" icon="download">
-    Install the core package and the SDKs each provider needs.
+    Install the core package and the provider packages you use.
   </Card>
   <Card title="Core Concepts" href="/docs/core-concepts/events" icon="book-open">
     Understand events, providers, and the client/server split.

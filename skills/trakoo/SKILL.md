@@ -11,7 +11,7 @@ Trakoo is a typed, provider-agnostic analytics library. Define one runtime event
 
 Detect the package manager, framework, installed `trakoo` version, browser/server entry points, analytics dependencies, and verification commands. Decide whether each event is a browser interaction, an authoritative server outcome, or both.
 
-Use the consuming project's installed Trakoo declarations as the source of truth. Consult the current documentation at https://trakoo.co. If the installed declarations differ, explain the version mismatch instead of silently upgrading or inventing an API.
+Use the consuming project's installed Trakoo declarations as the source of truth. Consult the current documentation at https://trakoo.co. If the installed declarations differ, explain the version mismatch instead of silently upgrading or inventing an API. Since trakoo 2.0, the PostHog, OpenPanel, Bento server, and EmitKit providers live in separate `@trakoo/*` packages; trakoo 1.x exported them from `trakoo/providers/*`.
 
 - Read [references/events-and-validation.md](references/events-and-validation.md) when defining events, adding Zod or another Standard Schema validator, configuring validation failures, or using propertyless events and custom traits.
 - Read [references/providers.md](references/providers.md) when choosing providers, routing events, using Proxy, or building a custom provider.
@@ -19,7 +19,7 @@ Use the consuming project's installed Trakoo declarations as the source of truth
 
 ## Integration workflow
 
-1. Install `trakoo`, the selected providers' optional SDKs, and a validator only when runtime validation is wanted.
+1. Install `trakoo`; for each SDK-backed provider, its `@trakoo/*` adapter plus only the SDK for the side that uses it; and a validator only when runtime validation is wanted.
 2. Define and export one shared registry with `defineEvents()`.
 3. Put client and server analytics in separate modules and pass `events: appEvents` to each factory.
 4. Track where the event becomes true: interactions in browser handlers; payments, signups, jobs, and other authoritative outcomes on the server.
@@ -63,7 +63,7 @@ Registry keys organize application source; each `name` is the stable value emitt
 ```ts
 import { typed } from "trakoo";
 import { createClientAnalytics } from "trakoo/client";
-import { PostHogClientProvider } from "trakoo/providers/client";
+import { PostHogClientProvider } from "@trakoo/posthog/client";
 import { appEvents } from "./events";
 
 interface BrowserUserTraits {
@@ -114,7 +114,7 @@ if (restoredSession.user) {
 ```ts
 import { typed } from "trakoo";
 import { createServerAnalytics } from "trakoo/server";
-import { PostHogServerProvider } from "trakoo/providers/server";
+import { PostHogServerProvider } from "@trakoo/posthog/server";
 import { appEvents } from "./events";
 
 interface ServerUserTraits {
@@ -174,13 +174,14 @@ Server analytics is stateless across users: pass user context with each event an
 | Event helpers and shared types | `trakoo` (environment-neutral) |
 | Browser factory | `trakoo/client` |
 | Server factory | `trakoo/server` |
-| Browser providers | `trakoo/providers/client` |
-| Server providers | `trakoo/providers/server` |
+| Browser providers without an SDK (Bento, Pirsch, Visitors, Proxy) | `trakoo/providers/client` |
+| Server providers without an SDK (Pirsch, proxy ingestion helpers) | `trakoo/providers/server` |
+| SDK-backed providers | `@trakoo/posthog/client`, `@trakoo/posthog/server`, `@trakoo/openpanel/client`, `@trakoo/openpanel/server`, `@trakoo/bento/server`, `@trakoo/emitkit/server` |
 | Browser identity | Await initialization before first identity transition; reset on logout |
 | Server identity | Pass request user context on every call |
 | Critical server delivery | Await `track()`; shutdown follows provider behavior and instance ownership |
 
-Never import a server provider, secret, or unprefixed server environment variable into browser code. Do not use a nonexistent `trakoo/providers` aggregate.
+Never import a server provider, secret, or unprefixed server environment variable into browser code. Do not use a nonexistent `trakoo/providers` aggregate or a root `@trakoo/*` import; adapter packages expose only their `/client` and `/server` subpaths.
 
 ## Verification
 
@@ -196,6 +197,7 @@ Run the consuming project's type checker and narrowest relevant tests. Run its p
 - Using `typed<T>()` when untrusted runtime input needs a validator.
 - Sharing stateful browser identity logic with stateless server analytics.
 - Sending all methods and events to providers with different requirements instead of routing them.
-- Installing every optional SDK instead of only the selected provider and validator packages.
+- Installing every provider SDK instead of only the selected adapters, the SDKs for the sides in use, and the chosen validator.
+- Importing PostHog, OpenPanel, Bento server, or EmitKit providers from `trakoo/providers/*` on trakoo 2.x instead of their `@trakoo/*` package.
 - Calling `identify()` before client provider initialization or forgetting logout reset.
 - Pairing a reusable server instance with per-event shutdown.

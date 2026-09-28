@@ -20,7 +20,7 @@ assert.match(config, /logo:\s*\{/);
 assert.match(config, /light:\s*"\/trakoo-logo\.png"/);
 assert.match(config, /dark:\s*"\/trakoo-logo\.png"/);
 assert.match(config, /alt:\s*"trakoo"/);
-assert.match(config, /site:\s*"https:\/\/stacksee-analytics\.vercel\.app"/);
+assert.match(config, /site:\s*"https:\/\/www\.trakoo\.co"/);
 assert.match(config, /og:\s*\{\s*enabled:\s*true/s);
 
 const readme = read("README.md");

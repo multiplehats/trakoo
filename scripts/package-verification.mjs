@@ -83,11 +83,8 @@ function declarationFiles(directory) {
 	return found;
 }
 
-export function assertRootBundleNeutral(
-	entryPath,
-	distDirectory,
-	prohibitedPackages,
-) {
+/** Walks the static relative-import graph reachable from `entryPath`. */
+function* staticImportGraph(entryPath, distDirectory) {
 	const pending = [resolve(entryPath)];
 	const visited = new Set();
 
@@ -97,6 +94,20 @@ export function assertRootBundleNeutral(
 		visited.add(filePath);
 
 		const source = readFileSync(filePath, "utf8");
+		yield { filePath, source };
+		pending.push(...relativeJavaScriptImports(source, filePath, distDirectory));
+	}
+}
+
+export function assertRootBundleNeutral(
+	entryPath,
+	distDirectory,
+	prohibitedPackages,
+) {
+	for (const { filePath, source } of staticImportGraph(
+		entryPath,
+		distDirectory,
+	)) {
 		for (const packageName of prohibitedPackages) {
 			if (source.includes(packageName)) {
 				const relativePath = relative(distDirectory, filePath)
@@ -107,7 +118,24 @@ export function assertRootBundleNeutral(
 				);
 			}
 		}
-
-		pending.push(...relativeJavaScriptImports(source, filePath, distDirectory));
 	}
+}
+
+/**
+ * Returns the candidate packages that an entry's module graph imports, either
+ * statically or through `import()`.
+ */
+export function referencedPackages(entryPath, distDirectory, candidates) {
+	const found = new Set();
+	for (const { source } of staticImportGraph(entryPath, distDirectory)) {
+		for (const packageName of candidates) {
+			if (importsPackage(source, packageName)) found.add(packageName);
+		}
+	}
+	return candidates.filter((packageName) => found.has(packageName));
+}
+
+function importsPackage(source, packageName) {
+	const escaped = packageName.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
+	return new RegExp(`["']${escaped}(?:/[^"']*)?["']`).test(source);
 }

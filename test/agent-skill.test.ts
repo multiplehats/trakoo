@@ -251,7 +251,7 @@ describe("Trakoo Agent Skill", () => {
 
 		expect(emitkit).toBeDefined();
 		expect(emitkit).toMatch(
-			/import \{ EmitKitServerProvider \} from "trakoo\/providers\/server"/,
+			/import \{ EmitKitServerProvider \} from "@trakoo\/emitkit\/server"/,
 		);
 		expect(emitkit).toMatch(
 			/new EmitKitServerProvider\(\{\s*apiKey: process\.env\.EMITKIT_API_KEY!,\s*\}\)/,

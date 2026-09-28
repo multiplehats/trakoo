@@ -33,7 +33,7 @@ Everything comes back to three moves: define events, create an instance with pro
 // 1. Define events once
 import { defineEvents, typed } from 'trakoo';
 import { createClientAnalytics } from 'trakoo/client';
-import { PostHogClientProvider } from 'trakoo/providers/client';
+import { PostHogClientProvider } from '@trakoo/posthog/client';
 
 export const appEvents = defineEvents({
   buttonClicked: {

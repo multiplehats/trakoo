@@ -27,11 +27,11 @@ The Bento SDK requires an email address for every event, including page views. E
 
 ## Installation
 
-The client provider loads the Bento script from the CDN, so no package is needed in the browser. The server provider uses the Bento Node SDK.
+`BentoClientProvider` ships with trakoo and loads the Bento script from the CDN, so no extra package is needed in the browser. `BentoServerProvider` ships in the `@trakoo/bento` package and uses the Bento Node SDK.
 
 ```bash
 # Server-side only
-pnpm install @bentonow/bento-node-sdk
+pnpm add trakoo @trakoo/bento @bentonow/bento-node-sdk
 ```
 
 ## Client-side usage
@@ -40,10 +40,8 @@ Route Bento to `identify` and `track`, and let PostHog cover page views and anon
 
 ```typescript title="lib/analytics.ts"
 import { createClientAnalytics } from "trakoo/client";
-import {
-  BentoClientProvider,
-  PostHogClientProvider,
-} from "trakoo/providers/client";
+import { BentoClientProvider } from "trakoo/providers/client";
+import { PostHogClientProvider } from "@trakoo/posthog/client";
 import { appEvents } from "@/lib/events";
 
 const analytics = createClientAnalytics({
@@ -68,10 +66,8 @@ The same routing applies on the server. Here Pirsch handles page views while Ben
 
 ```typescript title="lib/server-analytics.ts"
 import { createServerAnalytics } from "trakoo/server";
-import {
-  BentoServerProvider,
-  PirschServerProvider,
-} from "trakoo/providers/server";
+import { PirschServerProvider } from "trakoo/providers/server";
+import { BentoServerProvider } from "@trakoo/bento/server";
 import { appEvents } from "@/lib/events";
 
 const serverAnalytics = createServerAnalytics({
@@ -107,6 +103,26 @@ await serverAnalytics.track(
 );
 ```
 
+### What the server provider sends
+
+- `identify()` sends a `$update_fields` event. The traits become subscriber fields, and Bento creates the subscriber if it does not exist yet. It does not send Bento's `$subscribe` event, so calling `identify()` again doesn't re-run subscribe automations. Automations that fire on field updates can still run. To subscribe someone explicitly, call the Bento SDK's `V1.addSubscriber()` directly.
+- `track()` sends the event name with a `$` prefix, so `subscription_renewed` arrives as `$subscription_renewed`. The browser provider passes the name to Bento.js without a prefix. Keep this in mind when you set up automations that should fire from both sides.
+- For `track()`, event properties, category, session ID, page, device, and UTM data go into the event `details`. The event timestamp becomes the Bento event `date`. `context.server` is not sent.
+- `context.user.traits` becomes subscriber `fields` on every tracked event and page view. Bento fields must be flat, so don't nest objects in traits.
+- `pageView()` sends a `$view` event.
+
+:::warning[Avoid Bento's built-in event names]
+Because of the `$` prefix, a trakoo event named `subscribe`, `unsubscribe`, `tag`, `remove_tag`, `update_fields`, or `purchase` becomes one of Bento's built-in events and acts on the subscriber. For example, `unsubscribe` unsubscribes them. Give your events names that don't collide.
+:::
+
+If an event has a `value` property, Bento requires it to be an object with `amount` and `currency`. Bento rejects any other `value`, and the event is dropped.
+
+### Errors and shutdown
+
+When a Bento request fails, or Bento does not queue the event, the provider logs the failure to the console without the event payload and does not throw. `identify()`, `track()`, and `pageView()` still resolve. Set `logErrors: true` to make the Bento SDK also log the HTTP response of each failed request.
+
+Each call is sent as its own request and awaited, so the provider has nothing to flush. `shutdown()` releases the Bento client, and the provider ignores calls until `initialize()` runs again. Shut down a request-owned pair when its request ends, and a reusable pair only at process teardown.
+
 ## Configuration
 
 `BentoClientProvider`:
@@ -140,13 +156,33 @@ await serverAnalytics.track(
       required: true,
       description: "Bento secret key. Keep it server-side only.",
     },
+    "clientOptions.baseUrl": {
+      type: "string",
+      default: "https://app.bentonow.com/api/v1",
+      description: "Bento API base URL.",
+    },
+    logErrors: {
+      type: "boolean",
+      default: "false",
+      description: "Make the Bento SDK log the HTTP response of failed requests.",
+    },
+    debug: {
+      type: "boolean",
+      default: "false",
+      description: "Log provider activity to the console.",
+    },
+    enabled: {
+      type: "boolean",
+      default: "true",
+      description: "Set to false to disable the provider without removing it.",
+    },
   }}
 />
 
 ## Delivery behavior
 
 - Bento batches events, so they can take one to three minutes to appear.
-- `identify()` updates a subscriber only. Every attributed server event must include a valid email in its current call context.
+- `identify()` updates subscriber fields only. Every attributed server event must include a valid email in its current call context.
 
 ## Resources
 

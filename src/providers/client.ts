@@ -1,22 +1,6 @@
 // Base provider for extending
 export { BaseAnalyticsProvider } from "./base.provider.js";
 
-// PostHog client provider only
-export { PostHogClientProvider } from "./posthog/client.js";
-export type { PostHogClientConfig } from "./posthog/client.js";
-
-// PostHog client types only
-export type { PostHogConfig } from "posthog-js";
-
-// OpenPanel client provider
-export { OpenPanelClientProvider } from "./openpanel/client.js";
-export type { OpenPanelClientConfig } from "./openpanel/client.js";
-export type {
-	OpenPanelDeliveryFailure,
-	OpenPanelDeliveryFailureHandler,
-	OpenPanelDeliveryFailureReason,
-} from "./openpanel/transport.js";
-
 // Bento client provider
 export { BentoClientProvider } from "./bento/client.js";
 export type { BentoClientConfig } from "./bento/client.js";

@@ -24,9 +24,9 @@ jobs:
         name: Typecheck, test, build, and package
         runs-on: macos-latest
         steps:
-            - uses: actions/checkout@v4
+            - uses: actions/checkout@v6
             - uses: pnpm/action-setup@v4
-            - uses: actions/setup-node@v4
+            - uses: actions/setup-node@v6
               with:
                   node-version: 22
                   cache: pnpm
@@ -50,7 +50,7 @@ jobs:
               run: pnpm verify:package
 
             - name: Validate documentation links
-              run: pnpm --filter @stacksee/docs exec blume validate --strict
+              run: pnpm --filter @trakoo/docs exec blume validate --strict
 
             - name: Build documentation
-              run: pnpm --filter @stacksee/docs build
+              run: pnpm --filter @trakoo/docs build

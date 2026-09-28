@@ -6,7 +6,7 @@ First release of the EmitKit provider as its own package, moved out of trakoo co
 
 Changes from the trakoo 1.x provider:
 
-- Requires `@emitkit/js` 3 (`pnpm add @emitkit/js@next` until 3.0.0 is the stable release).
+- Requires `@emitkit/js` 3.
 - The visitor's IP address is removed from the `device` and `server` metadata, so it no longer appears in the EmitKit feed and its notifications.
 - A non-string `email` trait is no longer sent as an alias, which EmitKit rejected.
 - Duplicate tags are removed.

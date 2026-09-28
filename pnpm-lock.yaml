@@ -76,8 +76,8 @@ importers:
   packages/emitkit:
     devDependencies:
       '@emitkit/js':
-        specifier: ^3.0.0-next.0
-        version: 3.0.0-next.0
+        specifier: ^3.0.0
+        version: 3.0.0
       trakoo:
         specifier: workspace:*
         version: link:../..
@@ -571,8 +571,8 @@ packages:
     resolution: {integrity: sha512-Vd/9EVDiu6PPJt9yAh6roZP6El1xHrdvIVGjyBsHR0RYwNHgL7FJPyIIW4fANJNG6FtyZfvlRPpFI4ZM/lubvw==}
     engines: {node: '>=18'}
 
-  '@emitkit/js@3.0.0-next.0':
-    resolution: {integrity: sha512-BgaonIKnYuFE361oV6mq0iI3FXgJlWjovbllsQ5aBiC++7nAFf6dRRzrIFbh/1j7LwJcKHFw0A8SksqS/uOgdQ==}
+  '@emitkit/js@3.0.0':
+    resolution: {integrity: sha512-Q++y0cvWk/8ZFLi4a4oiLJAXyVgS4wr2Mq/52RfSOL8Z8BHWNkJPim75J7420TyrPCdJ8/Gp8Y9yYCuhws/Ong==}
     engines: {node: '>=20.3'}
 
   '@emmetio/abbreviation@2.3.3':
@@ -6139,7 +6139,7 @@ snapshots:
 
   '@csstools/css-tokenizer@3.0.4': {}
 
-  '@emitkit/js@3.0.0-next.0': {}
+  '@emitkit/js@3.0.0': {}
 
   '@emmetio/abbreviation@2.3.3':
     dependencies:

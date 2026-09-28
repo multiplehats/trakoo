@@ -20,8 +20,8 @@ export interface EmitKitServerConfig {
 	apiKey: string;
 
 	/**
-	 * Timeout for each request attempt in milliseconds. The EmitKit SDK retries
-	 * a timed-out, rate-limited, or failed request twice.
+	 * Request timeout in milliseconds. A request that fails or times out is not
+	 * retried.
 	 * @default 5000
 	 */
 	timeout?: number;
@@ -109,6 +109,9 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 			this.client = new EmitKit({
 				apiKey: this.config.apiKey,
 				timeout: this.config.timeout ?? DEFAULT_TIMEOUT,
+				// The SDK's retries would hold a caller for several timeouts, so a
+				// failed request is reported once `timeout` has passed instead.
+				maxRetries: 0,
 			});
 
 			this.initialized = true;

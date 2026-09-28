@@ -28,7 +28,7 @@ describe("EmitKitServerProvider", () => {
 		sdk.createEvent.mockResolvedValue({ id: "event-1" });
 	});
 
-	it("gives each request the documented 5 second timeout", async () => {
+	it("gives each request the documented 5 second timeout without retries", async () => {
 		await new EmitKitServerProvider({ apiKey: "emitkit_key" }).initialize();
 		await new EmitKitServerProvider({
 			apiKey: "emitkit_key",
@@ -36,8 +36,8 @@ describe("EmitKitServerProvider", () => {
 		}).initialize();
 
 		expect(sdk.construct.mock.calls).toEqual([
-			[{ apiKey: "emitkit_key", timeout: 5000 }],
-			[{ apiKey: "emitkit_key", timeout: 2000 }],
+			[{ apiKey: "emitkit_key", timeout: 5000, maxRetries: 0 }],
+			[{ apiKey: "emitkit_key", timeout: 2000, maxRetries: 0 }],
 		]);
 	});
 

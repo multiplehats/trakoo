@@ -139,9 +139,7 @@ export const serverAnalytics = createServerAnalytics({
 
 ## Errors and rate limits
 
-The EmitKit SDK retries a request twice after a network error, a timeout, a server error (5xx), or a rate limit (HTTP 429) whose wait is 10 seconds or less. Each event carries an idempotency key, so a retry never records it twice. The `timeout` applies to each attempt, so with the default of 5 seconds a request that keeps timing out gives up after about 16 seconds.
-
-A request that still fails is not delivered. A failed `track()` is logged by trakoo without affecting other providers. Failed `identify()` and `pageView()` calls are logged and do not reject. The provider's log line names the EmitKit error code, HTTP status, and request id, for example `EmitKitError rate_limited 429 request …`, so you can tell an invalid API key (`unauthorized`) from a validation error (`validation_error`) or a rate limit (`rate_limited`). A request that got no response is logged as `timeout` or `network_error`, without a status.
+trakoo turns off the EmitKit SDK's retries, so a call never waits longer than the `timeout`. A request that hits the rate limit (HTTP 429), fails, or times out is not delivered. A failed `track()` is logged by trakoo without affecting other providers. Failed `identify()` and `pageView()` calls are logged and do not reject. The provider's log line names the EmitKit error code, HTTP status, and request id, for example `EmitKitError rate_limited 429 request …`, so you can tell an invalid API key (`unauthorized`) from a validation error (`validation_error`) or a rate limit (`rate_limited`). A request that got no response is logged as `timeout` or `network_error`, without a status.
 
 ## Browser events via proxy
 
@@ -195,7 +193,7 @@ export async function POST(request: Request) {
       type: "number",
       default: "5000",
       description:
-        "Timeout for each request attempt in milliseconds. The SDK retries a timed-out request twice.",
+        "Request timeout in milliseconds. A request that fails or times out is not retried.",
     },
     channelName: {
       type: "string",

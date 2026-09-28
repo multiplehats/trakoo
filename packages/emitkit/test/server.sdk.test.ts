@@ -204,8 +204,8 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 		expect(body.description).toBe(rawDescription);
 	});
 
-	it("retries a failed event without recording it twice", async () => {
-		vi.useFakeTimers();
+	it("reports a failed event without retrying it", async () => {
+		vi.spyOn(console, "error").mockImplementation(() => {});
 		const fetchMock = stubFetch();
 		fetchMock.mockResolvedValueOnce(
 			new Response(JSON.stringify({ success: false, code: "internal_error" }), {
@@ -216,20 +216,13 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 		const provider = new EmitKitServerProvider({ apiKey: "emitkit_key" });
 		await provider.initialize();
 
-		const tracked = provider.track({
-			action: "checkout_completed",
-			category: "conversion",
-		});
-		await vi.advanceTimersByTimeAsync(1000);
-		await expect(tracked).resolves.toBeUndefined();
-
-		const [failed, retried] = requests(fetchMock);
-		expect(requests(fetchMock)).toHaveLength(2);
-		expect(retried.idempotencyKey).toBeTruthy();
-		expect(retried.idempotencyKey).toBe(failed.idempotencyKey);
+		await expect(
+			provider.track({ action: "checkout_completed", category: "conversion" }),
+		).rejects.toMatchObject({ code: "internal_error", status: 503 });
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 	});
 
-	it("logs a request that keeps timing out by its error code", async () => {
+	it("gives up on a request once the timeout passes", async () => {
 		const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 		const fetchMock = vi.fn(
 			(_url: URL, init: RequestInit) =>
@@ -249,7 +242,7 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 		await expect(
 			provider.track({ action: "checkout_completed", category: "conversion" }),
 		).rejects.toMatchObject({ name: "EmitKitError", code: "timeout" });
-		expect(fetchMock).toHaveBeenCalledTimes(3);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(errorSpy.mock.calls.map((call) => call.join(" "))).toEqual([
 			"[EmitKit-Server] Failed to track event (EmitKitError timeout)",
 		]);
@@ -271,8 +264,6 @@ describe("EmitKitServerProvider with the EmitKit SDK", () => {
 							status: 429,
 							headers: {
 								"content-type": "application/json",
-								// Over the SDK's 10 second limit, so it does not retry.
-								"Retry-After": "60",
 								"X-RateLimit-Limit": "100",
 								"X-RateLimit-Remaining": "0",
 								"X-RateLimit-Reset": "1733270400",

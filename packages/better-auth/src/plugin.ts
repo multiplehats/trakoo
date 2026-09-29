@@ -1,5 +1,5 @@
 import type { BetterAuthPlugin } from "better-auth";
-import { createAuthMiddleware } from "better-auth/api";
+import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import type { EventName } from "trakoo";
 import type { ServerAnalytics } from "trakoo/server";
 import { type BackgroundOptions, runInBackground } from "./background.js";
@@ -132,6 +132,8 @@ export interface TrakooAuthPlugin extends BetterAuthPlugin {
 interface RequestState {
 	createdUsers: Set<string>;
 	userUpdates: Set<string>[];
+	/** The session a sign-out request is ending. */
+	signingOut?: { userId: string; sessionId: string };
 	linkedAnonymousUserId?: string;
 }
 
@@ -163,6 +165,8 @@ interface AuthContextLike extends BackgroundOptions {
 }
 
 const PLUGIN_ID = "trakoo";
+/** How long an event waits for identify before it is sent anyway. */
+const IDENTIFY_TIMEOUT_MS = 3000;
 const LOG_PREFIX = "[trakoo/better-auth]";
 const WRAPPED = Symbol.for("trakoo.better-auth.wrapped");
 
@@ -196,6 +200,7 @@ const adminPaths = new Set([
 ]);
 
 const afterPaths = new Set([
+	"/sign-out",
 	"/revoke-session",
 	"/revoke-sessions",
 	"/revoke-other-sessions",
@@ -327,9 +332,20 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 			(emission.identify ?? authEventDefaults[key].identify === true) &&
 			user !== undefined &&
 			!user.isAnonymous;
-		const traits = identifies && user ? await traitsFor(user) : undefined;
-		if (traits && emission.userId) {
-			await analytics.identify(emission.userId, traits);
+		let traits: AuthTraits | undefined;
+		if (identifies && user) {
+			// A failed or slow identify must not cost any provider the event.
+			try {
+				traits = await traitsFor(user);
+				if (traits && emission.userId) {
+					await withTimeout(
+						Promise.resolve(analytics.identify(emission.userId, traits)),
+						IDENTIFY_TIMEOUT_MS,
+					);
+				}
+			} catch (error) {
+				reportError(error);
+			}
 		}
 
 		let properties: Record<string, unknown> = {
@@ -528,20 +544,6 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 			});
 		});
 
-	const onSessionDeleted = (
-		session: { id: string; userId: string },
-		ctx: EndpointContext | undefined,
-	) =>
-		guard(() => {
-			if (ctx?.path !== "/sign-out") return;
-			emit("userSignedOut", {
-				userId: session.userId,
-				sessionId: session.id,
-				properties: {},
-				request: requestOf(ctx),
-			});
-		});
-
 	const onAccountCreated = (
 		account: { userId: string; providerId: string },
 		ctx: EndpointContext | undefined,
@@ -628,6 +630,17 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 		const request = requestOf(ctx);
 
 		switch (path) {
+			case "/sign-out": {
+				const signingOut = stateOf(ctx)?.signingOut;
+				if (!signingOut) return;
+				emit("userSignedOut", {
+					userId: signingOut.userId,
+					sessionId: signingOut.sessionId,
+					properties: {},
+					request,
+				});
+				return;
+			}
 			case "/revoke-session":
 			case "/revoke-sessions":
 			case "/revoke-other-sessions": {
@@ -1225,10 +1238,13 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 				const plugins = context.options.plugins ?? [];
 				const position = plugins.findIndex((entry) => entry === plugin);
 				const later = plugins.slice(position + 1).map((entry) => entry.id);
-				if (position >= 0 && later.includes("two-factor")) {
+				const mustPrecede = ["two-factor", "anonymous"].filter((id) =>
+					later.includes(id),
+				);
+				if (position >= 0 && mustPrecede.length > 0) {
 					warnOnce(
 						"order",
-						'Register trakooAuth() after twoFactor() in "plugins". Otherwise a sign-in waiting for its second factor is reported as complete.',
+						`Register trakooAuth() last in "plugins", after ${mustPrecede.join(" and ")}. Otherwise a sign-in waiting for its second factor is reported as complete and anonymous account links are missed.`,
 					);
 				}
 
@@ -1265,14 +1281,6 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 									onUserDeleted(user, ctx ?? undefined),
 							},
 						},
-						session: {
-							delete: {
-								after: async (
-									session: { id: string; userId: string },
-									ctx?: EndpointContext | null,
-								) => onSessionDeleted(session, ctx ?? undefined),
-							},
-						},
 						account: {
 							create: {
 								after: async (
@@ -1292,6 +1300,30 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 			};
 		},
 		hooks: {
+			before: [
+				{
+					// Sessions can live in secondary storage, where no database hook
+					// sees them end, so sign-out reads the session it is ending.
+					matcher: (ctx: { path?: string }) =>
+						ctx.path === "/sign-out" && isOn("userSignedOut"),
+					handler: createAuthMiddleware(async (ctx) => {
+						try {
+							const session = await getSessionFromCtx(ctx, {
+								disableRefresh: true,
+							});
+							const state = stateOf(ctx as unknown as EndpointContext);
+							if (session && state) {
+								state.signingOut = {
+									userId: session.user.id,
+									sessionId: session.session.id,
+								};
+							}
+						} catch (error) {
+							reportError(error);
+						}
+					}),
+				},
+			],
 			after: [
 				{
 					matcher: (ctx: { path?: string }) =>
@@ -1307,6 +1339,20 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 	};
 
 	return plugin as unknown as TrakooAuthPlugin;
+}
+
+/** Settles with `promise`, or rejects once `ms` pass. */
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+	let timer: ReturnType<typeof setTimeout> | undefined;
+	return Promise.race([
+		promise,
+		new Promise<T>((_, reject) => {
+			timer = setTimeout(
+				() => reject(new Error(`identify did not finish within ${ms}ms`)),
+				ms,
+			);
+		}),
+	]).finally(() => clearTimeout(timer));
 }
 
 function roleString(role: unknown): string | undefined {

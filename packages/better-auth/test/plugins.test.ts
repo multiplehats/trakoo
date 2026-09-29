@@ -220,7 +220,7 @@ describe("two-factor plugin", () => {
 			trakooFirst: true,
 		});
 		expect(warn).toHaveBeenCalledWith(
-			expect.stringContaining("Register trakooAuth() after twoFactor()"),
+			expect.stringContaining("Register trakooAuth() last"),
 		);
 	});
 });
@@ -329,6 +329,46 @@ describe("passwordless sign-in plugins", () => {
 		expect(harness.provider.find("user_signed_in").properties.method).toBe(
 			"magic_link",
 		);
+	});
+
+	it("reports a magic link sign-in that ends in a redirect", async () => {
+		let magicToken = "";
+		harness = await createHarness({
+			plugins: [
+				magicLink({
+					sendMagicLink: async ({ token }) => {
+						magicToken = token;
+					},
+				}),
+			],
+		});
+		const { userId } = await harness.signUp();
+		await harness.flush();
+		harness.provider.clear();
+
+		await harness.api.signInMagicLink({
+			body: { email: "ada@example.com", callbackURL: "/dashboard" },
+			headers: new Headers(),
+		});
+		harness.secrets.add(magicToken);
+		// Better Auth answers a verified link with a 302 to the callback URL.
+		await expect(
+			harness.api.magicLinkVerify({
+				query: { token: magicToken, callbackURL: "/dashboard" },
+				headers: new Headers(),
+			}),
+		).rejects.toMatchObject({ statusCode: 302 });
+		await harness.flush();
+
+		// Following the link also proves the address.
+		expect(harness.provider.names()).toEqual([
+			"email_verified",
+			"user_signed_in",
+		]);
+		expect(harness.provider.find("user_signed_in")).toMatchObject({
+			userId,
+			properties: { method: "magic_link" },
+		});
 	});
 
 	it("labels an email OTP sign-up without the code", async () => {

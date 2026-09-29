@@ -96,6 +96,86 @@ describe("a provider outage", () => {
 		expect(onError).toHaveBeenCalledWith(expect.any(Error));
 	});
 
+	it("still sends the event to every provider when one provider's identify fails", async () => {
+		const onError = vi.fn();
+		const failing = new FailingProvider();
+		failing.track = vi.fn(async () => {});
+		const healthy = new RecordingProvider();
+		const analytics = createServerAnalytics({
+			events: appEvents,
+			providers: [failing, healthy],
+		});
+		const pending: Promise<unknown>[] = [];
+		const auth = betterAuth({
+			secret: "trakoo-better-auth-test-secret-0123456789abcdef",
+			baseURL: "http://localhost:3000",
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			}),
+			emailAndPassword: { enabled: true },
+			logger: { disabled: true },
+			advanced: { backgroundTasks: { handler: (p) => pending.push(p) } },
+			plugins: [trakooAuth({ analytics, onError })],
+		});
+
+		await auth.api.signUpEmail({
+			body: { email: "ada@example.com", password: PASSWORD, name: "Ada" },
+		});
+		await Promise.all(pending);
+
+		expect(onError).toHaveBeenCalledWith(expect.any(Error));
+		expect(healthy.names()).toEqual(["user_signed_up"]);
+		expect(failing.track).toHaveBeenCalledOnce();
+	});
+
+	it("sends the event once a stalled identify times out", async () => {
+		vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+		try {
+			const onError = vi.fn();
+			const stalled = new StalledProvider();
+			stalled.track = vi.fn(async () => {});
+			const healthy = new RecordingProvider();
+			const analytics = createServerAnalytics({
+				events: appEvents,
+				providers: [stalled, healthy],
+			});
+			const pending: Promise<unknown>[] = [];
+			const auth = betterAuth({
+				secret: "trakoo-better-auth-test-secret-0123456789abcdef",
+				baseURL: "http://localhost:3000",
+				database: memoryAdapter({
+					user: [],
+					session: [],
+					account: [],
+					verification: [],
+				}),
+				emailAndPassword: { enabled: true },
+				logger: { disabled: true },
+				advanced: { backgroundTasks: { handler: (p) => pending.push(p) } },
+				plugins: [trakooAuth({ analytics, onError })],
+			});
+
+			await auth.api.signUpEmail({
+				body: { email: "ada@example.com", password: PASSWORD, name: "Ada" },
+			});
+			await vi.waitFor(() => expect(stalled.identify).toHaveBeenCalled());
+			expect(healthy.names()).toEqual([]);
+
+			await vi.advanceTimersByTimeAsync(3000);
+			await Promise.all(pending);
+
+			expect(healthy.names()).toEqual(["user_signed_up"]);
+			expect(onError).toHaveBeenCalledWith(
+				expect.objectContaining({ message: expect.stringContaining("3000ms") }),
+			);
+		} finally {
+			vi.useRealTimers();
+		}
+	});
+
 	it("survives an onError callback that throws", async () => {
 		harness = await createHarness({
 			provider: new FailingProvider(),
@@ -134,7 +214,8 @@ describe("a provider outage", () => {
 		await harness.signIn("ada@example.com");
 		await harness.flush();
 
-		expect(onError).toHaveBeenCalledTimes(2);
+		// identify and redact for the sign-up, the events function for the sign-in.
+		expect(onError).toHaveBeenCalledTimes(3);
 		// A failing redact drops the event instead of sending it unredacted.
 		expect(harness.provider.tracked).toEqual([]);
 	});

@@ -414,4 +414,83 @@ describe("core Better Auth", () => {
 			});
 		}
 	});
+	it("labels a social sign-up and sign-in with the provider, without linking noise", async () => {
+		harness = await createHarness({
+			options: {
+				socialProviders: {
+					google: {
+						clientId: "google-client",
+						clientSecret: "google-client-secret",
+						// Stand in for Google's token verification and userinfo.
+						verifyIdToken: async () => true,
+						getUserInfo: async () =>
+							({
+								user: {
+									id: "google-user-1",
+									email: "ada@example.com",
+									name: "Ada",
+									emailVerified: true,
+								},
+								data: { sub: "google-user-1" },
+							}) as never,
+					},
+				},
+			},
+		});
+		harness.secrets.add("google-client-secret");
+		harness.secrets.add("google-id-token-value");
+		const signIn = async () => {
+			const result = await harness?.api.signInSocial({
+				body: {
+					provider: "google",
+					idToken: { token: "google-id-token-value" },
+				},
+			});
+			harness?.secrets.add(result.token);
+			return result;
+		};
+
+		const first = await signIn();
+		await harness.flush();
+		expect(harness.provider.names()).toEqual(["user_signed_up"]);
+		expect(harness.provider.find("user_signed_up")).toMatchObject({
+			userId: first.user.id,
+			properties: { method: "social", provider: "google", emailVerified: true },
+		});
+		harness.provider.clear();
+
+		await signIn();
+		await harness.flush();
+		expect(harness.provider.names()).toEqual(["user_signed_in"]);
+		expect(harness.provider.find("user_signed_in").properties).toMatchObject({
+			method: "social",
+			provider: "google",
+		});
+	});
+
+	it("reports a sign-out when sessions live in secondary storage", async () => {
+		const store = new Map<string, string>();
+		harness = await createHarness({
+			options: {
+				secondaryStorage: {
+					get: async (key) => store.get(key) ?? null,
+					set: async (key, value) => {
+						store.set(key, value);
+					},
+					delete: async (key) => {
+						store.delete(key);
+					},
+				},
+			},
+		});
+		const { userId, headers } = await harness.signUp();
+		await harness.flush();
+		harness.provider.clear();
+
+		await harness.api.signOut({ headers });
+		await harness.flush();
+
+		expect(harness.provider.names()).toEqual(["user_signed_out"]);
+		expect(harness.provider.find("user_signed_out").userId).toBe(userId);
+	});
 });

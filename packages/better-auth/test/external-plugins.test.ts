@@ -36,14 +36,20 @@ const versionOf = (name: string): string =>
 	).version;
 
 // These plugins ship in lockstep with better-auth, and a mismatched pair does
-// not load. The adapter matrix swaps better-auth alone, so they run only when
-// the installed versions match.
+// not load. The adapter matrix (adapters.yml, which sets SDK_VERSION) swaps
+// better-auth alone, so only there do they skip; anywhere else a mismatch
+// fails, so an upkeep bump cannot quietly drop this coverage.
 const lockstep = [
 	"@better-auth/api-key",
 	"@better-auth/passkey",
 	"@better-auth/sso",
 	"@better-auth/stripe",
 ].every((name) => versionOf(name) === versionOf("better-auth"));
+if (!lockstep && !process.env.SDK_VERSION) {
+	throw new Error(
+		`Install @better-auth/* plugin packages at better-auth ${versionOf("better-auth")} to test them.`,
+	);
+}
 
 const { apiKey } = lockstep
 	? await import("@better-auth/api-key")

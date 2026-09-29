@@ -1146,3 +1146,79 @@ describe("Event-Level Routing - Server", () => {
 		expect(provider3.calls.track[0].event.action).toBe("user_registered");
 	});
 });
+
+describe("Personal data routing", () => {
+	const traits = {
+		email: "ada@example.com",
+		name: "Ada Lovelace",
+		firstName: "Ada",
+		lastName: "Lovelace",
+		phone: "+441234567890",
+		plan: "pro",
+	};
+
+	it("keeps personal traits and the user's email from a server provider with pii: false", async () => {
+		const analyticsTool = new MockAnalyticsProvider({ enabled: true });
+		const emailTool = new MockAnalyticsProvider({ enabled: true });
+		const analytics = createServerAnalytics({
+			events: clientRoutingEvents,
+			providers: [{ provider: analyticsTool, pii: false }, emailTool],
+		});
+
+		await analytics.identify("user-1", traits);
+		await analytics.track(
+			"test_event",
+			{ foo: "bar" },
+			{
+				userId: "user-1",
+				user: { userId: "user-1", email: "ada@example.com", traits },
+				context: { server: { ip: "203.0.113.7" } },
+			},
+		);
+		await analytics.pageView(undefined, {
+			context: { user: { userId: "user-1", email: "ada@example.com" } },
+		});
+
+		expect(analyticsTool.calls.identify[0]).toEqual({
+			userId: "user-1",
+			traits: { plan: "pro" },
+		});
+		expect(analyticsTool.calls.track[0].event.userId).toBe("user-1");
+		expect(analyticsTool.calls.track[0].context).toEqual({
+			server: { ip: "203.0.113.7" },
+			user: { userId: "user-1", traits: { plan: "pro" } },
+		});
+		expect(analyticsTool.calls.pageView[0].context?.user).toEqual({
+			userId: "user-1",
+		});
+
+		expect(emailTool.calls.identify[0].traits).toEqual(traits);
+		expect(emailTool.calls.track[0].context?.user?.email).toBe(
+			"ada@example.com",
+		);
+	});
+
+	it("keeps personal traits from a browser provider with pii: false", async () => {
+		const analyticsTool = new MockAnalyticsProvider({ enabled: true });
+		const emailTool = new MockAnalyticsProvider({ enabled: true });
+		const analytics = createClientAnalytics({
+			events: clientRoutingEvents,
+			providers: [{ provider: analyticsTool, pii: false }, emailTool],
+		});
+		await analytics.initialize();
+
+		analytics.identify("user-1", traits);
+		await analytics.track("test_event", { foo: "bar" });
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(analyticsTool.calls.identify[0].traits).toEqual({ plan: "pro" });
+		expect(analyticsTool.calls.track[0].context?.user).toEqual({
+			userId: "user-1",
+			traits: { plan: "pro" },
+		});
+		expect(emailTool.calls.identify[0].traits).toEqual(traits);
+		expect(emailTool.calls.track[0].context?.user?.email).toBe(
+			"ada@example.com",
+		);
+	});
+});

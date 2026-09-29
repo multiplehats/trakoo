@@ -19,6 +19,7 @@ import {
 } from "@/core/events/validation.js";
 import { isBrowser } from "@/utils/environment";
 import { compileEventPattern } from "@/utils/event-pattern.js";
+import { withoutPiiContext, withoutPiiTraits } from "@/utils/pii.js";
 
 export interface BrowserAnalyticsConfig<
 	TRegistry extends EventRegistry<EventDefinitions>,
@@ -41,6 +42,8 @@ interface NormalizedProviderConfig {
 	enabledEvents?: Set<string>;
 	excludedEvents?: Set<string>;
 	eventPatterns?: RegExp[];
+	/** Whether the provider may receive personal traits and the user's email. */
+	pii: boolean;
 }
 
 /**
@@ -140,6 +143,7 @@ export class BrowserAnalytics<
 				return {
 					provider: config as AnalyticsProvider,
 					enabledMethods: new Set(allMethods),
+					pii: true,
 				};
 			}
 
@@ -151,6 +155,7 @@ export class BrowserAnalytics<
 				events?: string[];
 				excludeEvents?: string[];
 				eventPatterns?: string[];
+				pii?: boolean;
 			};
 
 			// Validate mutually exclusive method options
@@ -222,6 +227,7 @@ export class BrowserAnalytics<
 				enabledEvents,
 				excludedEvents,
 				eventPatterns,
+				pii: providerConfig.pii !== false,
 			};
 		});
 	}
@@ -448,9 +454,12 @@ export class BrowserAnalytics<
 		this.runAfterInitialization(() => {
 			for (const config of this.providerConfigs) {
 				if (this.shouldCallMethod(config, "identify")) {
+					const providerTraits = traitsSnapshot as
+						| Record<string, unknown>
+						| undefined;
 					config.provider.identify(
 						userIdSnapshot,
-						traitsSnapshot as Record<string, unknown> | undefined,
+						config.pii ? providerTraits : withoutPiiTraits(providerTraits),
 					);
 				}
 			}
@@ -598,7 +607,9 @@ export class BrowserAnalytics<
 				try {
 					await config.provider.track(
 						event as BaseEvent,
-						contextWithUser as EventContext,
+						config.pii
+							? (contextWithUser as EventContext)
+							: withoutPiiContext(contextWithUser as EventContext),
 						{
 							input: invocation.input,
 							inputProvided: invocation.inputProvided,
@@ -694,7 +705,9 @@ export class BrowserAnalytics<
 				if (this.shouldCallMethod(config, "pageView")) {
 					config.provider.pageView(
 						propertiesSnapshot,
-						contextSnapshot as EventContext,
+						config.pii
+							? (contextSnapshot as EventContext)
+							: withoutPiiContext(contextSnapshot as EventContext),
 					);
 				}
 			}
@@ -769,7 +782,9 @@ export class BrowserAnalytics<
 				) {
 					config.provider.pageLeave(
 						propertiesSnapshot,
-						contextSnapshot as EventContext,
+						config.pii
+							? (contextSnapshot as EventContext)
+							: withoutPiiContext(contextSnapshot as EventContext),
 					);
 				}
 			}

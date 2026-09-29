@@ -1,0 +1,62 @@
+{
+	"name": "@trakoo/better-auth",
+	"version": "0.0.0",
+	"description": "Better Auth plugin that turns auth lifecycle changes into typed trakoo events",
+	"type": "module",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"default": "./dist/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md",
+		"LICENSE"
+	],
+	"sideEffects": false,
+	"scripts": {
+		"build": "tsc -p tsconfig.build.json",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run"
+	},
+	"keywords": [
+		"analytics",
+		"trakoo",
+		"better-auth",
+		"auth",
+		"typescript"
+	],
+	"author": "Chris Jayden <https://github.com/multiplehats>",
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/multiplehats/trakoo.git",
+		"directory": "packages/better-auth"
+	},
+	"bugs": {
+		"url": "https://github.com/multiplehats/trakoo/issues"
+	},
+	"homepage": "https://trakoo.co/docs/integrations/better-auth",
+	"publishConfig": {
+		"access": "public"
+	},
+	"engines": {
+		"node": ">=20"
+	},
+	"peerDependencies": {
+		"better-auth": "^1.5.0",
+		"trakoo": "workspace:^"
+	},
+	"devDependencies": {
+		"@better-auth/api-key": "^1.7.6",
+		"@better-auth/passkey": "^1.7.6",
+		"@better-auth/sso": "^1.7.6",
+		"@better-auth/stripe": "^1.7.6",
+		"@simplewebauthn/server": "^13.3.1",
+		"better-auth": "^1.7.6",
+		"stripe": "^22",
+		"trakoo": "workspace:*"
+	}
+}

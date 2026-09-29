@@ -8,6 +8,7 @@ export const adapterTestConfig: UserConfig = {
 	resolve: {
 		alias: [
 			{ find: /^trakoo$/, replacement: `${coreSource}index.ts` },
+			{ find: /^trakoo\/server$/, replacement: `${coreSource}server/index.ts` },
 			{ find: /^@\//, replacement: coreSource },
 		],
 	},

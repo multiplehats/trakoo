@@ -12,6 +12,7 @@
 		"types": ["node", "vitest/globals"],
 		"paths": {
 			"trakoo": ["../src/index.ts"],
+			"trakoo/server": ["../src/server/index.ts"],
 			"@/*": ["../src/*"]
 		}
 	}

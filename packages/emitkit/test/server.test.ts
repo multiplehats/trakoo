@@ -98,4 +98,85 @@ describe("EmitKitServerProvider", () => {
 			expect.objectContaining({ userId: null }),
 		);
 	});
+	it("lets an event's __emitkit_notify override the provider's notify", async () => {
+		const provider = new EmitKitServerProvider({
+			apiKey: "emitkit_key",
+			notify: false,
+		});
+		await provider.initialize();
+
+		await provider.track({
+			action: "user_signed_up",
+			category: "user",
+			properties: { method: "email", __emitkit_notify: true },
+		});
+		await provider.track({
+			action: "user_signed_in",
+			category: "user",
+			properties: { method: "email" },
+		});
+
+		expect(sdk.createEvent.mock.calls[0][0]).toMatchObject({ notify: true });
+		expect(sdk.createEvent.mock.calls[1][0]).toMatchObject({ notify: false });
+	});
+
+	it("silences a single event when the provider notifies by default", async () => {
+		const provider = new EmitKitServerProvider({ apiKey: "emitkit_key" });
+		await provider.initialize();
+
+		await provider.track({
+			action: "user_signed_in",
+			category: "user",
+			properties: { __emitkit_notify: false },
+		});
+		await provider.track({
+			action: "user_signed_up",
+			category: "user",
+			properties: {},
+		});
+
+		expect(sdk.createEvent.mock.calls[0][0]).toMatchObject({ notify: false });
+		expect(sdk.createEvent.mock.calls[1][0]).toMatchObject({ notify: true });
+	});
+
+	it("ignores a notify hint that is not a boolean", async () => {
+		const provider = new EmitKitServerProvider({
+			apiKey: "emitkit_key",
+			notify: false,
+		});
+		await provider.initialize();
+
+		await provider.track({
+			action: "user_signed_up",
+			category: "user",
+			properties: { __emitkit_notify: "true" },
+		});
+
+		expect(sdk.createEvent.mock.calls[0][0]).toMatchObject({ notify: false });
+	});
+
+	it("keeps the __emitkit_* hints out of event and page view metadata", async () => {
+		const provider = new EmitKitServerProvider({ apiKey: "emitkit_key" });
+		await provider.initialize();
+
+		await provider.track({
+			action: "user_signed_up",
+			category: "user",
+			properties: {
+				method: "email",
+				__emitkit_channel: "auth",
+				__emitkit_notify: true,
+			},
+		});
+		await provider.pageView({ __emitkit_notify: true, section: "docs" });
+
+		const [event, pageView] = sdk.createEvent.mock.calls.map(([body]) => body);
+		expect(event.channelName).toBe("auth");
+		expect(event.metadata).not.toHaveProperty("__emitkit_channel");
+		expect(event.metadata).not.toHaveProperty("__emitkit_notify");
+		expect(event.metadata).toMatchObject({ method: "email" });
+		expect(pageView.notify).toBe(true);
+		expect(pageView.metadata).not.toHaveProperty("__emitkit_notify");
+		expect(pageView.metadata).toMatchObject({ section: "docs" });
+	});
 });

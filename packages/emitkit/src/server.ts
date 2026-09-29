@@ -54,7 +54,8 @@ export interface EmitKitServerConfig {
 	categoryChannelMap?: Record<string, string>;
 
 	/**
-	 * Send notification for events
+	 * Send a push notification for events. An event overrides it with a boolean
+	 * `__emitkit_notify` property.
 	 * @default true
 	 */
 	notify?: boolean;
@@ -179,8 +180,12 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 		const title = this.formatEventTitle(event.action);
 
 		// Build metadata from event properties and context
-		// Strip __emitkit_channel from properties as it's internal routing metadata
-		const { __emitkit_channel, ...cleanProperties } = event.properties || {};
+		// Strip the __emitkit_* hints from properties: they are delivery settings
+		const {
+			__emitkit_channel,
+			__emitkit_notify,
+			...cleanProperties
+		} = event.properties || {};
 
 		const metadata: Record<string, unknown> = {
 			...cleanProperties,
@@ -219,7 +224,10 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 				tags: uniqueTags.length > 0 ? uniqueTags : undefined,
 				metadata: asJsonObject(metadata),
 				userId: userId || null,
-				notify: this.config.notify ?? true,
+				notify:
+					typeof __emitkit_notify === "boolean"
+						? __emitkit_notify
+						: (this.config.notify ?? true),
 				displayAs: this.config.displayAs || "notification",
 				source: EVENT_SOURCE,
 			});
@@ -242,8 +250,12 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 		// Page views may only use identity supplied in the current context.
 		const userId = context?.user?.email || context?.user?.userId;
 
-		// Strip __emitkit_channel from properties if present
-		const { __emitkit_channel, ...cleanProperties } = properties || {};
+		// Strip the __emitkit_* hints from properties if present
+		const {
+			__emitkit_channel,
+			__emitkit_notify,
+			...cleanProperties
+		} = properties || {};
 
 		// Build page view metadata
 		const metadata: Record<string, unknown> = {
@@ -272,7 +284,8 @@ export class EmitKitServerProvider extends BaseAnalyticsProvider {
 				tags: ["page_view", "navigation"],
 				metadata: asJsonObject(metadata),
 				userId: userId || null,
-				notify: false, // Don't notify for page views by default
+				// Page views are silent unless the page view asks otherwise
+				notify: typeof __emitkit_notify === "boolean" ? __emitkit_notify : false,
 				displayAs: "message",
 				source: EVENT_SOURCE,
 			});

@@ -133,13 +133,16 @@ export const authEvents = defineEvents({
 		name: "user_deleted",
 		category: "user",
 		properties:
-			typed<Props<ActorProperties & { deletedBy: "self" | "admin" | "server" }>>(),
+			typed<
+				Props<ActorProperties & { deletedBy: "self" | "admin" | "server" }>
+			>(),
 	},
 
 	organizationCreated: {
 		name: "organization_created",
 		category: "organization",
-		properties: typed<Props<OrganizationProperties & { slug: string; name: string }>>(),
+		properties:
+			typed<Props<OrganizationProperties & { slug: string; name: string }>>(),
 	},
 	organizationUpdated: {
 		name: "organization_updated",
@@ -322,9 +325,7 @@ export const authEvents = defineEvents({
 		category: "billing",
 		properties:
 			typed<
-				Props<
-					SubscriptionProperties & { interval?: string; trial: boolean }
-				>
+				Props<SubscriptionProperties & { interval?: string; trial: boolean }>
 			>(),
 	},
 	subscriptionUpdated: {

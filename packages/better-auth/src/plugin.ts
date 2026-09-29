@@ -259,7 +259,9 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 		}
 	};
 
-	const stateOf = (ctx: EndpointContext | undefined): RequestState | undefined => {
+	const stateOf = (
+		ctx: EndpointContext | undefined,
+	): RequestState | undefined => {
 		const key = ctx?.context;
 		if (!key) return undefined;
 		let state = states.get(key);
@@ -302,7 +304,7 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 	function channelFor(key: AuthEventKey, override: EventOverride): string {
 		if (override.channel) return override.channel;
 		const channel = authEventDefaults[key].channel;
-		return (options.emitkit && options.emitkit.channels?.[channel]) || channel;
+		return (options.emitkit || undefined)?.channels?.[channel] || channel;
 	}
 
 	async function traitsFor(user: AuthUser): Promise<AuthTraits | undefined> {
@@ -371,7 +373,10 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 		await analytics.track(authEvents[key].name, properties, trackOptions);
 	}
 
-	function emit(key: AuthEventKey, emission: Emission | (() => Promise<Emission | undefined>)): void {
+	function emit(
+		key: AuthEventKey,
+		emission: Emission | (() => Promise<Emission | undefined>),
+	): void {
 		if (!isOn(key)) return;
 		runInBackground(
 			async () => {
@@ -470,7 +475,10 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 					request,
 				});
 			}
-			if (changed.has("phoneNumberVerified") && user.phoneNumberVerified === true) {
+			if (
+				changed.has("phoneNumberVerified") &&
+				user.phoneNumberVerified === true
+			) {
 				emit("phoneNumberVerified", {
 					userId: user.id,
 					properties: {},
@@ -574,7 +582,10 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 		const { user, session } = newSession;
 		const state = stateOf(ctx);
 		const request = requestOf(ctx);
-		if (state?.linkedAnonymousUserId && state.linkedAnonymousUserId !== user.id) {
+		if (
+			state?.linkedAnonymousUserId &&
+			state.linkedAnonymousUserId !== user.id
+		) {
 			emit("anonymousUserLinked", {
 				userId: user.id,
 				properties: { anonymousUserId: state.linkedAnonymousUserId },
@@ -635,7 +646,8 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 				return;
 			}
 			case "/change-password": {
-				const userId = sessionUserId ?? stringField(objectField(returned, "user"), "id");
+				const userId =
+					sessionUserId ?? stringField(objectField(returned, "user"), "id");
 				if (!userId) return;
 				emit("passwordChanged", {
 					userId,
@@ -777,14 +789,16 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 			}
 			case "/sso/register": {
 				const ssoProviderId =
-					stringField(returned, "providerId") ?? stringField(body, "providerId");
+					stringField(returned, "providerId") ??
+					stringField(body, "providerId");
 				const userId = sessionUserId ?? stringField(returned, "userId");
 				if (!ssoProviderId || !userId) return;
-				const type = objectField(returned, "samlConfig") || body.samlConfig
-					? "saml"
-					: objectField(returned, "oidcConfig") || body.oidcConfig
-						? "oidc"
-						: undefined;
+				const type =
+					objectField(returned, "samlConfig") || body.samlConfig
+						? "saml"
+						: objectField(returned, "oidcConfig") || body.oidcConfig
+							? "oidc"
+							: undefined;
 				const organizationId =
 					stringField(returned, "organizationId") ??
 					stringField(body, "organizationId");
@@ -867,10 +881,8 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 	function wrapOrganization(organization: PluginLike | undefined): void {
 		const pluginOptions = organization?.options;
 		if (!pluginOptions) return;
-		const hooks = (pluginOptions.organizationHooks ??= {}) as Record<
-			string,
-			unknown
-		>;
+		pluginOptions.organizationHooks ??= {};
+		const hooks = pluginOptions.organizationHooks as Record<string, unknown>;
 		type Org = { id: string; slug?: string; name?: string };
 		type Member = { id: string; userId: string; role: string };
 		const ids = (data: unknown) => data as Record<string, unknown>;
@@ -899,15 +911,24 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 				...(org.name && { name: org.name }),
 			})),
 		);
-		wrap(hooks, "afterUpdateOrganization", organizationEvent("organizationUpdated"));
-		wrap(hooks, "afterDeleteOrganization", organizationEvent("organizationDeleted"));
+		wrap(
+			hooks,
+			"afterUpdateOrganization",
+			organizationEvent("organizationUpdated"),
+		);
+		wrap(
+			hooks,
+			"afterDeleteOrganization",
+			organizationEvent("organizationDeleted"),
+		);
 
 		const memberEvent =
 			(
 				key: AuthEventKey,
-				extra?: (data: Record<string, unknown>, ctx?: EndpointContext) =>
-					| Record<string, unknown>
-					| undefined,
+				extra?: (
+					data: Record<string, unknown>,
+					ctx?: EndpointContext,
+				) => Record<string, unknown> | undefined,
 			) =>
 			(data: unknown) => {
 				const ctx = currentEndpointContext();
@@ -1071,9 +1092,8 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 				emit(key, async () => {
 					// A subscription belongs to a user or to an organization.
 					const referenceId = row.referenceId as string;
-					const user = await authContext?.internalAdapter?.findUserById?.(
-						referenceId,
-					);
+					const user =
+						await authContext?.internalAdapter?.findUserById?.(referenceId);
 					const owner = user
 						? { userId: referenceId }
 						: { organizationId: referenceId };
@@ -1096,11 +1116,31 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 				});
 			};
 
-		wrap(subscription, "onSubscriptionComplete", subscriptionEvent("subscriptionStarted", true));
-		wrap(subscription, "onSubscriptionCreated", subscriptionEvent("subscriptionStarted", true));
-		wrap(subscription, "onSubscriptionUpdate", subscriptionEvent("subscriptionUpdated"));
-		wrap(subscription, "onSubscriptionCancel", subscriptionEvent("subscriptionCanceled"));
-		wrap(subscription, "onSubscriptionDeleted", subscriptionEvent("subscriptionEnded"));
+		wrap(
+			subscription,
+			"onSubscriptionComplete",
+			subscriptionEvent("subscriptionStarted", true),
+		);
+		wrap(
+			subscription,
+			"onSubscriptionCreated",
+			subscriptionEvent("subscriptionStarted", true),
+		);
+		wrap(
+			subscription,
+			"onSubscriptionUpdate",
+			subscriptionEvent("subscriptionUpdated"),
+		);
+		wrap(
+			subscription,
+			"onSubscriptionCancel",
+			subscriptionEvent("subscriptionCanceled"),
+		);
+		wrap(
+			subscription,
+			"onSubscriptionDeleted",
+			subscriptionEvent("subscriptionEnded"),
+		);
 	}
 
 	function wrapAnonymous(anonymous: PluginLike | undefined): void {
@@ -1112,11 +1152,14 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 			};
 			const anonymousUserId = link.anonymousUser?.user?.id;
 			const state = stateOf(link.ctx ?? currentEndpointContext());
-			if (state && anonymousUserId) state.linkedAnonymousUserId = anonymousUserId;
+			if (state && anonymousUserId)
+				state.linkedAnonymousUserId = anonymousUserId;
 		});
 	}
 
-	function wrapPasswordReset(emailAndPassword: Record<string, unknown> | undefined): void {
+	function wrapPasswordReset(
+		emailAndPassword: Record<string, unknown> | undefined,
+	): void {
 		wrap(emailAndPassword, "onPasswordReset", (data) => {
 			const user = (data as { user?: AuthUser } | undefined)?.user;
 			if (!user?.id) return;

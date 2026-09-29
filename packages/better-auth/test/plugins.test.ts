@@ -41,10 +41,17 @@ describe("admin plugin", () => {
 
 		await h.api.banUser({
 			headers,
-			body: { userId: target.userId, banReason: "spam from 203.0.113.7", banExpiresIn: 3600 },
+			body: {
+				userId: target.userId,
+				banReason: "spam from 203.0.113.7",
+				banExpiresIn: 3600,
+			},
 		});
 		await h.api.unbanUser({ headers, body: { userId: target.userId } });
-		await h.api.setRole({ headers, body: { userId: target.userId, role: "admin" } });
+		await h.api.setRole({
+			headers,
+			body: { userId: target.userId, role: "admin" },
+		});
 		const created = await h.api.createUser({
 			headers,
 			body: {
@@ -64,7 +71,10 @@ describe("admin plugin", () => {
 		]);
 		expect(h.provider.find("user_banned")).toMatchObject({
 			userId: target.userId,
-			properties: { actorUserId: adminUser.userId, expiresAt: expect.any(String) },
+			properties: {
+				actorUserId: adminUser.userId,
+				expiresAt: expect.any(String),
+			},
 		});
 		expect(JSON.stringify(h.provider.tracked)).not.toContain("spam");
 		expect(h.provider.find("user_role_changed").properties.role).toBe("admin");
@@ -158,7 +168,10 @@ describe("two-factor plugin", () => {
 				: headers;
 		await harness.api.sendTwoFactorOTP({ headers: rotated, body: {} });
 		harness.secrets.add(otp);
-		await harness.api.verifyTwoFactorOTP({ headers: rotated, body: { code: otp } });
+		await harness.api.verifyTwoFactorOTP({
+			headers: rotated,
+			body: { code: otp },
+		});
 		await harness.flush();
 		expect(harness.provider.names()).toContain("two_factor_enabled");
 		expect(harness.provider.names()).not.toContain("user_signed_in");
@@ -224,7 +237,9 @@ describe("anonymous plugin", () => {
 		expect(harness.provider.names()).toEqual(["anonymous_user_created"]);
 		// Anonymous users are not identified: their email is a placeholder.
 		expect(harness.provider.identified).toEqual([]);
-		const anonymousUserId = harness.provider.find("anonymous_user_created").userId;
+		const anonymousUserId = harness.provider.find(
+			"anonymous_user_created",
+		).userId;
 		harness.provider.clear();
 
 		const signedUp = await harness.api.signUpEmail({

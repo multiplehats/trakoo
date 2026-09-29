@@ -107,9 +107,7 @@ export function requestInfo(
 		if (userAgent) info.userAgent = userAgent;
 
 		if (!ipOptions?.disableIpTracking) {
-			for (const name of ipOptions?.ipAddressHeaders ?? [
-				"x-forwarded-for",
-			]) {
+			for (const name of ipOptions?.ipAddressHeaders ?? ["x-forwarded-for"]) {
 				const ip = headers.get(name)?.split(",")[0]?.trim();
 				if (ip) {
 					info.ip = ip;

@@ -6,7 +6,8 @@ import { type AnalyticsProvider, defineEvents, typed } from "trakoo";
 import { createServerAnalytics } from "trakoo/server";
 import { afterEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { resetBackgroundWarning } from "../src/background.js";
-import { authEvents, trakooAuth } from "../src/index.js";
+import type { authEvents } from "../src/index.js";
+import { trakooAuth } from "../src/index.js";
 import {
 	appEvents,
 	createHarness,
@@ -155,7 +156,12 @@ describe("a provider outage", () => {
 		const auth = betterAuth({
 			secret: "trakoo-better-auth-test-secret-0123456789abcdef",
 			baseURL: "http://localhost:3000",
-			database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			}),
 			emailAndPassword: { enabled: true },
 			logger: { disabled: true },
 			plugins: [
@@ -210,7 +216,10 @@ describe("background delivery", () => {
 describe("configuration", () => {
 	it("limits events with include and exclude", async () => {
 		harness = await createHarness({
-			trakoo: { include: ["userSignedUp", "userSignedIn"], exclude: ["userSignedIn"] },
+			trakoo: {
+				include: ["userSignedUp", "userSignedIn"],
+				exclude: ["userSignedIn"],
+			},
 		});
 		expect([...harness.plugin.activeEvents]).toEqual(["userSignedUp"]);
 
@@ -245,7 +254,10 @@ describe("configuration", () => {
 		await harness.api.signOut({ headers });
 		await harness.flush();
 
-		expect(harness.provider.names()).toEqual(["user_signed_up", "user_signed_in"]);
+		expect(harness.provider.names()).toEqual([
+			"user_signed_up",
+			"user_signed_in",
+		]);
 		expect(harness.provider.find("user_signed_up").properties).toMatchObject({
 			method: "email",
 			source: "web",
@@ -300,7 +312,9 @@ describe("configuration", () => {
 		await harness.flush();
 
 		expect(harness.provider.identified).toEqual([]);
-		expect(harness.provider.find("user_signed_up").context?.user).toBeUndefined();
+		expect(
+			harness.provider.find("user_signed_up").context?.user,
+		).toBeUndefined();
 		const sent = JSON.stringify(harness.provider.tracked);
 		expect(sent).not.toContain("ada@example.com");
 		expect(sent).not.toContain("Ada Lovelace");
@@ -309,7 +323,10 @@ describe("configuration", () => {
 	it("uses the traits an identify function returns, email included only if returned", async () => {
 		harness = await createHarness({
 			trakoo: {
-				identify: (user) => ({ plan: "free", createdAt: String(user.createdAt) }),
+				identify: (user) => ({
+					plan: "free",
+					createdAt: String(user.createdAt),
+				}),
 			},
 		});
 		const { userId } = await harness.signUp();
@@ -318,7 +335,9 @@ describe("configuration", () => {
 		expect(harness.provider.identified).toEqual([
 			{ userId, traits: { plan: "free", createdAt: expect.any(String) } },
 		]);
-		expect(harness.provider.find("user_signed_up").context?.user).toBeUndefined();
+		expect(
+			harness.provider.find("user_signed_up").context?.user,
+		).toBeUndefined();
 	});
 
 	it("redacts properties before they are sent", async () => {
@@ -351,7 +370,9 @@ describe("configuration", () => {
 			headers: request,
 		});
 		await harness.flush();
-		expect(harness.provider.find("user_signed_up").context?.server).toBeUndefined();
+		expect(
+			harness.provider.find("user_signed_up").context?.server,
+		).toBeUndefined();
 
 		harness = await createHarness({
 			options: { advanced: { ipAddress: { disableIpTracking: true } } },
@@ -413,7 +434,12 @@ describe("personal data routing", () => {
 		const auth = betterAuth({
 			secret: "trakoo-better-auth-test-secret-0123456789abcdef",
 			baseURL: "http://localhost:3000",
-			database: memoryAdapter({ user: [], session: [], account: [], verification: [] }),
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			}),
 			emailAndPassword: { enabled: true },
 			logger: { disabled: true },
 			advanced: { backgroundTasks: { handler: (p) => pending.push(p) } },
@@ -428,7 +454,10 @@ describe("personal data routing", () => {
 		expect(JSON.stringify(analyticsTool)).not.toContain("ada@example.com");
 		expect(JSON.stringify(analyticsTool)).not.toContain('"Ada"');
 		expect(analyticsTool.identified).toEqual([
-			{ userId: user.id, traits: { createdAt: expect.any(String), emailVerified: false } },
+			{
+				userId: user.id,
+				traits: { createdAt: expect.any(String), emailVerified: false },
+			},
 		]);
 		expect(emailTool.find("user_signed_up").context?.user?.email).toBe(
 			"ada@example.com",

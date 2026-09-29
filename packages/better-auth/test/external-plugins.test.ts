@@ -1,7 +1,4 @@
-import { apiKey } from "@better-auth/api-key";
-import { passkey } from "@better-auth/passkey";
-import { sso } from "@better-auth/sso";
-import { stripe } from "@better-auth/stripe";
+import { readFileSync } from "node:fs";
 import { organization } from "better-auth/plugins";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
@@ -30,13 +27,44 @@ vi.mock("@simplewebauthn/server", async (importOriginal) => ({
 	})),
 }));
 
+const versionOf = (name: string): string =>
+	JSON.parse(
+		readFileSync(
+			new URL(`../node_modules/${name}/package.json`, import.meta.url),
+			"utf8",
+		),
+	).version;
+
+// These plugins ship in lockstep with better-auth, and a mismatched pair does
+// not load. The adapter matrix swaps better-auth alone, so they run only when
+// the installed versions match.
+const lockstep = [
+	"@better-auth/api-key",
+	"@better-auth/passkey",
+	"@better-auth/sso",
+	"@better-auth/stripe",
+].every((name) => versionOf(name) === versionOf("better-auth"));
+
+const { apiKey } = lockstep
+	? await import("@better-auth/api-key")
+	: ({} as typeof import("@better-auth/api-key"));
+const { passkey } = lockstep
+	? await import("@better-auth/passkey")
+	: ({} as typeof import("@better-auth/passkey"));
+const { sso } = lockstep
+	? await import("@better-auth/sso")
+	: ({} as typeof import("@better-auth/sso"));
+const { stripe } = lockstep
+	? await import("@better-auth/stripe")
+	: ({} as typeof import("@better-auth/stripe"));
+
 let harness: Harness | undefined;
 afterEach(() => {
 	if (harness) expectNoSecrets(harness);
 	harness = undefined;
 });
 
-describe("api-key plugin", () => {
+describe.runIf(lockstep)("api-key plugin", () => {
 	it("reports created, updated and deleted keys without the key", async () => {
 		harness = await createHarness({ plugins: [apiKey()], tables: ["apikey"] });
 		const { userId, headers } = await harness.signUp();
@@ -83,7 +111,7 @@ describe("api-key plugin", () => {
 	});
 });
 
-describe("passkey plugin", () => {
+describe.runIf(lockstep)("passkey plugin", () => {
 	it("reports an added and a removed passkey without credential material", async () => {
 		harness = await createHarness({
 			plugins: [passkey({ origin: "http://localhost:3000" })],
@@ -123,7 +151,10 @@ describe("passkey plugin", () => {
 		await harness.api.deletePasskey({ headers, body: { id: added.id } });
 		await harness.flush();
 
-		expect(harness.provider.names()).toEqual(["passkey_added", "passkey_removed"]);
+		expect(harness.provider.names()).toEqual([
+			"passkey_added",
+			"passkey_removed",
+		]);
 		expect(harness.provider.find("passkey_added")).toMatchObject({
 			userId,
 			properties: { passkeyId: added.id, deviceType: "multiDevice" },
@@ -135,9 +166,12 @@ describe("passkey plugin", () => {
 	});
 });
 
-describe("sso plugin", () => {
+describe.runIf(lockstep)("sso plugin", () => {
 	it("reports a registered and a deleted provider without its client secret", async () => {
-		harness = await createHarness({ plugins: [sso()], tables: ["ssoProvider"] });
+		harness = await createHarness({
+			plugins: [sso()],
+			tables: ["ssoProvider"],
+		});
 		harness.secrets.add("oidc-client-secret-value");
 		const { userId, headers } = await harness.signUp();
 		await harness.flush();
@@ -179,7 +213,7 @@ describe("sso plugin", () => {
 	});
 });
 
-describe("stripe plugin", () => {
+describe.runIf(lockstep)("stripe plugin", () => {
 	async function setupStripe(onSubscriptionComplete = vi.fn()) {
 		harness = await createHarness({
 			plugins: [
@@ -195,18 +229,15 @@ describe("stripe plugin", () => {
 					},
 				}),
 			],
-			tables: [
-				"organization",
-				"member",
-				"invitation",
-				"subscription",
-			],
+			tables: ["organization", "member", "invitation", "subscription"],
 		});
 		harness.secrets.add("whsec_test_secret");
 		const context = await harness.auth.$context;
 		const subscription = (
 			context.getPlugin("stripe") as unknown as {
-				options: { subscription: Record<string, (data: unknown) => Promise<void>> };
+				options: {
+					subscription: Record<string, (data: unknown) => Promise<void>>;
+				};
 			}
 		).options.subscription;
 		return { harness, subscription };
@@ -228,10 +259,17 @@ describe("stripe plugin", () => {
 			billingInterval: "month",
 			stripeSubscriptionId: "sub_123",
 		};
-		await subscription.onSubscriptionComplete({ subscription: row, plan: { name: "pro" } });
-		await subscription.onSubscriptionUpdate({ subscription: { ...row, status: "past_due" } });
+		await subscription.onSubscriptionComplete({
+			subscription: row,
+			plan: { name: "pro" },
+		});
+		await subscription.onSubscriptionUpdate({
+			subscription: { ...row, status: "past_due" },
+		});
 		await subscription.onSubscriptionCancel({ subscription: row });
-		await subscription.onSubscriptionDeleted({ subscription: { ...row, status: "canceled" } });
+		await subscription.onSubscriptionDeleted({
+			subscription: { ...row, status: "canceled" },
+		});
 		await h.flush();
 
 		expect(appCallback).toHaveBeenCalledOnce();

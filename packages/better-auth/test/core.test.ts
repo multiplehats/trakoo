@@ -118,7 +118,9 @@ describe("core Better Auth", () => {
 			},
 			context: { server: { ip: "203.0.113.7" } },
 		});
-		expect(harness.provider.find("user_signed_in").context?.user).toBeUndefined();
+		expect(
+			harness.provider.find("user_signed_in").context?.user,
+		).toBeUndefined();
 		expect(harness.provider.identified).toHaveLength(1);
 	});
 
@@ -195,9 +197,9 @@ describe("core Better Auth", () => {
 		await harness.api.revokeSessions({ headers });
 		await harness.flush();
 
-		expect(harness.provider.tracked.map((call) => call.properties.scope)).toEqual(
-			["one", "others", "all"],
-		);
+		expect(
+			harness.provider.tracked.map((call) => call.properties.scope),
+		).toEqual(["one", "others", "all"]);
 		for (const call of harness.provider.tracked) {
 			expect(call).toMatchObject({ name: "sessions_revoked", userId });
 		}
@@ -370,12 +372,14 @@ describe("core Better Auth", () => {
 			"/test/link-github",
 			{ method: "POST", use: [sessionMiddleware] },
 			async (ctx) => {
-				await ctx.context.internalAdapter.linkAccount({
+				const account = {
 					userId: ctx.context.session.user.id,
 					providerId: "github",
 					accountId: "gh-1",
 					accessToken: "gho_secret_access_token",
-				});
+				};
+				// The account input type changes between 1.7 releases.
+				await ctx.context.internalAdapter.linkAccount(account as never);
 				return ctx.json({ ok: true });
 			},
 		);
@@ -388,7 +392,9 @@ describe("core Better Auth", () => {
 		harness.provider.clear();
 
 		await harness.api.linkEndpoint({ headers });
-		const github = harness.db.account.find((row) => row.providerId === "github");
+		const github = harness.db.account.find(
+			(row) => row.providerId === "github",
+		);
 		// Better Auth 1.7 unlinks by the account row id, earlier releases by
 		// the provider id.
 		await harness.api.unlinkAccount({
@@ -402,7 +408,10 @@ describe("core Better Auth", () => {
 			"account_unlinked",
 		]);
 		for (const call of harness.provider.tracked) {
-			expect(call).toMatchObject({ userId, properties: { provider: "github" } });
+			expect(call).toMatchObject({
+				userId,
+				properties: { provider: "github" },
+			});
 		}
 	});
 });

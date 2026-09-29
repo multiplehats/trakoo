@@ -59,8 +59,7 @@ export function signInMethod(
 	const method = exactPaths[path];
 	if (!method) return undefined;
 	if (method === "social") {
-		const provider = (ctx.body as { provider?: unknown } | undefined)
-			?.provider;
+		const provider = (ctx.body as { provider?: unknown } | undefined)?.provider;
 		return {
 			method,
 			...(typeof provider === "string" && { provider }),

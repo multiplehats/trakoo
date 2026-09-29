@@ -9,7 +9,11 @@ import {
 } from "trakoo";
 import { createServerAnalytics } from "trakoo/server";
 import { expect } from "vitest";
-import { authEvents, type TrakooAuthOptions, trakooAuth } from "../src/index.js";
+import {
+	authEvents,
+	type TrakooAuthOptions,
+	trakooAuth,
+} from "../src/index.js";
 
 export const appEvents = defineEvents({
 	...authEvents,
@@ -57,7 +61,9 @@ export class RecordingProvider implements AnalyticsProvider {
 	find(name: string): TrackedCall {
 		const call = this.tracked.find((entry) => entry.name === name);
 		if (!call) {
-			throw new Error(`${name} was not tracked; got ${this.names().join(", ")}`);
+			throw new Error(
+				`${name} was not tracked; got ${this.names().join(", ")}`,
+			);
 		}
 		return call;
 	}
@@ -217,10 +223,13 @@ export function expectNoSecrets(harness: Harness): void {
 	});
 	for (const secret of harness.secrets) {
 		if (secret.length < 6) continue;
-		expect(sent, `a provider received a secret: ${secret.slice(0, 4)}…`).not.toContain(
-			secret,
-		);
+		expect(
+			sent,
+			`a provider received a secret: ${secret.slice(0, 4)}…`,
+		).not.toContain(secret);
 	}
 	// Session tokens, API keys and hashes never appear under these names.
-	expect(sent).not.toMatch(/"(token|password|key|secret|totpURI|backupCodes|otp)"\s*:/i);
+	expect(sent).not.toMatch(
+		/"(token|password|key|secret|totpURI|backupCodes|otp)"\s*:/i,
+	);
 }

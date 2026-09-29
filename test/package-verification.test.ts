@@ -188,13 +188,19 @@ describe("adapter package discovery", () => {
 
 		expect(adapters.map((adapter) => adapter.name)).toEqual([
 			"@trakoo/bento",
+			"@trakoo/better-auth",
 			"@trakoo/emitkit",
 			"@trakoo/openpanel",
 			"@trakoo/posthog",
 		]);
 		expect(
 			adapters.flatMap((adapter) => adapter.sdkPeers.map((peer) => peer.name)),
-		).toEqual(providerPackages);
+		).toEqual([
+			"@bentonow/bento-node-sdk",
+			// An integration's peer is tested like a provider SDK.
+			"better-auth",
+			...providerPackages.slice(1),
+		]);
 		for (const adapter of adapters) {
 			expect(adapter.manifest.peerDependencies.trakoo).toBe("workspace:^");
 			for (const peer of adapter.sdkPeers) {

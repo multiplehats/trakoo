@@ -8,7 +8,13 @@ afterEach(() => {
 	harness = undefined;
 });
 
-const orgTables = ["organization", "member", "invitation", "team", "teamMember"];
+const orgTables = [
+	"organization",
+	"member",
+	"invitation",
+	"team",
+	"teamMember",
+];
 
 async function setup(
 	options: Parameters<typeof organization>[0] = {},
@@ -183,7 +189,11 @@ describe("organization plugin", () => {
 		});
 		const first = await harness.api.createInvitation({
 			headers: owner.headers,
-			body: { organizationId: org.id, email: "charles@example.com", role: "member" },
+			body: {
+				organizationId: org.id,
+				email: "charles@example.com",
+				role: "member",
+			},
 		});
 		await harness.flush();
 		harness.provider.clear();
@@ -194,7 +204,11 @@ describe("organization plugin", () => {
 		});
 		const second = await harness.api.createInvitation({
 			headers: owner.headers,
-			body: { organizationId: org.id, email: "charles@example.com", role: "member" },
+			body: {
+				organizationId: org.id,
+				email: "charles@example.com",
+				role: "member",
+			},
 		});
 		await harness.api.cancelInvitation({
 			headers: owner.headers,
@@ -207,11 +221,15 @@ describe("organization plugin", () => {
 			"organization_invitation_sent",
 			"organization_invitation_canceled",
 		]);
-		expect(harness.provider.find("organization_invitation_rejected")).toMatchObject({
+		expect(
+			harness.provider.find("organization_invitation_rejected"),
+		).toMatchObject({
 			userId: invitee.userId,
 			properties: { organizationId: org.id, invitationId: first.id },
 		});
-		expect(harness.provider.find("organization_invitation_canceled")).toMatchObject({
+		expect(
+			harness.provider.find("organization_invitation_canceled"),
+		).toMatchObject({
 			userId: owner.userId,
 			properties: { organizationId: org.id, invitationId: second.id },
 		});

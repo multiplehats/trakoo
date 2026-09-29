@@ -1,0 +1,273 @@
+---
+title: Better Auth
+description: Turn Better Auth sign-ups, sign-ins, organizations, API keys and subscriptions into typed trakoo events with one plugin.
+---
+
+A [Better Auth](https://www.better-auth.com) plugin that turns auth lifecycle changes into typed [trakoo](https://www.npmjs.com/package/trakoo) events: sign-ups, sign-ins, sessions, password and email changes, organizations, members, invitations, API keys, admin actions and subscriptions. Your trakoo server instance sends them to the providers it already has, such as OpenPanel or PostHog for analytics, Bento for email automation and EmitKit for notifications.
+
+## Installation
+
+```bash
+pnpm add @trakoo/better-auth
+```
+
+The plugin needs `better-auth` 1.7 or later and `trakoo` 2.1 or later. Better Auth 1.5 and 1.6 run database hooks even for transactions that roll back, so the plugin would report sign-ups that never happened.
+
+## Setup
+
+**1. Add the auth events to your registry**, so your server analytics accepts them:
+
+```ts title="lib/events.ts"
+import { defineEvents } from "trakoo";
+import { authEvents } from "@trakoo/better-auth";
+
+export const appEvents = defineEvents({
+  ...authEvents,
+  // your own events
+});
+```
+
+`defineEvents` rejects two events with the same name. If your registry already defines `user_signed_up`, remove it: the plugin sends that event now.
+
+**2. Register the plugin last**, after every other plugin:
+
+```ts title="lib/auth.ts"
+import { betterAuth } from "better-auth";
+import { organization } from "better-auth/plugins";
+import { trakooAuth } from "@trakoo/better-auth";
+import { analytics } from "./analytics"; // your trakoo server instance
+
+export const auth = betterAuth({
+  plugins: [organization(), trakooAuth({ analytics })],
+});
+```
+
+That's the whole setup. The next sign-up reaches every configured provider as `user_signed_up`, with its sign-in method and an identified user. If `analytics` was created from a registry without `authEvents`, TypeScript rejects it.
+
+The plugin has to run after `twoFactor` and `anonymous`: otherwise a sign-in still waiting for its second factor would count as complete. It warns at startup if they come after it.
+
+## Serverless
+
+Tracking never blocks a Better Auth response: events are sent after it. On serverless and edge runtimes, that work has to be registered with the platform or it can be cut off:
+
+- **Vercel**: detected automatically.
+- **Cloudflare Workers**: `advanced: { backgroundTasks: { handler: waitUntil } }`, with `waitUntil` from `cloudflare:workers`.
+- **Next.js** on other hosts: `advanced: { backgroundTasks: { handler: (promise) => after(promise) } }`, with `after` from `next/server`.
+- **AWS Lambda** has no way to finish work after the response, so events sent then can be lost.
+
+On Node and Bun servers nothing is needed. Without a handler on a detected serverless runtime, the plugin warns once.
+
+## Recommended routing
+
+Choosing providers stays in trakoo routing. This setup sends every event to OpenPanel, sign-ups and profile traits to Bento, and a handful of important events to EmitKit:
+
+```ts title="lib/analytics.ts"
+import { createServerAnalytics } from "trakoo/server";
+import { OpenPanelServerProvider } from "@trakoo/openpanel/server";
+import { BentoServerProvider } from "@trakoo/bento/server";
+import { EmitKitServerProvider } from "@trakoo/emitkit/server";
+import { appEvents } from "./events";
+
+export const analytics = createServerAnalytics({
+  events: appEvents,
+  providers: [
+    // Product analytics: every event, without email or name.
+    {
+      provider: new OpenPanelServerProvider({
+        clientId: process.env.OPENPANEL_CLIENT_ID!,
+        clientSecret: process.env.OPENPANEL_CLIENT_SECRET!,
+      }),
+      pii: false,
+    },
+    // Email automation: the subscriber profile and the sign-up event.
+    {
+      provider: new BentoServerProvider({
+        siteUuid: process.env.BENTO_SITE_UUID!,
+        authentication: {
+          publishableKey: process.env.BENTO_PUBLISHABLE_KEY!,
+          secretKey: process.env.BENTO_SECRET_KEY!,
+        },
+      }),
+      methods: ["identify", "track"],
+      events: ["user_signed_up"],
+    },
+    // Team notifications: the events worth a look.
+    {
+      provider: new EmitKitServerProvider({
+        apiKey: process.env.EMITKIT_API_KEY!,
+      }),
+      events: [
+        "user_signed_up",
+        "organization_created",
+        "organization_invitation_accepted",
+        "subscription_started",
+        "subscription_canceled",
+      ],
+    },
+  ],
+});
+```
+
+### Personal data
+
+The plugin sends email addresses and names only through `identify`, never in event properties. `user_signed_up` is the one exception: it also carries the email in its user context, because Bento needs an email on an event to record it and start a sequence.
+
+`pii: false` on a provider entry keeps every email and name away from that provider, in identify traits and in event context alike. It still gets the user id. The OpenPanel entry above does this. EmitKit and Bento keep the email so notifications and sequences can name the person. Pass `identify: false` to the plugin to send no email or name to anyone.
+
+Events never include passwords, session tokens, API key values, OTP codes, reset or verification tokens, TOTP URIs, backup codes, invitee emails or ban reasons. The caller's IP address and user agent are sent as request context (`context.server`) unless you turn that off with `requestContext: false` or Better Auth's `advanced.ipAddress.disableIpTracking`. OpenPanel and PostHog use them for location and device. EmitKit drops the IP.
+
+### Without EmitKit
+
+Each event carries `__emitkit_channel` and `__emitkit_notify` properties for EmitKit. Only EmitKit reads them, and it strips them before sending. Other providers receive them as ordinary properties, so if you don't use EmitKit, pass `emitkit: false` to leave them out.
+
+## Event catalog
+
+Every event carries the Better Auth user id as trakoo's `userId`. The id belongs to the user the event is about. When someone else made the change, such as an admin or an organization owner, the event also has an `actorUserId` property where Better Auth provides it. Events with a session also carry its id (never its token) as `sessionId`.
+
+Events that need a plugin are registered only when that plugin is installed.
+
+### Core
+
+| Event | When | Properties | Identify | Channel | Notify |
+|---|---|---|---|---|---|
+| `user_signed_up` | A user is created by sign-up, social sign-in, magic link, email OTP or similar | `method`, `provider?`, `emailVerified` | ✅ | `auth` | ✅ |
+| `user_signed_in` | A sign-in completes, including after the second factor | `method`, `provider?`, `twoFactor` | ✅ | `auth` | |
+| `user_signed_out` | `/sign-out` ends a session | | | `auth` | |
+| `sessions_revoked` | A user revokes one, all or their other sessions | `scope`: `one` \| `all` \| `others` | | `auth` | |
+| `email_verified` | An email address is verified | | ✅ | `auth` | |
+| `email_changed` | The email address changes | `emailVerified` | ✅ | `auth` | |
+| `user_profile_updated` | The user (or an admin) updates profile fields | `fields` (names only), `actorUserId?` | ✅ | `auth` | |
+| `password_changed` | A signed-in user changes their password | `revokedOtherSessions` | | `auth` | |
+| `password_reset` | A password reset completes | | | `auth` | |
+| `account_linked` | An existing user links a login method | `provider` | | `auth` | |
+| `account_unlinked` | A user unlinks a login method | `provider` | | `auth` | |
+| `user_deleted` | A user is deleted | `deletedBy`: `self` \| `admin` \| `server`, `actorUserId?` | | `auth` | |
+
+`method` is one of `email`, `username`, `social`, `generic_oauth`, `one_tap`, `magic_link`, `email_otp`, `phone_number`, `passkey`, `sso`, `siwe`, `email_verification` (signed in by a verification link), `two_factor` (completed a second factor; the first factor isn't known then) or `unknown`. `provider` is the social, OAuth or SSO provider id, such as `google`.
+
+A password reset request and a verification email have no event: Better Auth doesn't reveal whether the account exists, so there is no user to attribute them to.
+
+### Organizations (`organization` plugin)
+
+| Event | Properties | Channel | Notify |
+|---|---|---|---|
+| `organization_created` | `organizationId`, `slug`, `name` | `orgs` | ✅ |
+| `organization_updated` | `organizationId` | `orgs` | |
+| `organization_deleted` | `organizationId` | `orgs` | |
+| `organization_member_added` | `organizationId`, `memberId`, `role`, `actorUserId?` | `orgs` | |
+| `organization_member_removed` | `organizationId`, `memberId`, `role`, `reason`: `removed` \| `left`, `actorUserId?` | `orgs` | |
+| `organization_member_role_updated` | `organizationId`, `memberId`, `role`, `previousRole`, `actorUserId?` | `orgs` | |
+| `organization_invitation_sent` | `organizationId`, `invitationId`, `role` | `orgs` | |
+| `organization_invitation_accepted` | `organizationId`, `invitationId`, `memberId`, `role` | `orgs` | ✅ |
+| `organization_invitation_rejected` | `organizationId`, `invitationId` | `orgs` | |
+| `organization_invitation_canceled` | `organizationId`, `invitationId` | `orgs` | |
+| `organization_team_created` | `organizationId`, `teamId` | `orgs` | |
+| `organization_team_deleted` | `organizationId`, `teamId` | `orgs` | |
+| `organization_team_member_added` | `organizationId`, `teamId`, `actorUserId?` | `orgs` | |
+| `organization_team_member_removed` | `organizationId`, `teamId`, `actorUserId?` | `orgs` | |
+
+The organization's creator and its default team are part of `organization_created`, not separate member and team events. Member events belong to the member; invitation events to the inviter, the invitee or the person who canceled.
+
+### Other plugins
+
+| Event | Plugin | Properties | Channel | Notify |
+|---|---|---|---|---|
+| `api_key_created` | `api-key` | `apiKeyId`, `name?`, `prefix?`, `expiresAt?` | `api-keys` | |
+| `api_key_updated` | `api-key` | `apiKeyId`, `enabled?` | `api-keys` | |
+| `api_key_deleted` | `api-key` | `apiKeyId` | `api-keys` | |
+| `user_banned` | `admin` | `actorUserId`, `expiresAt?` | `auth` | |
+| `user_unbanned` | `admin` | `actorUserId` | `auth` | |
+| `user_role_changed` | `admin` | `role`, `actorUserId` | `auth` | |
+| `user_created_by_admin` | `admin` | `role?`, `actorUserId` (identifies the user) | `auth` | |
+| `user_impersonation_started` | `admin` | `actorUserId` (the admin) | `auth` | |
+| `user_impersonation_stopped` | `admin` | `actorUserId` (the admin) | `auth` | |
+| `two_factor_enabled` | `two-factor` | | `auth` | |
+| `two_factor_disabled` | `two-factor` | | `auth` | |
+| `passkey_added` | `passkey` | `passkeyId`, `deviceType?` | `auth` | |
+| `passkey_removed` | `passkey` | `passkeyId` | `auth` | |
+| `phone_number_verified` | `phone-number` | | `auth` | |
+| `anonymous_user_created` | `anonymous` | (not identified) | `auth` | |
+| `anonymous_user_linked` | `anonymous` | `anonymousUserId` | `auth` | |
+| `sso_provider_registered` | `sso` | `ssoProviderId`, `type?`, `organizationId?` | `auth` | |
+| `sso_provider_deleted` | `sso` | `ssoProviderId` | `auth` | |
+| `subscription_started` | `stripe` | `subscriptionId`, `plan`, `status`, `interval?`, `trial`, `organizationId?` | `billing` | ✅ |
+| `subscription_updated` | `stripe` | `subscriptionId`, `plan`, `status`, `organizationId?` | `billing` | |
+| `subscription_canceled` | `stripe` | `subscriptionId`, `plan`, `organizationId?` | `billing` | |
+| `subscription_ended` | `stripe` | `subscriptionId`, `plan`, `organizationId?` | `billing` | |
+
+The magic link, email OTP, phone number, username, one tap and SIWE plugins add no events of their own. They set `method` on sign-ups and sign-ins. A subscription that belongs to an organization carries `organizationId` and no user id.
+
+### When events fire
+
+Database changes are reported only after their transaction commits, and failed requests report nothing. A rejected sign-in, a duplicate sign-up or a sign-up whose transaction rolls back sends no event.
+
+## Configuration
+
+Every option except `analytics` is optional.
+
+```ts
+trakooAuth({
+  analytics,
+
+  // Turn events off, adjust them, or decide per occurrence.
+  events: {
+    userSignedOut: false,
+    userSignedUp: { channel: "signups", properties: { source: "web" } },
+    userSignedIn: (event) =>
+      event.properties.method === "email" ? {} : false,
+  },
+
+  // Or pick events wholesale. Keys are registry keys, not wire names.
+  include: ["userSignedUp", "userSignedIn", "organizationCreated"],
+  exclude: ["userSignedIn"],
+
+  // Choose identify traits, or send no email or name at all with `false`.
+  identify: (user) => ({ email: user.email, name: user.name, plan: "free" }),
+
+  // EmitKit hints. `emitkit: false` leaves them out.
+  emitkit: {
+    channels: { auth: "people", orgs: "customers" },
+    notify: ["userSignedUp", "subscriptionStarted"], // or true / false
+  },
+
+  // Last look at the properties before they are sent.
+  redact: (properties, event) => properties,
+
+  // Leave the IP address and user agent out.
+  requestContext: false,
+
+  // Tracking failures. They never reach Better Auth.
+  onError: (error) => logger.warn(error),
+});
+```
+
+| Option | Default | |
+|---|---|---|
+| `analytics` | required | A trakoo server analytics instance whose registry includes `authEvents` |
+| `events` | all on | Per event: `false`, `{ channel?, notify?, properties? }`, or a function returning either |
+| `include` / `exclude` | all events | Registry keys, such as `userSignedUp` |
+| `identify` | `true` | `false`, or a function returning traits. Default traits: `email`, `name`, `createdAt`, `emailVerified` |
+| `emitkit` | on | `false`, or `{ channels?, notify? }` |
+| `redact` | none | Rewrites event properties. It does not see identify traits or the sign-up email |
+| `requestContext` | `true` | Sends the caller's IP address and user agent as `context.server` |
+| `onError` | logs the error type | Receives tracking failures |
+
+Option callbacks run after the response, never in the request. A callback that throws goes to `onError`. When `identify` throws, the event is still sent without identify. When `redact` throws, the event is dropped rather than sent unredacted.
+
+A plugin option that mentions an event of a plugin you haven't installed logs one warning and is ignored.
+
+### Merging with your events
+
+`authEvents` is an ordinary trakoo registry, so you route and filter on its wire names (`user_signed_up`) like any other event. `authEventDefaults` lists each event's required plugin, EmitKit channel and notify default, and `plugin.activeEvents` holds the events registered for the current Better Auth instance.
+
+## Guarantees
+
+- Tracking never runs in the request path and never throws into Better Auth. A provider that fails or never responds doesn't delay or break auth. A slow `identify` holds its event back for at most three seconds.
+- Your own Better Auth hooks, `organizationHooks` and Stripe callbacks keep running; the plugin adds to them.
+- Node, Bun and Cloudflare Workers.
+
+## Next steps
+
+- [Routing](/docs/providers#routing) and [personal data routing](/docs/providers#personal-data)
+- [EmitKit notifications](/docs/providers/emitkit#notifications)
+- [Merging registries](/docs/core-concepts/events#merging-registries)

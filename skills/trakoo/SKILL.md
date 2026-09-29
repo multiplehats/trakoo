@@ -1,6 +1,6 @@
 ---
 name: trakoo
-description: Use when adding, configuring, or troubleshooting Trakoo analytics in TypeScript applications, including typed or validated events, browser or server tracking, PostHog, OpenPanel, Bento, Pirsch, EmitKit, Visitors, Proxy, provider routing, user identification, or framework integration.
+description: Use when adding, configuring, or troubleshooting Trakoo analytics in TypeScript applications, including typed or validated events, browser or server tracking, PostHog, OpenPanel, Bento, Pirsch, EmitKit, Visitors, Proxy, provider routing, user identification, Better Auth auth events, or framework integration.
 ---
 
 # Trakoo Integration
@@ -167,6 +167,32 @@ export async function trackPurchase(input: {
 
 Server analytics is stateless across users: pass user context with each event and await critical events. For a fresh request-scoped provider/analytics pair, shut down that same pair in `finally`. A reusable instance shuts down only at application or process teardown. Some providers flush buffered events during shutdown; others only clear state. Inspect the selected provider's installed implementation before choosing the lifecycle. Use the platform's `waitUntil` only for explicitly non-critical work.
 
+## Better Auth
+
+When the application uses Better Auth, track auth lifecycle events with `@trakoo/better-auth` instead of hand-written sign-up and sign-in calls. Merge its registry into the shared one, then register the plugin last, after `twoFactor` and `anonymous`:
+
+```ts
+import { defineEvents } from "trakoo";
+import { authEvents } from "@trakoo/better-auth";
+
+export const appEvents = defineEvents({
+	...authEvents,
+	// application events; remove any definition of an event the plugin sends, such as user_signed_up
+});
+```
+
+```ts
+import { betterAuth } from "better-auth";
+import { trakooAuth } from "@trakoo/better-auth";
+import { analytics } from "./server-analytics";
+
+export const auth = betterAuth({
+	plugins: [trakooAuth({ analytics })],
+});
+```
+
+The plugin needs `better-auth` 1.7 or later. It sends events after the response and never throws into Better Auth. On serverless runtimes other than Vercel, set Better Auth's `advanced.backgroundTasks.handler` to the platform's `waitUntil` so events are not cut off. Choose destinations with provider routing: product analytics with `pii: false`, Bento for `user_signed_up` and identify, EmitKit for a short list of high-signal events. Pass `emitkit: false` when EmitKit is not a provider. Read the installed package's README for the event catalog and options.
+
 ## Imports and ownership
 
 | Concern | Correct pattern |
@@ -177,11 +203,12 @@ Server analytics is stateless across users: pass user context with each event an
 | Browser providers without an SDK (Bento, Pirsch, Visitors, Proxy) | `trakoo/providers/client` |
 | Server providers without an SDK (Pirsch, proxy ingestion helpers) | `trakoo/providers/server` |
 | SDK-backed providers | `@trakoo/posthog/client`, `@trakoo/posthog/server`, `@trakoo/openpanel/client`, `@trakoo/openpanel/server`, `@trakoo/bento/server`, `@trakoo/emitkit/server` |
+| Better Auth plugin and its event registry | `@trakoo/better-auth` |
 | Browser identity | Await initialization before first identity transition; reset on logout |
 | Server identity | Pass request user context on every call |
 | Critical server delivery | Await `track()`; shutdown follows provider behavior and instance ownership |
 
-Never import a server provider, secret, or unprefixed server environment variable into browser code. Do not use a nonexistent `trakoo/providers` aggregate or a root `@trakoo/*` import; adapter packages expose only their `/client` and `/server` subpaths.
+Never import a server provider, secret, or unprefixed server environment variable into browser code. Do not use a nonexistent `trakoo/providers` aggregate or a root import of a provider package; provider packages expose only their `/client` and `/server` subpaths. `@trakoo/better-auth` is the one package imported from its root.
 
 ## Verification
 
@@ -201,3 +228,4 @@ Run the consuming project's type checker and narrowest relevant tests. Run its p
 - Importing PostHog, OpenPanel, Bento server, or EmitKit providers from `trakoo/providers/*` on trakoo 2.x instead of their `@trakoo/*` package.
 - Calling `identify()` before client provider initialization or forgetting logout reset.
 - Pairing a reusable server instance with per-event shutdown.
+- Registering `trakooAuth()` before other Better Auth plugins, or forgetting to merge `authEvents` into the registry.

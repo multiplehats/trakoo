@@ -137,6 +137,8 @@ async function handleUpgrade(user: User, plan: UserTraits['plan']) {
 Bento and other email tools need an email trait for every identified event, and Bento won't track anonymous users at all. Route those providers to identified events only — see [routing](/docs/providers#routing).
 :::
 
+**Keep personal data where it's needed.** Route analytics providers with `pii: false` so they get the user id but never the email or name, while email tools still receive them. See [personal data routing](/docs/providers#personal-data).
+
 ## Framework patterns
 
 <Tabs>

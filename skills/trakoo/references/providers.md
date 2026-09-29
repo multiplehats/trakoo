@@ -42,6 +42,8 @@ providers: [
 
 Use one method selector: `methods` or `exclude`. Use one event selector: `events`, `excludeEvents`, or `eventPatterns`. If mutually exclusive options are combined, Trakoo warns and applies precedence; remove the ambiguity instead of relying on precedence.
 
+Set `pii: false` on a routing object to keep personal data from that provider: it never receives the `email`, `name`, `firstName`, `lastName`, or `phone` identify traits, nor the email or those traits in an event's user context. It still receives the user id. Use it for product-analytics providers while email tools such as Bento keep the email. `pii` does not inspect event properties, so never put personal data there.
+
 ## Provider constraints
 
 ### PostHog
@@ -153,6 +155,8 @@ export async function createEmitKitAnalytics() {
 `EMITKIT_API_KEY` is server-only. Never expose it through client-prefixed environment variables or import this module into browser code. EmitKit dynamically imports its SDK; early calls can be skipped until initialization completes, so awaiting `provider.initialize()` before the factory is required.
 
 For request-scoped ownership, create a fresh provider and analytics pair and shut down that same pair in `finally`. For a reusable instance, call `shutdown()` only at application or process teardown. EmitKit sends immediately rather than buffering; its shutdown clears the provider's client state.
+
+Two event properties steer EmitKit per event and are stripped before sending: `__emitkit_channel` picks the channel, and a boolean `__emitkit_notify` overrides the provider's `notify` option. Other providers receive them as ordinary properties.
 
 ### OpenPanel
 

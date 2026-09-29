@@ -876,17 +876,15 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 			| (((...args: unknown[]) => unknown) & { [WRAPPED]?: object })
 			| undefined;
 		if (existing?.[WRAPPED] === token) return;
-		const original =
-			existing?.[WRAPPED] !== undefined
-				? (existing as unknown as { original?: typeof existing }).original
-				: existing;
+		// Another trakooAuth instance's wrapper stays in the chain.
+		const original = existing;
 		const wrapped = Object.assign(
 			async (...args: unknown[]) => {
 				const result = original ? await original(...args) : undefined;
 				guard(() => handler(...args));
 				return result;
 			},
-			{ [WRAPPED]: token, original },
+			{ [WRAPPED]: token },
 		);
 		target[name] = wrapped;
 	}

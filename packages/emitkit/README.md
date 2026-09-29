@@ -32,6 +32,8 @@ export const serverAnalytics = createServerAnalytics({
 });
 ```
 
+Set `__emitkit_channel` or a boolean `__emitkit_notify` in an event's properties to send that event to another channel or to turn its push notification on or off. The provider strips both before sending.
+
 EmitKit is server-only. To send browser events to it, forward them through trakoo's [Proxy provider](https://trakoo.co/docs/providers/proxy).
 
 The provider also sends page views, as silent events. EmitKit allows 100 requests per minute per API key by default, so if you only want explicit events in your feeds, register it as `{ provider: new EmitKitServerProvider({ ... }), exclude: ['pageView'] }`.

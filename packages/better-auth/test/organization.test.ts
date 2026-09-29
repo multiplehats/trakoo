@@ -1,3 +1,5 @@
+import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { organization } from "better-auth/plugins";
 import { afterEach, describe, expect, it } from "vitest";
 import { createHarness, expectNoSecrets, type Harness } from "./helpers.js";
@@ -318,5 +320,41 @@ describe("organization plugin", () => {
 				properties: { organizationId: org.id, teamId: team.id },
 			});
 		}
+	});
+	it("wraps the organization hooks once when the plugins are reused", async () => {
+		const seen: string[] = [];
+		const org = organization({
+			organizationHooks: {
+				afterCreateOrganization: async ({ organization }) => {
+					seen.push(organization.slug);
+				},
+			},
+		});
+		harness = await createHarness({ plugins: [org], tables: orgTables });
+		// A second Better Auth instance initializes the same plugin objects.
+		await betterAuth({
+			secret: "trakoo-better-auth-test-secret-0123456789abcdef",
+			baseURL: "http://localhost:3000",
+			database: memoryAdapter({
+				user: [],
+				session: [],
+				account: [],
+				verification: [],
+			}),
+			logger: { disabled: true },
+			plugins: [org, harness.plugin],
+		}).$context;
+		const { headers } = await harness.signUp();
+		await harness.flush();
+		harness.provider.clear();
+
+		await harness.api.createOrganization({
+			headers,
+			body: { name: "Engines", slug: "engines" },
+		});
+		await harness.flush();
+
+		expect(seen).toEqual(["engines"]);
+		expect(harness.provider.names()).toEqual(["organization_created"]);
 	});
 });

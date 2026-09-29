@@ -103,6 +103,25 @@ await serverAnalytics.track("large_payment", {
 });
 ```
 
+## Notifications
+
+The `notify` option decides whether EmitKit sends a push notification for each event. A single event overrides it with a boolean `__emitkit_notify` property, so the provider can stay quiet by default and notify only for the events that matter, or the other way round:
+
+```typescript
+new EmitKitServerProvider({
+  apiKey: process.env.EMITKIT_API_KEY!,
+  notify: false, // feed entries only
+});
+
+// This one also sends a push notification.
+await serverAnalytics.track("large_payment", {
+  amount: 50000,
+  __emitkit_notify: true,
+});
+```
+
+Only a boolean counts; any other value falls back to `notify`. trakoo strips `__emitkit_notify` before sending, like `__emitkit_channel`. The [Better Auth plugin](/docs/integrations/better-auth) sets both hints on every auth event.
+
 ## What EmitKit receives
 
 Each tracked event becomes one EmitKit event:
@@ -111,15 +130,16 @@ Each tracked event becomes one EmitKit event:
 - **Icon**: chosen from the event category, so feeds stay legible without extra configuration.
 - **Description**: the event's `description` property, or a short default for the built-in categories.
 - **Tags**: the event category plus a `tags` property made of strings, without duplicates.
-- **Metadata**: the event properties without `__emitkit_channel`, plus `category`, `timestamp`, `sessionId`, and the page, device, UTM, and server context. trakoo removes `ip` from the device and server context, so the visitor IP address that proxy ingestion records never reaches your feeds. User traits are not attached to events.
+- **Metadata**: the event properties without `__emitkit_channel` and `__emitkit_notify`, plus `category`, `timestamp`, `sessionId`, and the page, device, UTM, and server context. trakoo removes `ip` from the device and server context, so the visitor IP address that proxy ingestion records never reaches your feeds. User traits are not attached to events.
 - **User**: the email from the current call's user context, then its user id, then the event's `userId`.
+- **Notification**: the event's `__emitkit_notify` when it is a boolean, otherwise the `notify` option.
 - **Source**: `trakoo`.
 
 EmitKit stores at most 16 KB per event across all of these fields, metadata included, and rejects a larger event with `payload_too_large`. The `description` and `tags` properties are also part of the metadata, so they count twice toward that limit.
 
 ## Page views
 
-`pageView()` sends a silent "Page View" event (`notify: false`, displayed as a message) to the `__emitkit_channel` in its properties, the channel mapped to the `navigation` category, or the default `channelName`, in that order.
+`pageView()` sends a silent "Page View" event (`notify: false` unless its properties set `__emitkit_notify`, displayed as a message) to the `__emitkit_channel` in its properties, the channel mapped to the `navigation` category, or the default `channelName`, in that order.
 
 EmitKit allows 100 requests per minute per API key by default. Page views forwarded through the proxy can use up the budget your signup and payment events need. If you only want explicit events in EmitKit, exclude page views with [routing](/docs/providers#routing):
 
@@ -208,7 +228,8 @@ export async function POST(request: Request) {
     notify: {
       type: "boolean",
       default: "true",
-      description: "Send a notification for each event.",
+      description:
+        "Send a notification for each event. An event's boolean `__emitkit_notify` property overrides it.",
     },
     displayAs: {
       type: "'message' | 'notification'",

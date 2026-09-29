@@ -1,5 +1,13 @@
 # trakoo
 
+## 2.1.0
+
+### Minor Changes
+
+- Provider routing takes `pii: false` to keep personal data from a provider. That provider never receives the `email`, `name`, `firstName`, `lastName` or `phone` traits in `identify()`, nor the email or those traits in an event's user context, while other providers still do. It works in both client and server analytics. ([#45](https://github.com/multiplehats/trakoo/pull/45))
+
+  `defineEvents({ ...otherRegistry, ...events })` now type-checks: spreading a registry no longer carries its internal brand into the new registry's definitions, so packages can ship events for you to merge.
+
 ## 2.0.0
 
 ### Major Changes

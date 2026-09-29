@@ -34,6 +34,18 @@ describe("organization plugin", () => {
 		expect(harness.plugin.activeEvents.has("apiKeyCreated")).toBe(false);
 	});
 
+	it("registers the team events only when teams are enabled", async () => {
+		harness = await setup();
+		expect(harness.plugin.activeEvents.has("organizationTeamCreated")).toBe(
+			false,
+		);
+
+		harness = await setup({ teams: { enabled: true } });
+		expect(harness.plugin.activeEvents.has("organizationTeamCreated")).toBe(
+			true,
+		);
+	});
+
 	it("reports a created organization with its name and notifies", async () => {
 		harness = await setup();
 		const { userId, headers } = await harness.signUp();

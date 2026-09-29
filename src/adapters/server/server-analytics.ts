@@ -22,7 +22,7 @@ import {
 	type ValidationConfig,
 } from "@/core/events/validation.js";
 import { compileEventPattern } from "@/utils/event-pattern.js";
-import { withoutPiiContext, withoutPiiTraits } from "@/utils/pii.js";
+import { providerContext, providerTraits } from "@/utils/pii.js";
 
 export interface ServerTrackOptions<TUserTraits extends object> {
 	readonly userId?: string;
@@ -435,13 +435,12 @@ export class ServerAnalytics<
 
 		const promises = this.providerConfigs
 			.filter((config) => this.shouldCallMethod(config, "identify"))
-			.map((config) => {
-				const providerTraits = traits as Record<string, unknown> | undefined;
-				return config.provider.identify(
+			.map((config) =>
+				config.provider.identify(
 					userId,
-					config.pii ? providerTraits : withoutPiiTraits(providerTraits),
-				);
-			});
+					providerTraits(config, traits as Record<string, unknown> | undefined),
+				),
+			);
 
 		const results = await Promise.allSettled(promises);
 
@@ -704,9 +703,7 @@ export class ServerAnalytics<
 				try {
 					await config.provider.track(
 						event as BaseEvent,
-						config.pii
-							? (context as EventContext)
-							: withoutPiiContext(context as EventContext),
+						providerContext(config, context as EventContext),
 					);
 				} catch (error) {
 					// Log error but don't throw - one provider failing shouldn't break others
@@ -800,9 +797,7 @@ export class ServerAnalytics<
 			.map((config) =>
 				config.provider.pageView(
 					properties,
-					config.pii
-						? (context as EventContext)
-						: withoutPiiContext(context as EventContext),
+					providerContext(config, context as EventContext),
 				),
 			);
 
@@ -896,9 +891,7 @@ export class ServerAnalytics<
 				) {
 					config.provider.pageLeave(
 						propertiesSnapshot,
-						config.pii
-							? (context as EventContext)
-							: withoutPiiContext(context as EventContext),
+						providerContext(config, context as EventContext),
 					);
 				}
 			}

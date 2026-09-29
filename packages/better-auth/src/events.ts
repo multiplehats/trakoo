@@ -28,7 +28,8 @@ export type AuthMethod =
 
 type Props<T extends object> = T & EmitKitHints & Record<string, unknown>;
 
-interface SignInProperties {
+/** How the user signed in or up. */
+export interface SignInProperties {
 	method: AuthMethod;
 	/** Social, generic OAuth or SSO provider id, such as `google`. */
 	provider?: string;
@@ -82,7 +83,7 @@ export const authEvents = defineEvents({
 	userSignedIn: {
 		name: "user_signed_in",
 		category: "user",
-		properties: typed<Props<SignInProperties & { twoFactor: boolean }>>(),
+		properties: typed<Props<SignInProperties>>(),
 	},
 	userSignedOut: {
 		name: "user_signed_out",
@@ -222,6 +223,8 @@ export const authEvents = defineEvents({
 					name?: string;
 					prefix?: string;
 					expiresAt?: string;
+					/** Set when the key belongs to an organization. */
+					organizationId?: string;
 				}>
 			>(),
 	},
@@ -256,12 +259,12 @@ export const authEvents = defineEvents({
 		category: "user",
 		properties: typed<Props<ActorProperties & { role?: string }>>(),
 	},
-	impersonationStarted: {
+	userImpersonationStarted: {
 		name: "user_impersonation_started",
 		category: "user",
 		properties: typed<Props<ActorProperties>>(),
 	},
-	impersonationStopped: {
+	userImpersonationStopped: {
 		name: "user_impersonation_stopped",
 		category: "user",
 		properties: typed<Props<ActorProperties>>(),
@@ -368,6 +371,8 @@ export type AuthChannel = "auth" | "orgs" | "api-keys" | "billing";
 
 export interface AuthEventDefaults {
 	readonly plugin?: BetterAuthPluginId;
+	/** Needs the organization plugin's `teams` option. */
+	readonly teams?: boolean;
 	readonly channel: AuthChannel;
 	readonly notify: boolean;
 	/** Calls identify with the user's traits before the event. */
@@ -383,6 +388,7 @@ const org = (notify = false): AuthEventDefaults => ({
 	channel: "orgs",
 	notify,
 });
+const team = (): AuthEventDefaults => ({ ...org(), teams: true });
 const plugin = (
 	id: BetterAuthPluginId,
 	channel: AuthChannel = "auth",
@@ -416,10 +422,10 @@ export const authEventDefaults: Readonly<
 	organizationInvitationAccepted: org(true),
 	organizationInvitationRejected: org(),
 	organizationInvitationCanceled: org(),
-	organizationTeamCreated: org(),
-	organizationTeamDeleted: org(),
-	organizationTeamMemberAdded: org(),
-	organizationTeamMemberRemoved: org(),
+	organizationTeamCreated: team(),
+	organizationTeamDeleted: team(),
+	organizationTeamMemberAdded: team(),
+	organizationTeamMemberRemoved: team(),
 
 	apiKeyCreated: plugin("api-key", "api-keys"),
 	apiKeyUpdated: plugin("api-key", "api-keys"),
@@ -429,8 +435,8 @@ export const authEventDefaults: Readonly<
 	userUnbanned: plugin("admin"),
 	userRoleChanged: plugin("admin"),
 	userCreatedByAdmin: { ...plugin("admin"), identify: true },
-	impersonationStarted: plugin("admin"),
-	impersonationStopped: plugin("admin"),
+	userImpersonationStarted: plugin("admin"),
+	userImpersonationStopped: plugin("admin"),
 
 	twoFactorEnabled: plugin("two-factor"),
 	twoFactorDisabled: plugin("two-factor"),

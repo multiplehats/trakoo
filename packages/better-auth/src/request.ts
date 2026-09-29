@@ -132,23 +132,3 @@ export function succeeded(returned: unknown): boolean {
 	}
 	return true;
 }
-
-/** Reads a string field of an unknown object. */
-export function stringField(value: unknown, key: string): string | undefined {
-	if (typeof value !== "object" || value === null) return undefined;
-	const field = (value as Record<string, unknown>)[key];
-	return typeof field === "string" && field ? field : undefined;
-}
-
-export function objectField(value: unknown, key: string): unknown {
-	if (typeof value !== "object" || value === null) return undefined;
-	return (value as Record<string, unknown>)[key];
-}
-
-export function isoDate(value: unknown): string | undefined {
-	if (value instanceof Date && !Number.isNaN(value.getTime())) {
-		return value.toISOString();
-	}
-	if (typeof value === "string" && value) return value;
-	return undefined;
-}

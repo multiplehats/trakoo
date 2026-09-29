@@ -46,11 +46,15 @@ describe("core Better Auth", () => {
 
 		expect(harness.provider.names()).toEqual(["user_signed_up"]);
 		const event = harness.provider.find("user_signed_up");
+		const session = harness.db.session.find(
+			(row) => row.token === result.response.token,
+		);
 		expect(event).toEqual({
 			name: "user_signed_up",
 			category: "user",
 			userId,
-			sessionId: undefined,
+			// The session the sign-up signs in with.
+			sessionId: session?.id,
 			properties: {
 				method: "email",
 				emailVerified: false,
@@ -87,6 +91,8 @@ describe("core Better Auth", () => {
 		});
 		await harness.flush();
 		expect(harness.provider.names()).toEqual(["user_signed_up"]);
+		// No session exists until the email is verified.
+		expect(harness.provider.find("user_signed_up").sessionId).toBeUndefined();
 	});
 
 	it("reports a sign-in with its session id and identifies the user", async () => {
@@ -112,7 +118,6 @@ describe("core Better Auth", () => {
 			sessionId: session?.id,
 			properties: {
 				method: "email",
-				twoFactor: false,
 				__emitkit_channel: "auth",
 				__emitkit_notify: false,
 			},
@@ -195,6 +200,7 @@ describe("core Better Auth", () => {
 		await harness.flush();
 		harness.provider.clear();
 
+		const current = harness.db.session.find((row) => row.token !== other.token);
 		await harness.api.revokeSession({ headers, body: { token: other.token } });
 		await harness.api.revokeOtherSessions({ headers });
 		await harness.api.revokeSessions({ headers });
@@ -204,7 +210,12 @@ describe("core Better Auth", () => {
 			harness.provider.tracked.map((call) => call.properties.scope),
 		).toEqual(["one", "others", "all"]);
 		for (const call of harness.provider.tracked) {
-			expect(call).toMatchObject({ name: "sessions_revoked", userId });
+			// The session making the request, not the one it revokes.
+			expect(call).toMatchObject({
+				name: "sessions_revoked",
+				userId,
+				sessionId: current?.id,
+			});
 		}
 	});
 
@@ -227,9 +238,15 @@ describe("core Better Auth", () => {
 		if (result.token) harness.secrets.add(result.token);
 		await harness.flush();
 
+		// Revoking the other sessions signs this one in again.
+		const session = harness.db.session.find(
+			(row) => row.token === result.token,
+		);
+		expect(session).toBeDefined();
 		expect(harness.provider.names()).toEqual(["password_changed"]);
 		expect(harness.provider.find("password_changed")).toMatchObject({
 			userId,
+			sessionId: session?.id,
 			properties: { revokedOtherSessions: true },
 		});
 	});

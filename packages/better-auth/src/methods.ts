@@ -1,10 +1,8 @@
-import type { AuthMethod } from "./events.js";
+import type { AuthMethod, SignInProperties } from "./events.js";
 import type { EndpointContext } from "./request.js";
 
-export interface SignInMethod {
-	method: AuthMethod;
-	provider?: string;
-}
+/** How a request signs in: the `method` and `provider?` event properties. */
+export type SignInMethod = SignInProperties;
 
 /** Paths that sign a user in (or up) when they set a new session. */
 const exactPaths: Record<string, AuthMethod> = {
@@ -40,33 +38,36 @@ export function signInMethod(
 	if (!path) return undefined;
 
 	if (path.startsWith("/callback/")) {
-		return { method: "social", provider: ctx.params?.id ?? lastSegment(path) };
+		return withProvider("social", ctx.params?.id ?? lastSegment(path));
 	}
 	if (path.startsWith("/oauth2/callback/")) {
-		return {
-			method: "generic_oauth",
-			provider: ctx.params?.providerId ?? lastSegment(path),
-		};
+		return withProvider(
+			"generic_oauth",
+			ctx.params?.providerId ?? lastSegment(path),
+		);
 	}
 	if (
 		path.startsWith("/sso/callback/") ||
 		path.startsWith("/sso/saml2/callback/") ||
 		path.startsWith("/sso/saml2/sp/acs/")
 	) {
-		return { method: "sso", provider: ctx.params?.providerId };
+		return withProvider("sso", ctx.params?.providerId);
 	}
 
 	const method = exactPaths[path];
 	if (!method) return undefined;
 	if (method === "social") {
-		const provider = (ctx.body as { provider?: unknown } | undefined)?.provider;
-		return {
-			method,
-			...(typeof provider === "string" && { provider }),
-		};
+		return withProvider(method, (ctx.body as { provider?: unknown })?.provider);
 	}
-	if (method === "one_tap") return { method, provider: "google" };
+	if (method === "one_tap") return withProvider(method, "google");
 	return { method };
+}
+
+/** The method, with `provider` only when there is one. */
+function withProvider(method: AuthMethod, provider: unknown): SignInMethod {
+	return typeof provider === "string" && provider
+		? { method, provider }
+		: { method };
 }
 
 function lastSegment(path: string): string | undefined {

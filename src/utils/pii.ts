@@ -38,3 +38,25 @@ export function withoutPiiContext(
 		},
 	};
 }
+
+/** A provider entry's routing, as far as personal data goes. */
+interface PiiRouting {
+	/** Whether the provider may receive personal data. */
+	readonly pii: boolean;
+}
+
+/** The identify traits the provider of `routing` may receive. */
+export function providerTraits<T extends Record<string, unknown>>(
+	routing: PiiRouting,
+	traits: T | undefined,
+): T | undefined {
+	return routing.pii ? traits : withoutPiiTraits(traits);
+}
+
+/** The event context the provider of `routing` may receive. */
+export function providerContext(
+	routing: PiiRouting,
+	context: EventContext | undefined,
+): EventContext | undefined {
+	return routing.pii ? context : withoutPiiContext(context);
+}

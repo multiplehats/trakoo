@@ -114,6 +114,40 @@ describe.runIf(lockstep)("api-key plugin", () => {
 				created.start,
 			);
 		}
+		expect(
+			harness.provider.find("api_key_created").properties,
+		).not.toHaveProperty("organizationId");
+	});
+
+	it("reports an organization's key for the user who made it", async () => {
+		harness = await createHarness({
+			plugins: [organization(), apiKey({ references: "organization" })],
+			tables: ["apikey", "organization", "member", "invitation"],
+		});
+		const { userId, headers } = await harness.signUp();
+		const org = await harness.api.createOrganization({
+			headers,
+			body: { name: "Analytical Engines", slug: "engines" },
+		});
+		await harness.flush();
+		harness.provider.clear();
+
+		// A server call names the user in the body instead of a session.
+		const created = await harness.api.createApiKey({
+			body: { name: "CI", organizationId: org.id, userId },
+		});
+		harness.secrets.add(created.key);
+		await harness.api.updateApiKey({
+			body: { keyId: created.id, userId, enabled: false },
+		});
+		await harness.flush();
+
+		expect(created.referenceId).toBe(org.id);
+		expect(harness.provider.find("api_key_created")).toMatchObject({
+			userId,
+			properties: { apiKeyId: created.id, organizationId: org.id },
+		});
+		expect(harness.provider.find("api_key_updated").userId).toBe(userId);
 	});
 });
 

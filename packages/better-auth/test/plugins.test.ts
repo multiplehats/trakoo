@@ -77,6 +77,8 @@ describe("admin plugin", () => {
 			},
 		});
 		expect(JSON.stringify(h.provider.tracked)).not.toContain("spam");
+		// The admin's session is not the banned user's.
+		expect(h.provider.find("user_banned").sessionId).toBeUndefined();
 		expect(h.provider.find("user_role_changed").properties.role).toBe("admin");
 		expect(h.provider.find("user_created_by_admin")).toMatchObject({
 			userId: created.user.id,
@@ -109,6 +111,7 @@ describe("admin plugin", () => {
 		for (const call of h.provider.tracked) {
 			expect(call).toMatchObject({
 				userId: target.userId,
+				sessionId: started.response.session.id,
 				properties: { actorUserId: adminUser.userId },
 			});
 		}
@@ -200,7 +203,7 @@ describe("two-factor plugin", () => {
 		expect(harness.provider.names()).toEqual(["user_signed_in"]);
 		expect(harness.provider.find("user_signed_in")).toMatchObject({
 			userId,
-			properties: { method: "two_factor", twoFactor: true },
+			properties: { method: "two_factor" },
 		});
 
 		harness.provider.clear();

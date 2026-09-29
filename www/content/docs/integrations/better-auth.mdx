@@ -122,16 +122,18 @@ Each event carries `__emitkit_channel` and `__emitkit_notify` properties for Emi
 
 ## Event catalog
 
-Every event carries the Better Auth user id as trakoo's `userId`. The id belongs to the user the event is about. When someone else made the change, such as an admin or an organization owner, the event also has an `actorUserId` property where Better Auth provides it. Events with a session also carry its id (never its token) as `sessionId`.
+Every event carries the Better Auth user id as trakoo's `userId`. The id belongs to the user the event is about. When someone else made the change, such as an admin or an organization owner, the event also has an `actorUserId` property where Better Auth provides it.
 
-Events that need a plugin are registered only when that plugin is installed.
+An event also carries a session id (never its token) as `sessionId` when the request has a session of the user the event is about: the session a sign-in or sign-up creates, the one making the change, or the one a sign-out ends. Someone acting on another user's account, such as an admin or an organization owner, adds none. With the api-key plugin's `enableSessionForAPIKeys`, a request made with an API key reports the key's id, which Better Auth uses as its session id.
+
+Events that need a plugin are registered only when that plugin is installed, and team events only when the organization plugin has `teams` enabled.
 
 ### Core
 
 | Event | When | Properties | Identify | Channel | Notify |
 |---|---|---|---|---|---|
 | `user_signed_up` | A user is created by sign-up, social sign-in, magic link, email OTP or similar | `method`, `provider?`, `emailVerified` | ✅ | `auth` | ✅ |
-| `user_signed_in` | A sign-in completes, including after the second factor | `method`, `provider?`, `twoFactor` | ✅ | `auth` | |
+| `user_signed_in` | A sign-in completes, including after the second factor | `method`, `provider?` | ✅ | `auth` | |
 | `user_signed_out` | `/sign-out` ends a session | | | `auth` | |
 | `sessions_revoked` | A user revokes one, all or their other sessions | `scope`: `one` \| `all` \| `others` | | `auth` | |
 | `email_verified` | An email address is verified | | ✅ | `auth` | |
@@ -172,7 +174,7 @@ The organization's creator and its default team are part of `organization_create
 
 | Event | Plugin | Properties | Channel | Notify |
 |---|---|---|---|---|
-| `api_key_created` | `api-key` | `apiKeyId`, `name?`, `prefix?`, `expiresAt?` | `api-keys` | |
+| `api_key_created` | `api-key` | `apiKeyId`, `name?`, `prefix?`, `expiresAt?`, `organizationId?` | `api-keys` | |
 | `api_key_updated` | `api-key` | `apiKeyId`, `enabled?` | `api-keys` | |
 | `api_key_deleted` | `api-key` | `apiKeyId` | `api-keys` | |
 | `user_banned` | `admin` | `actorUserId`, `expiresAt?` | `auth` | |
@@ -195,7 +197,7 @@ The organization's creator and its default team are part of `organization_create
 | `subscription_canceled` | `stripe` | `subscriptionId`, `plan`, `organizationId?` | `billing` | |
 | `subscription_ended` | `stripe` | `subscriptionId`, `plan`, `organizationId?` | `billing` | |
 
-The magic link, email OTP, phone number, username, one tap and SIWE plugins add no events of their own. They set `method` on sign-ups and sign-ins. A subscription that belongs to an organization carries `organizationId` and no user id.
+The magic link, email OTP, phone number, username, one tap and SIWE plugins add no events of their own. They set `method` on sign-ups and sign-ins. API key events belong to the user who made the change, and a key that belongs to an organization (`references: "organization"`) also carries `organizationId`. A subscription that belongs to an organization carries `organizationId` and no user id.
 
 ### When events fire
 
@@ -255,6 +257,8 @@ trakooAuth({
 Option callbacks run after the response, never in the request. A callback that throws goes to `onError`. When `identify` throws, the event is still sent without identify. When `redact` throws, the event is dropped rather than sent unredacted.
 
 A plugin option that mentions an event of a plugin you haven't installed logs one warning and is ignored.
+
+`emitkit.channels` renames the plugin's channels. The plugin's channel hint takes precedence over the EmitKit provider's `categoryChannelMap`, so that map doesn't apply to auth events. With `emitkit: false` it does, but the plugin's notify defaults go too.
 
 ### Merging with your events
 

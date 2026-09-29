@@ -421,6 +421,22 @@ describe("configuration", () => {
 		).toBeUndefined();
 	});
 
+	it("attaches the email to the sign-up when an identify function returns it", async () => {
+		harness = await createHarness({
+			trakoo: { identify: (user) => ({ email: user.email }) },
+		});
+		const { userId } = await harness.signUp();
+		await harness.flush();
+
+		expect(harness.provider.identified).toEqual([
+			{ userId, traits: { email: "ada@example.com" } },
+		]);
+		expect(harness.provider.find("user_signed_up").context?.user).toEqual({
+			userId,
+			email: "ada@example.com",
+		});
+	});
+
 	it("redacts properties before they are sent", async () => {
 		harness = await createHarness({
 			trakoo: {

@@ -50,6 +50,17 @@ The three property modes are:
 
 Recent compatible Zod, Valibot, ArkType, and other Standard Schema implementations work directly with no Trakoo adapter. Install only the chosen validator; do not add validator-specific Trakoo configuration. Trakoo itself remains validator-optional.
 
+Registries merge by spreading since trakoo 2.1, so a package's events join the application's own. Keep emitted names unique across the merged registry:
+
+```ts
+import { authEvents } from "@trakoo/better-auth";
+
+export const appEvents = defineEvents({
+	...authEvents,
+	buttonClicked: { name: "button_clicked", category: "engagement", properties: typed<{ buttonId: string }>() },
+});
+```
+
 `typed<T>()` is for trusted, type-checked application values. It does not validate JavaScript, JSON, form data, or other untrusted input at runtime. Use a schema when that boundary needs validation. Duplicate emitted names are a registry initialization error.
 
 ## Schema input and provider output

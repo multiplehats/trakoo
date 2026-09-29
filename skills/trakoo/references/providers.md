@@ -69,6 +69,8 @@ const serverProvider = new PostHogServerProvider({
 
 `VITE_POSTHOG_PROJECT_KEY` is intentionally browser-public. `POSTHOG_PROJECT_KEY` stays in server configuration even though both values identify the project. Do not expose unrelated server settings or personal credentials through the public prefix.
 
+The server provider leaves the host to `posthog-node`, whose default is PostHog's US ingestion host; EU projects set `host: "https://eu.i.posthog.com"`. Server events forward the caller's `context.server` IP and user agent (falling back to `context.device`) as `$ip` and `$raw_user_agent`, the page URL as `$current_url`, and campaign values as `utm_*`, and GeoIP runs on them unless `disableGeoip` is set. A server event without a user gets its own distinct ID with `$process_person_profile: false` rather than one shared anonymous person.
+
 Choose one page-view owner. When the application router owns initial and navigation views, set `capture_pageview: false` before manually emitting either stream. When PostHog auto-capture owns page views, do not add a manual initial view or router subscription. For page-leave tracking, use the same one-owner rule: set `capture_pageleave: false` when the application emits page leaves itself, or leave manual tracking out when PostHog owns it.
 
 For a router-owned stream, normalize every initial and navigation URL with the same function before deduplicating. Resolve relative router hrefs against `window.location.origin`, then compare the resulting absolute URL:
@@ -129,6 +131,8 @@ try {
 
 For a long-lived module instance, call `shutdown()` only at application or process teardown. Do not call `shutdown()` after each event on a reusable module singleton. Bento `shutdown()` clears provider state; it is not a buffered flush.
 
+Server `identify()` updates the subscriber's fields with `$update_fields`; it does not subscribe the person to marketing email or rerun subscribe automations. Call Bento's `V1.addSubscriber()` directly when the application should subscribe someone.
+
 ### EmitKit
 
 EmitKit is server-only. Construct `EmitKitServerProvider` with the server-only `EMITKIT_API_KEY`, explicitly await its initialization, and only then pass it to `createServerAnalytics()`:
@@ -155,6 +159,8 @@ export async function createEmitKitAnalytics() {
 `EMITKIT_API_KEY` is server-only. Never expose it through client-prefixed environment variables or import this module into browser code. EmitKit dynamically imports its SDK; early calls can be skipped until initialization completes, so awaiting `provider.initialize()` before the factory is required.
 
 For request-scoped ownership, create a fresh provider and analytics pair and shut down that same pair in `finally`. For a reusable instance, call `shutdown()` only at application or process teardown. EmitKit sends immediately rather than buffering; its shutdown clears the provider's client state.
+
+Optional constructor settings: `channelName` (default `general`), `categoryChannelMap` from event category to channel, `notify` (default `true`), and `timeout` (default 5 seconds; SDK retries are off, so a failed request is reported once and never holds the caller longer). The visitor IP is removed from the metadata EmitKit shows in its feed and notifications.
 
 Two event properties steer EmitKit per event and are stripped before sending: `__emitkit_channel` picks the channel, and a boolean `__emitkit_notify` overrides the provider's `notify` option. Other providers receive them as ordinary properties.
 

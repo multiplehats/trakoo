@@ -11,7 +11,7 @@ Trakoo is a typed, provider-agnostic analytics library. Define one runtime event
 
 Detect the package manager, framework, installed `trakoo` version, browser/server entry points, analytics dependencies, and verification commands. Decide whether each event is a browser interaction, an authoritative server outcome, or both.
 
-Use the consuming project's installed Trakoo declarations as the source of truth. Consult the current documentation at https://trakoo.co. If the installed declarations differ, explain the version mismatch instead of silently upgrading or inventing an API. Since trakoo 2.0, the PostHog, OpenPanel, Bento server, and EmitKit providers live in separate `@trakoo/*` packages; trakoo 1.x exported them from `trakoo/providers/*`.
+Use the consuming project's installed Trakoo declarations as the source of truth. Consult the current documentation at https://trakoo.co. If the installed declarations differ, explain the version mismatch instead of silently upgrading or inventing an API. Since trakoo 2.0, the PostHog, OpenPanel, Bento server, and EmitKit providers live in separate `@trakoo/*` packages; trakoo 1.x exported them from `trakoo/providers/*`. trakoo 2.1 added `pii: false` provider routing and registry spreading; `@trakoo/better-auth` needs 2.1.
 
 - Read [references/events-and-validation.md](references/events-and-validation.md) when defining events, adding Zod or another Standard Schema validator, configuring validation failures, or using propertyless events and custom traits.
 - Read [references/providers.md](references/providers.md) when choosing providers, routing events, using Proxy, or building a custom provider.
@@ -165,7 +165,7 @@ export async function trackPurchase(input: {
 }
 ```
 
-Server analytics is stateless across users: pass user context with each event and await critical events. For a fresh request-scoped provider/analytics pair, shut down that same pair in `finally`. A reusable instance shuts down only at application or process teardown. Some providers flush buffered events during shutdown; others only clear state. Inspect the selected provider's installed implementation before choosing the lifecycle. Use the platform's `waitUntil` only for explicitly non-critical work.
+Server analytics is stateless across users: pass user context with each event and await critical events. When a server event stands for a visitor's request, also pass `context.server` with the caller's `ip` and `userAgent`; PostHog, OpenPanel, and Pirsch attribute geo and device from it instead of from the server itself. For a fresh request-scoped provider/analytics pair, shut down that same pair in `finally`. A reusable instance shuts down only at application or process teardown. Some providers flush buffered events during shutdown; others only clear state. Inspect the selected provider's installed implementation before choosing the lifecycle. Use the platform's `waitUntil` only for explicitly non-critical work.
 
 ## Better Auth
 

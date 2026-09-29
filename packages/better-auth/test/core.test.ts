@@ -470,18 +470,28 @@ describe("core Better Auth", () => {
 
 	it("reports a sign-out when sessions live in secondary storage", async () => {
 		const store = new Map<string, string>();
-		harness = await createHarness({
-			options: {
-				secondaryStorage: {
-					get: async (key) => store.get(key) ?? null,
-					set: async (key, value) => {
-						store.set(key, value);
-					},
-					delete: async (key) => {
-						store.delete(key);
-					},
-				},
+		const secondaryStorage = {
+			get: async (key: string) => store.get(key) ?? null,
+			set: async (key: string, value: string) => {
+				store.set(key, value);
 			},
+			delete: async (key: string) => {
+				store.delete(key);
+			},
+			getAndDelete: async (key: string) => {
+				const value = store.get(key) ?? null;
+				store.delete(key);
+				return value;
+			},
+			increment: async (key: string) => {
+				const next = Number(store.get(key) ?? 0) + 1;
+				store.set(key, String(next));
+				return next;
+			},
+		};
+		// The storage interface grows between 1.7 releases.
+		harness = await createHarness({
+			options: { secondaryStorage: secondaryStorage as never },
 		});
 		const { userId, headers } = await harness.signUp();
 		await harness.flush();

@@ -1,6 +1,6 @@
 {
 	"name": "@trakoo/emitkit",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "EmitKit provider for trakoo",
 	"type": "module",
 	"exports": {

@@ -400,10 +400,19 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 					typeof emission === "function" ? await emission() : emission;
 				if (resolved) await send(key, resolved);
 			},
-			authContext?.options,
+			currentAuthContext()?.options,
 			reportError,
 		);
 	}
+
+	/**
+	 * The auth context of the call in progress. One plugin object can serve
+	 * several Better Auth instances, so the one captured at init is only the
+	 * fallback outside a call.
+	 */
+	const currentAuthContext = (): AuthContextLike | undefined =>
+		(currentEndpointContext()?.context as AuthContextLike | undefined) ??
+		authContext;
 
 	const requestOf = (ctx: EndpointContext | undefined) =>
 		options.requestContext === false ? undefined : requestInfo(ctx);
@@ -456,8 +465,9 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 
 	const onUserUpdated = (user: AuthUser, ctx: EndpointContext | undefined) =>
 		guard(() => {
-			if (!ctx || typeof user !== "object" || user === null) return;
+			// Pairs with the before hook, even for an update that returns no row.
 			const changed = stateOf(ctx)?.userUpdates.shift();
+			if (!ctx || typeof user !== "object" || user === null) return;
 			if (!changed || user.isAnonymous) return;
 			const request = requestOf(ctx);
 			let identified = false;
@@ -1100,11 +1110,11 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 					?.subscription;
 				if (!row?.id || !row.referenceId) return;
 				const request = requestOf(currentEndpointContext());
+				const adapter = currentAuthContext()?.internalAdapter;
 				emit(key, async () => {
 					// A subscription belongs to a user or to an organization.
 					const referenceId = row.referenceId as string;
-					const user =
-						await authContext?.internalAdapter?.findUserById?.(referenceId);
+					const user = await adapter?.findUserById?.(referenceId);
 					const owner = user
 						? { userId: referenceId }
 						: { organizationId: referenceId };

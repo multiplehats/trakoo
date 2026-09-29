@@ -46,7 +46,7 @@ The plugin has to run after `twoFactor` and `anonymous`: otherwise a sign-in sti
 Tracking never blocks a Better Auth response: events are sent after it. On serverless and edge runtimes, that work has to be registered with the platform or it can be cut off:
 
 - **Vercel**: detected automatically.
-- **Cloudflare Workers**: `advanced: { backgroundTasks: { handler: waitUntil } }`, with `waitUntil` from `cloudflare:workers`.
+- **Cloudflare Workers**: `advanced: { backgroundTasks: { handler: waitUntil } }`, with `waitUntil` from `cloudflare:workers`. Better Auth needs the `nodejs_compat` compatibility flag there.
 - **Next.js** on other hosts: `advanced: { backgroundTasks: { handler: (promise) => after(promise) } }`, with `after` from `next/server`.
 - **AWS Lambda** has no way to finish work after the response, so events sent then can be lost.
 
@@ -259,7 +259,7 @@ A plugin option that mentions an event of a plugin you haven't installed logs on
 
 - Tracking never runs in the request path and never throws into Better Auth. A provider that fails or never responds doesn't delay or break auth. A slow `identify` holds its event back for at most three seconds.
 - Your own Better Auth hooks, `organizationHooks` and Stripe callbacks keep running; the plugin adds to them.
-- Node, Bun and Cloudflare Workers.
+- Tested on Node and Bun. The plugin uses no Node-only APIs, so it runs wherever Better Auth does, including Cloudflare Workers with the `nodejs_compat` flag Better Auth needs there; it hasn't been run in Workers yet.
 
 ## Documentation
 

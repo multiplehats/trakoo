@@ -177,6 +177,9 @@ describe("core Better Auth", () => {
 		await harness.api.signOut({ headers });
 		await harness.flush();
 
+		// Reading the session first leaves sign-out itself unchanged.
+		expect(await harness.api.getSession({ headers })).toBeNull();
+		expect(harness.db.session).toEqual([]);
 		expect(harness.provider.names()).toEqual(["user_signed_out"]);
 		expect(harness.provider.find("user_signed_out")).toMatchObject({
 			userId,
@@ -493,13 +496,18 @@ describe("core Better Auth", () => {
 		harness = await createHarness({
 			options: { secondaryStorage: secondaryStorage as never },
 		});
-		const { userId, headers } = await harness.signUp();
+		const { userId, headers, token } = await harness.signUp();
 		await harness.flush();
 		harness.provider.clear();
+
+		// Better Auth keys a stored session by its token.
+		expect(store.has(token)).toBe(true);
 
 		await harness.api.signOut({ headers });
 		await harness.flush();
 
+		expect(await harness.api.getSession({ headers })).toBeNull();
+		expect(store.has(token)).toBe(false);
 		expect(harness.provider.names()).toEqual(["user_signed_out"]);
 		expect(harness.provider.find("user_signed_out").userId).toBe(userId);
 	});

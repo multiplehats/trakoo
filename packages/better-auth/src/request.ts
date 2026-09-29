@@ -122,6 +122,13 @@ export function requestInfo(
 	}
 }
 
+/** The signed-in user making the request. */
+export function sessionUserIdOf(
+	ctx: EndpointContext | undefined,
+): string | undefined {
+	return ctx?.context.session?.user?.id;
+}
+
 /** Whether an after-hook's result is a success. A redirect counts as one. */
 export function succeeded(returned: unknown): boolean {
 	if (returned instanceof Response) return returned.status < 400;

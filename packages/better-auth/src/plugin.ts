@@ -2,7 +2,8 @@ import type { BetterAuthPlugin } from "better-auth";
 import { createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
 import type { EventName } from "trakoo";
 import type { ServerAnalytics } from "trakoo/server";
-import { type BackgroundOptions, runInBackground } from "./background.js";
+import { runInBackground } from "./background.js";
+import { coreEvents } from "./core.js";
 import {
 	type AuthChannel,
 	type AuthEventKey,
@@ -11,8 +12,14 @@ import {
 	authEventKeys,
 	authEvents,
 } from "./events.js";
-import { field, isoDate, record, stringField } from "./fields.js";
-import { type SignInMethod, signInMethod } from "./methods.js";
+import { field, isoDate, record } from "./fields.js";
+import { signInMethod } from "./methods.js";
+import { adminEvents } from "./plugins/admin.js";
+import { apiKeyEvents } from "./plugins/api-key.js";
+import { organizationEvents } from "./plugins/organization.js";
+import { passkeyEvents } from "./plugins/passkey.js";
+import { ssoEvents } from "./plugins/sso.js";
+import { stripeEvents } from "./plugins/stripe.js";
 import {
 	type AuthSession,
 	type AuthUser,
@@ -20,8 +27,18 @@ import {
 	type RequestInfo,
 	currentEndpointContext,
 	requestInfo,
+	sessionUserIdOf,
 	succeeded,
 } from "./request.js";
+import {
+	type AfterCall,
+	type AuthContextLike,
+	type Emission,
+	type PluginEvents,
+	type RequestState,
+	type Toolkit,
+	findPlugin,
+} from "./toolkit.js";
 
 /** Per-event settings. */
 export interface EventOverride {
@@ -128,56 +145,6 @@ export interface TrakooAuthPlugin extends BetterAuthPlugin {
 	readonly activeEvents: ReadonlySet<AuthEventKey>;
 }
 
-interface RequestState {
-	createdUsers: Set<string>;
-	userUpdates: Set<string>[];
-	/** The session a sign-out request is ending. */
-	signingOut?: { userId: string; sessionId: string };
-	linkedAnonymousUserId?: string;
-}
-
-interface Emission {
-	userId: string | undefined;
-	/** Defaults to the request's session of `userId`, when it has one. */
-	sessionId?: string;
-	properties: Record<string, unknown>;
-	/** Identify this user first, when the event identifies. */
-	user?: AuthUser;
-	/** Attach the user's email to the event (sign-up only). */
-	withEmail?: boolean;
-	identify?: boolean;
-}
-
-/** An after hook's view of the call it follows. */
-interface AfterCall {
-	ctx: EndpointContext;
-	returned: unknown;
-	body: Record<string, unknown>;
-	/** The signed-in user making the request. */
-	sessionUserId: string | undefined;
-}
-
-/** The account fields the plugin reads. */
-interface AccountRow {
-	userId: string;
-	providerId: string;
-}
-
-interface PluginLike {
-	id: string;
-	options?: Record<string, unknown>;
-}
-
-interface AuthContextLike extends BackgroundOptions {
-	options: BackgroundOptions & {
-		plugins?: PluginLike[];
-		emailAndPassword?: Record<string, unknown>;
-	};
-	internalAdapter?: {
-		findUserById?: (id: string) => Promise<unknown>;
-	};
-}
-
 const PLUGIN_ID = "trakoo";
 /** How long an event waits for identify before it is sent anyway. */
 const IDENTIFY_TIMEOUT_MS = 3000;
@@ -202,11 +169,6 @@ export function defaultTraits(user: AuthUser): AuthTraits {
 		traits.emailVerified = user.emailVerified;
 	}
 	return traits;
-}
-
-/** The signed-in user making the request. */
-function sessionUserIdOf(ctx: EndpointContext | undefined): string | undefined {
-	return ctx?.context.session?.user?.id;
 }
 
 /**
@@ -397,15 +359,7 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 		await analytics.track(authEvents[key].name, properties, trackOptions);
 	}
 
-	/**
-	 * Sends `key` in the background. What the event needs from the request is
-	 * read now, while the request is still at this point.
-	 */
-	function emit(
-		key: AuthEventKey,
-		ctx: EndpointContext | undefined,
-		emission: Emission | (() => Promise<Emission | undefined>),
-	): void {
+	const emit: Toolkit["emit"] = (key, ctx, emission) => {
 		if (!isOn(key)) return;
 		const request = requestOf(ctx);
 		const sessions = sessionsOf(ctx);
@@ -422,7 +376,7 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 			currentAuthContext()?.options,
 			reportError,
 		);
-	}
+	};
 
 	/**
 	 * The auth context of the call in progress. One plugin object can serve
@@ -436,481 +390,12 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 	const requestOf = (ctx: EndpointContext | undefined) =>
 		options.requestContext === false ? undefined : requestInfo(ctx);
 
-	const actorOf = (ctx: EndpointContext | undefined, subject?: string) => {
+	const actorOf: Toolkit["actorOf"] = (ctx, subject) => {
 		const actor = sessionUserIdOf(ctx);
 		return actor && actor !== subject ? { actorUserId: actor } : {};
 	};
 
-	// ---------------------------------------------------------------------
-	// Database hooks: run after the transaction commits (Better Auth >= 1.7)
-	// ---------------------------------------------------------------------
-
-	const onUserCreated = (user: AuthUser, ctx: EndpointContext | undefined) =>
-		guard(() => {
-			// Users created outside an endpoint (seed scripts, migrations) are
-			// not sign-ups.
-			if (!ctx) return;
-			stateOf(ctx)?.createdUsers.add(user.id);
-			if (user.isAnonymous) {
-				emit("anonymousUserCreated", ctx, { userId: user.id, properties: {} });
-				return;
-			}
-			if (ctx.path === "/admin/create-user") return;
-			emit("userSignedUp", ctx, {
-				userId: user.id,
-				properties: {
-					...(signInMethod(ctx) ?? { method: "unknown" }),
-					emailVerified: user.emailVerified === true,
-				},
-				user,
-				withEmail: true,
-			});
-		});
-
-	const onUserUpdating = (
-		data: Record<string, unknown>,
-		ctx: EndpointContext | undefined,
-	) =>
-		guard(() => {
-			stateOf(ctx)?.userUpdates.push(new Set(Object.keys(data ?? {})));
-		});
-
-	const onUserUpdated = (user: AuthUser, ctx: EndpointContext | undefined) =>
-		guard(() => {
-			// Pairs with the before hook, even for an update that returns no row.
-			const changed = stateOf(ctx)?.userUpdates.shift();
-			if (!ctx || typeof user !== "object" || user === null) return;
-			if (!changed || user.isAnonymous) return;
-			let identified = false;
-			const once = () => {
-				const first = !identified;
-				identified = true;
-				return first;
-			};
-
-			if (changed.has("email")) {
-				emit("emailChanged", ctx, {
-					userId: user.id,
-					properties: { emailVerified: user.emailVerified === true },
-					user,
-					identify: once(),
-				});
-			} else if (changed.has("emailVerified") && user.emailVerified === true) {
-				emit("emailVerified", ctx, {
-					userId: user.id,
-					properties: {},
-					user,
-					identify: once(),
-				});
-			}
-			if (changed.has("twoFactorEnabled")) {
-				emit(
-					user.twoFactorEnabled ? "twoFactorEnabled" : "twoFactorDisabled",
-					ctx,
-					{ userId: user.id, properties: {} },
-				);
-			}
-			if (
-				changed.has("phoneNumberVerified") &&
-				user.phoneNumberVerified === true
-			) {
-				emit("phoneNumberVerified", ctx, { userId: user.id, properties: {} });
-			}
-			if (ctx.path === "/update-user" || ctx.path === "/admin/update-user") {
-				const fields = [...changed].filter(
-					(name) =>
-						!["id", "updatedAt", "email", "emailVerified"].includes(name),
-				);
-				if (fields.length > 0) {
-					emit("userProfileUpdated", ctx, {
-						userId: user.id,
-						properties: { fields, ...actorOf(ctx, user.id) },
-						user,
-						identify: once(),
-					});
-				}
-			}
-		});
-
-	const onUserDeleted = (user: AuthUser, ctx: EndpointContext | undefined) =>
-		guard(() => {
-			if (user.isAnonymous) {
-				// Better Auth deletes the anonymous user once it is linked.
-				const state = signInMethod(ctx) ? stateOf(ctx) : undefined;
-				if (state) state.linkedAnonymousUserId ??= user.id;
-				return;
-			}
-			const deletedBy = deletedByOf(ctx?.path);
-			emit("userDeleted", ctx, {
-				userId: user.id,
-				properties: {
-					deletedBy,
-					...(deletedBy === "admin" ? actorOf(ctx, user.id) : {}),
-				},
-			});
-		});
-
-	const onAccountCreated = (
-		account: AccountRow,
-		ctx: EndpointContext | undefined,
-	) =>
-		guard(() => {
-			if (!ctx) return;
-			if (stateOf(ctx)?.createdUsers.has(account.userId)) return;
-			emit("accountLinked", ctx, {
-				userId: account.userId,
-				properties: { provider: account.providerId },
-			});
-		});
-
-	const onAccountDeleted = (
-		account: AccountRow,
-		ctx: EndpointContext | undefined,
-	) =>
-		guard(() => {
-			if (ctx?.path !== "/unlink-account") return;
-			emit("accountUnlinked", ctx, {
-				userId: account.userId,
-				properties: { provider: account.providerId },
-			});
-		});
-
-	// ---------------------------------------------------------------------
-	// After hooks: endpoints whose writes bypass the database hooks
-	// ---------------------------------------------------------------------
-
-	const onSignIn = (ctx: EndpointContext, method: SignInMethod) => {
-		const newSession = ctx.context.newSession;
-		if (!newSession?.user?.id) return;
-		if (field(ctx.context.returned, "twoFactorRedirect")) return;
-
-		const { user } = newSession;
-		const state = stateOf(ctx);
-		if (
-			state?.linkedAnonymousUserId &&
-			state.linkedAnonymousUserId !== user.id
-		) {
-			emit("anonymousUserLinked", ctx, {
-				userId: user.id,
-				properties: { anonymousUserId: state.linkedAnonymousUserId },
-			});
-			state.linkedAnonymousUserId = undefined;
-		}
-		// A sign-up already reported this user.
-		if (state?.createdUsers.has(user.id) || user.isAnonymous) return;
-		// Re-verifying while signed in as the same user (such as confirming a
-		// new second factor) refreshes the session; it is not a sign-in.
-		if (sessionUserIdOf(ctx) === user.id) return;
-
-		emit("userSignedIn", ctx, {
-			userId: user.id,
-			properties: { ...method },
-			user,
-		});
-	};
-
-	const sessionsRevoked =
-		(scope: "one" | "all" | "others") =>
-		({ ctx, sessionUserId }: AfterCall) => {
-			if (!sessionUserId) return;
-			emit("sessionsRevoked", ctx, {
-				userId: sessionUserId,
-				properties: { scope },
-			});
-		};
-
-	/**
-	 * The user an API key call acts for: the signed-in user, or the `userId` a
-	 * server call passes. The key's `referenceId` is not it: an organization's
-	 * key references the organization.
-	 */
-	const apiKeyUserOf = ({ body, sessionUserId }: AfterCall) =>
-		sessionUserId ?? stringField(body, "userId");
-
-	/** The user an admin endpoint acted on. */
-	const adminSubjectOf = ({ returned, body }: AfterCall) => {
-		const user = field(returned, "user") as AuthUser | undefined;
-		return {
-			user,
-			userId: stringField(user, "id") ?? stringField(body, "userId"),
-		};
-	};
-
-	/** What each endpoint reports once it succeeds. */
-	const afterHandlers = new Map<string, (call: AfterCall) => void>([
-		[
-			"/sign-out",
-			({ ctx }) => {
-				const signingOut = stateOf(ctx)?.signingOut;
-				if (!signingOut) return;
-				emit("userSignedOut", ctx, {
-					userId: signingOut.userId,
-					sessionId: signingOut.sessionId,
-					properties: {},
-				});
-			},
-		],
-		["/revoke-session", sessionsRevoked("one")],
-		["/revoke-sessions", sessionsRevoked("all")],
-		["/revoke-other-sessions", sessionsRevoked("others")],
-		[
-			"/change-password",
-			({ ctx, returned, body, sessionUserId }) => {
-				const userId =
-					sessionUserId ?? stringField(field(returned, "user"), "id");
-				if (!userId) return;
-				emit("passwordChanged", ctx, {
-					userId,
-					properties: {
-						revokedOtherSessions: body.revokeOtherSessions === true,
-					},
-				});
-			},
-		],
-		[
-			"/api-key/create",
-			(call) => {
-				const { ctx, returned, body } = call;
-				const apiKeyId = stringField(returned, "id");
-				const userId = apiKeyUserOf(call);
-				if (!apiKeyId || !userId) return;
-				const name = stringField(returned, "name");
-				const prefix = stringField(returned, "prefix");
-				const expiresAt = isoDate(field(returned, "expiresAt"));
-				const organizationId = stringField(body, "organizationId");
-				// Only an organization's key references the organization.
-				const ownedByOrganization =
-					organizationId !== undefined &&
-					stringField(returned, "referenceId") === organizationId;
-				emit("apiKeyCreated", ctx, {
-					userId,
-					properties: {
-						apiKeyId,
-						...(name && { name }),
-						...(prefix && { prefix }),
-						...(expiresAt && { expiresAt }),
-						...(ownedByOrganization && { organizationId }),
-					},
-				});
-			},
-		],
-		[
-			"/api-key/update",
-			(call) => {
-				const apiKeyId = stringField(call.returned, "id");
-				const userId = apiKeyUserOf(call);
-				if (!apiKeyId || !userId) return;
-				const enabled = field(call.returned, "enabled");
-				emit("apiKeyUpdated", call.ctx, {
-					userId,
-					properties: {
-						apiKeyId,
-						...(typeof enabled === "boolean" && { enabled }),
-					},
-				});
-			},
-		],
-		[
-			"/api-key/delete",
-			(call) => {
-				const apiKeyId = stringField(call.body, "keyId");
-				const userId = apiKeyUserOf(call);
-				if (!apiKeyId || !userId) return;
-				emit("apiKeyDeleted", call.ctx, { userId, properties: { apiKeyId } });
-			},
-		],
-		[
-			"/admin/ban-user",
-			(call) => {
-				const { user, userId } = adminSubjectOf(call);
-				if (!userId) return;
-				const expiresAt = isoDate(field(user, "banExpires"));
-				emit("userBanned", call.ctx, {
-					userId,
-					properties: {
-						...actorOf(call.ctx, userId),
-						...(expiresAt && { expiresAt }),
-					},
-				});
-			},
-		],
-		[
-			"/admin/unban-user",
-			(call) => {
-				const { userId } = adminSubjectOf(call);
-				if (!userId) return;
-				emit("userUnbanned", call.ctx, {
-					userId,
-					properties: actorOf(call.ctx, userId),
-				});
-			},
-		],
-		[
-			"/admin/set-role",
-			(call) => {
-				const { user, userId } = adminSubjectOf(call);
-				const role = stringField(user, "role") ?? roleString(call.body.role);
-				if (!userId || !role) return;
-				emit("userRoleChanged", call.ctx, {
-					userId,
-					properties: { ...actorOf(call.ctx, userId), role },
-				});
-			},
-		],
-		[
-			"/admin/create-user",
-			(call) => {
-				const { user, userId } = adminSubjectOf(call);
-				if (!userId) return;
-				const role = stringField(user, "role");
-				emit("userCreatedByAdmin", call.ctx, {
-					userId,
-					properties: { ...actorOf(call.ctx, userId), ...(role && { role }) },
-					user,
-				});
-			},
-		],
-		[
-			"/admin/impersonate-user",
-			(call) => {
-				const { userId } = adminSubjectOf(call);
-				if (!userId) return;
-				emit("userImpersonationStarted", call.ctx, {
-					userId,
-					properties: actorOf(call.ctx, userId),
-				});
-			},
-		],
-		[
-			"/admin/stop-impersonating",
-			({ ctx }) => {
-				// The request still carries the impersonation session.
-				const session = ctx.context.session;
-				const userId = session?.user?.id;
-				const actorUserId = session?.session?.impersonatedBy ?? undefined;
-				if (!userId) return;
-				emit("userImpersonationStopped", ctx, {
-					userId,
-					properties: actorUserId ? { actorUserId } : {},
-				});
-			},
-		],
-		[
-			"/passkey/verify-registration",
-			({ ctx, returned, sessionUserId }) => {
-				const passkeyId = stringField(returned, "id");
-				const userId = sessionUserId ?? stringField(returned, "userId");
-				if (!passkeyId || !userId) return;
-				const deviceType = stringField(returned, "deviceType");
-				emit("passkeyAdded", ctx, {
-					userId,
-					properties: { passkeyId, ...(deviceType && { deviceType }) },
-				});
-			},
-		],
-		[
-			"/passkey/delete-passkey",
-			({ ctx, body, sessionUserId }) => {
-				const passkeyId = stringField(body, "id");
-				if (!passkeyId || !sessionUserId) return;
-				emit("passkeyRemoved", ctx, {
-					userId: sessionUserId,
-					properties: { passkeyId },
-				});
-			},
-		],
-		[
-			"/sso/register",
-			({ ctx, returned, body, sessionUserId }) => {
-				const ssoProviderId =
-					stringField(returned, "providerId") ??
-					stringField(body, "providerId");
-				const userId = sessionUserId ?? stringField(returned, "userId");
-				if (!ssoProviderId || !userId) return;
-				const type =
-					field(returned, "samlConfig") || body.samlConfig
-						? "saml"
-						: field(returned, "oidcConfig") || body.oidcConfig
-							? "oidc"
-							: undefined;
-				const organizationId =
-					stringField(returned, "organizationId") ??
-					stringField(body, "organizationId");
-				emit("ssoProviderRegistered", ctx, {
-					userId,
-					properties: {
-						ssoProviderId,
-						...(type && { type }),
-						...(organizationId && { organizationId }),
-					},
-				});
-			},
-		],
-		[
-			"/sso/delete-provider",
-			({ ctx, body, sessionUserId }) => {
-				const ssoProviderId = stringField(body, "providerId");
-				if (!ssoProviderId || !sessionUserId) return;
-				emit("ssoProviderDeleted", ctx, {
-					userId: sessionUserId,
-					properties: { ssoProviderId },
-				});
-			},
-		],
-		[
-			"/organization/leave",
-			({ ctx, returned, sessionUserId }) => {
-				const memberId = stringField(returned, "id");
-				const organizationId = stringField(returned, "organizationId");
-				const role = stringField(returned, "role");
-				const userId = stringField(returned, "userId") ?? sessionUserId;
-				if (!memberId || !organizationId || !userId) return;
-				emit("organizationMemberRemoved", ctx, {
-					userId,
-					properties: {
-						organizationId,
-						memberId,
-						...(role && { role }),
-						reason: "left",
-					},
-				});
-			},
-		],
-	]);
-
-	const onAfter = (ctx: EndpointContext) => {
-		const returned = ctx.context.returned;
-		if (!succeeded(returned)) return;
-
-		const method = signInMethod(ctx);
-		if (method) {
-			onSignIn(ctx, method);
-			return;
-		}
-
-		const handler = ctx.path ? afterHandlers.get(ctx.path) : undefined;
-		handler?.({
-			ctx,
-			returned,
-			body: record(ctx.body),
-			sessionUserId: sessionUserIdOf(ctx),
-		});
-	};
-
-	// ---------------------------------------------------------------------
-	// Plugin option callbacks, wrapped at init
-	// ---------------------------------------------------------------------
-
-	/**
-	 * Chains `handler` after the existing callback at `target[name]`. The
-	 * callback's own result and errors pass through unchanged; `handler`
-	 * never throws.
-	 */
-	function wrap(
-		target: Record<string, unknown> | undefined,
-		name: string,
-		handler: (...args: unknown[]) => void,
-	): void {
+	const wrap: Toolkit["wrap"] = (target, name, handler) => {
 		if (!target) return;
 		const existing = target[name] as
 			| (((...args: unknown[]) => unknown) & { [WRAPPED]?: object })
@@ -927,285 +412,54 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 			{ [WRAPPED]: token },
 		);
 		target[name] = wrapped;
-	}
+	};
 
-	function wrapOrganization(organization: PluginLike | undefined): void {
-		const pluginOptions = organization?.options;
-		if (!pluginOptions) return;
-		pluginOptions.organizationHooks ??= {};
-		const hooks = pluginOptions.organizationHooks as Record<string, unknown>;
-		type Org = { id: string; slug?: string; name?: string };
-		type Member = { id: string; userId: string; role: string };
-		type Report = Pick<Emission, "userId" | "properties"> | undefined;
-		type Reader = (
-			data: Record<string, unknown>,
-			ctx: EndpointContext | undefined,
-		) => Report;
+	const toolkit: Toolkit = {
+		emit,
+		stateOf,
+		actorOf,
+		wrap,
+		currentAuthContext,
+	};
+	const core = coreEvents(toolkit);
+	const pluginEvents: PluginEvents[] = [
+		core,
+		organizationEvents(toolkit),
+		apiKeyEvents(toolkit),
+		adminEvents(toolkit),
+		passkeyEvents(toolkit),
+		ssoEvents(toolkit),
+		stripeEvents(toolkit),
+	];
+	const afterHandlers = new Map(
+		pluginEvents.flatMap((events) => Object.entries(events.after ?? {})),
+	);
 
-		/** Reports `key` after the organization hook `name`, when `read` finds one. */
-		const on = (name: string, key: AuthEventKey, read: Reader) =>
-			wrap(hooks, name, (data) => {
-				const ctx = currentEndpointContext();
-				const report = read(record(data), ctx);
-				if (report?.userId) emit(key, ctx, report);
-			});
+	const onAfter = (ctx: EndpointContext) => {
+		const returned = ctx.context.returned;
+		if (!succeeded(returned)) return;
 
-		const orgOf = (data: Record<string, unknown>) =>
-			data.organization as Org | undefined;
+		const method = signInMethod(ctx);
+		if (method) {
+			core.signIn(ctx, method);
+			return;
+		}
 
-		// Organization events belong to the user acting on the organization.
-		const organizationReport = (
-			data: Record<string, unknown>,
-			ctx: EndpointContext | undefined,
-			extra: Record<string, unknown> = {},
-		): Report => {
-			const org = orgOf(data);
-			if (!org?.id) return undefined;
-			return {
-				userId: stringField(data.user, "id") ?? sessionUserIdOf(ctx),
-				properties: { organizationId: org.id, ...extra },
-			};
+		const call: AfterCall = {
+			ctx,
+			returned,
+			body: record(ctx.body),
+			sessionUserId: sessionUserIdOf(ctx),
 		};
+		if (ctx.path) afterHandlers.get(ctx.path)?.(call);
+	};
 
-		on("afterCreateOrganization", "organizationCreated", (data, ctx) => {
-			const org = orgOf(data);
-			return organizationReport(data, ctx, {
-				...(org?.slug && { slug: org.slug }),
-				...(org?.name && { name: org.name }),
-			});
-		});
-		on("afterUpdateOrganization", "organizationUpdated", organizationReport);
-		on("afterDeleteOrganization", "organizationDeleted", organizationReport);
-
-		// Member events belong to the member.
-		const memberReport = (
-			data: Record<string, unknown>,
-			ctx: EndpointContext | undefined,
-			extra: Record<string, unknown> = {},
-		): Report => {
-			const member = data.member as Member | undefined;
-			const org = orgOf(data);
-			if (!member?.userId || !org?.id) return undefined;
-			return {
-				userId: member.userId,
-				properties: {
-					organizationId: org.id,
-					memberId: member.id,
-					role: member.role,
-					...actorOf(ctx, member.userId),
-					...extra,
-				},
-			};
-		};
-
-		on("afterAddMember", "organizationMemberAdded", (data, ctx) =>
-			// The creator joins as a member while creating the organization.
-			ctx?.path === "/organization/create"
-				? undefined
-				: memberReport(data, ctx),
-		);
-		on("afterRemoveMember", "organizationMemberRemoved", (data, ctx) =>
-			// Leaving is reported by the after hook on /organization/leave.
-			ctx?.path === "/organization/leave"
-				? undefined
-				: memberReport(data, ctx, { reason: "removed" }),
-		);
-		on("afterUpdateMemberRole", "organizationMemberRoleUpdated", (data, ctx) =>
-			memberReport(
-				data,
-				ctx,
-				typeof data.previousRole === "string"
-					? { previousRole: data.previousRole }
-					: {},
-			),
-		);
-
-		// Invitation events belong to whoever acts on the invitation, named by
-		// `actorField` in the hook's data.
-		const invitationReport = (
-			data: Record<string, unknown>,
-			ctx: EndpointContext | undefined,
-			actorField: string,
-			extra: Record<string, unknown> = {},
-		): Report => {
-			const invitationId = stringField(data.invitation, "id");
-			const org = orgOf(data);
-			if (!invitationId || !org?.id) return undefined;
-			return {
-				userId: stringField(data[actorField], "id") ?? sessionUserIdOf(ctx),
-				properties: { organizationId: org.id, invitationId, ...extra },
-			};
-		};
-
-		on("afterCreateInvitation", "organizationInvitationSent", (data, ctx) => {
-			const role = stringField(data.invitation, "role");
-			return invitationReport(data, ctx, "inviter", role ? { role } : {});
-		});
-		on(
-			"afterAcceptInvitation",
-			"organizationInvitationAccepted",
-			(data, ctx) => {
-				const member = data.member as Member | undefined;
-				if (!member?.id) return undefined;
-				return invitationReport(data, ctx, "user", {
-					memberId: member.id,
-					role: member.role,
-				});
-			},
-		);
-		on("afterRejectInvitation", "organizationInvitationRejected", (data, ctx) =>
-			invitationReport(data, ctx, "user"),
-		);
-		on("afterCancelInvitation", "organizationInvitationCanceled", (data, ctx) =>
-			invitationReport(data, ctx, "cancelledBy"),
-		);
-
-		// Team events belong to the team member they are about, or else to the
-		// user acting on the team.
-		const teamReport =
-			(memberField?: string): Reader =>
-			(data, ctx) => {
-				// The default team is part of creating the organization.
-				if (ctx?.path === "/organization/create") return undefined;
-				const teamId = stringField(data.team, "id");
-				const organizationId =
-					orgOf(data)?.id ?? stringField(data.team, "organizationId");
-				const subject = memberField
-					? stringField(data[memberField], "userId")
-					: undefined;
-				const userId =
-					subject ?? stringField(data.user, "id") ?? sessionUserIdOf(ctx);
-				if (!teamId || !organizationId || !userId) return undefined;
-				return {
-					userId,
-					properties: {
-						organizationId,
-						teamId,
-						...(memberField ? actorOf(ctx, userId) : {}),
-					},
-				};
-			};
-
-		on("afterCreateTeam", "organizationTeamCreated", teamReport());
-		on("afterDeleteTeam", "organizationTeamDeleted", teamReport());
-		on(
-			"afterAddTeamMember",
-			"organizationTeamMemberAdded",
-			teamReport("teamMember"),
-		);
-		on(
-			"afterRemoveTeamMember",
-			"organizationTeamMemberRemoved",
-			teamReport("teamMember"),
-		);
-	}
-
-	function wrapStripe(stripe: PluginLike | undefined): void {
-		const subscription = stripe?.options?.subscription as
-			| Record<string, unknown>
-			| undefined;
-		if (!subscription) return;
-
-		type Subscription = {
-			id: string;
-			plan?: string;
-			status?: string;
-			referenceId?: string;
-			billingInterval?: string | null;
-			trialStart?: unknown;
-		};
-
-		const subscriptionEvent =
-			(key: AuthEventKey, started = false) =>
-			(data: unknown) => {
-				const row = (data as { subscription?: Subscription } | undefined)
-					?.subscription;
-				if (!row?.id || !row.referenceId) return;
-				const adapter = currentAuthContext()?.internalAdapter;
-				emit(key, currentEndpointContext(), async () => {
-					// A subscription belongs to a user or to an organization.
-					const referenceId = row.referenceId as string;
-					const user = await adapter?.findUserById?.(referenceId);
-					const owner = user
-						? { userId: referenceId }
-						: { organizationId: referenceId };
-					return {
-						userId: owner.userId,
-						properties: {
-							subscriptionId: row.id,
-							plan: row.plan ?? "unknown",
-							...(row.status && { status: row.status }),
-							...(owner.organizationId && {
-								organizationId: owner.organizationId,
-							}),
-							...(started && {
-								...(row.billingInterval && { interval: row.billingInterval }),
-								trial: Boolean(row.trialStart),
-							}),
-						},
-					};
-				});
-			};
-
-		wrap(
-			subscription,
-			"onSubscriptionComplete",
-			subscriptionEvent("subscriptionStarted", true),
-		);
-		wrap(
-			subscription,
-			"onSubscriptionCreated",
-			subscriptionEvent("subscriptionStarted", true),
-		);
-		wrap(
-			subscription,
-			"onSubscriptionUpdate",
-			subscriptionEvent("subscriptionUpdated"),
-		);
-		wrap(
-			subscription,
-			"onSubscriptionCancel",
-			subscriptionEvent("subscriptionCanceled"),
-		);
-		wrap(
-			subscription,
-			"onSubscriptionDeleted",
-			subscriptionEvent("subscriptionEnded"),
-		);
-	}
-
-	function wrapAnonymous(anonymous: PluginLike | undefined): void {
-		// Covers `disableDeleteAnonymousUser`, where no deletion reveals the link.
-		wrap(anonymous?.options, "onLinkAccount", (data) => {
-			const link = data as {
-				anonymousUser?: { user?: { id?: string } };
-				ctx?: EndpointContext;
-			};
-			const anonymousUserId = link.anonymousUser?.user?.id;
-			const state = stateOf(link.ctx ?? currentEndpointContext());
-			if (state && anonymousUserId)
-				state.linkedAnonymousUserId = anonymousUserId;
-		});
-	}
-
-	function wrapPasswordReset(
-		emailAndPassword: Record<string, unknown> | undefined,
-	): void {
-		wrap(emailAndPassword, "onPasswordReset", (data) => {
-			const user = (data as { user?: AuthUser } | undefined)?.user;
-			if (!user?.id) return;
-			emit("passwordReset", currentEndpointContext(), {
-				userId: user.id,
-				properties: {},
-			});
-		});
-	}
-
-	function activate(ctx: AuthContextLike): Set<AuthEventKey> {
-		const plugins = ctx.options.plugins ?? [];
+	function activate(context: AuthContextLike): Set<AuthEventKey> {
+		const plugins = context.options.plugins ?? [];
 		const installed = new Set(plugins.map((plugin) => plugin.id));
-		const organization = plugins.find((plugin) => plugin.id === "organization");
-		const teams = field(organization?.options?.teams, "enabled") === true;
+		const teams =
+			field(findPlugin(context, "organization")?.options?.teams, "enabled") ===
+			true;
 		/** What `key` needs that this Better Auth instance lacks. */
 		const missing = (key: AuthEventKey): string | undefined => {
 			const defaults = authEventDefaults[key];
@@ -1250,6 +504,12 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 		);
 	}
 
+	/** A database hook that reports through `handler` and never throws. */
+	const databaseHook =
+		<T>(handler: (row: T, ctx: EndpointContext | undefined) => void) =>
+		async (row: T, ctx?: EndpointContext | null) =>
+			guard(() => handler(row, ctx ?? undefined));
+
 	const plugin = {
 		id: PLUGIN_ID,
 		get activeEvents() {
@@ -1274,11 +534,7 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 					);
 				}
 
-				const find = (id: string) => plugins.find((entry) => entry.id === id);
-				wrapOrganization(find("organization"));
-				wrapStripe(find("stripe"));
-				wrapAnonymous(find("anonymous"));
-				wrapPasswordReset(context.options.emailAndPassword);
+				for (const events of pluginEvents) events.init?.(context);
 			} catch (error) {
 				reportError(error);
 			}
@@ -1287,39 +543,17 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 				options: {
 					databaseHooks: {
 						user: {
-							create: {
-								after: async (user: AuthUser, ctx?: EndpointContext | null) =>
-									onUserCreated(user, ctx ?? undefined),
-							},
+							create: { after: databaseHook(core.userCreated) },
 							update: {
-								before: async (
-									data: Record<string, unknown>,
-									ctx?: EndpointContext | null,
-								) => {
-									// Returning nothing leaves the write untouched.
-									onUserUpdating(data, ctx ?? undefined);
-								},
-								after: async (user: AuthUser, ctx?: EndpointContext | null) =>
-									onUserUpdated(user, ctx ?? undefined),
+								// Returning nothing leaves the write untouched.
+								before: databaseHook(core.userUpdating),
+								after: databaseHook(core.userUpdated),
 							},
-							delete: {
-								after: async (user: AuthUser, ctx?: EndpointContext | null) =>
-									onUserDeleted(user, ctx ?? undefined),
-							},
+							delete: { after: databaseHook(core.userDeleted) },
 						},
 						account: {
-							create: {
-								after: async (
-									account: AccountRow,
-									ctx?: EndpointContext | null,
-								) => onAccountCreated(account, ctx ?? undefined),
-							},
-							delete: {
-								after: async (
-									account: AccountRow,
-									ctx?: EndpointContext | null,
-								) => onAccountDeleted(account, ctx ?? undefined),
-							},
+							create: { after: databaseHook(core.accountCreated) },
+							delete: { after: databaseHook(core.accountDeleted) },
 						},
 					},
 				},
@@ -1367,13 +601,6 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 	return plugin as unknown as TrakooAuthPlugin;
 }
 
-/** Who deleted a user, judged by the endpoint that did it. */
-function deletedByOf(path: string | undefined): "self" | "admin" | "server" {
-	if (path === "/admin/remove-user") return "admin";
-	if (path?.startsWith("/delete-user")) return "self";
-	return "server";
-}
-
 /** Settles with `promise`, or rejects once `ms` pass. */
 function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 	let timer: ReturnType<typeof setTimeout> | undefined;
@@ -1386,12 +613,4 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 			);
 		}),
 	]).finally(() => clearTimeout(timer));
-}
-
-function roleString(role: unknown): string | undefined {
-	if (typeof role === "string") return role;
-	if (Array.isArray(role) && role.every((entry) => typeof entry === "string")) {
-		return role.join(",");
-	}
-	return undefined;
 }

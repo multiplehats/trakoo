@@ -117,8 +117,22 @@ Routing options are part of the shared provider config:
 | `events` | Only track these exact event names |
 | `excludeEvents` | Track every event except these names |
 | `eventPatterns` | Track events matching glob-style patterns such as `newsletter_*` |
+| `pii` | `false` keeps personal data from this provider (default `true`) |
 
 `methods` wins over `exclude` when both are set. `events`, `eventPatterns`, and `excludeEvents` are mutually exclusive; the runtime logs a warning and uses the highest-priority option.
+
+### Personal data
+
+An email tool needs the user's email; a product-analytics tool usually shouldn't store it. Set `pii: false` on a provider entry to keep personal data from that provider while the others still receive it:
+
+```typescript
+providers: [
+  { provider: new OpenPanelServerProvider({ /* ... */ }), pii: false },
+  new BentoServerProvider({ /* ... */ }),
+]
+```
+
+A provider with `pii: false` never receives the `email`, `name`, `firstName`, `lastName`, or `phone` traits in `identify()`, nor the email or those traits in an event's user context. It still receives the user id, event properties, and the rest of the context. Keep personal data out of event properties themselves: `pii` doesn't inspect them.
 
 ## Browser-to-server delivery
 

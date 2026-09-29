@@ -259,7 +259,11 @@ const analytics = createClientAnalytics({
 });
 ```
 
-Every configured provider receives eligible calls. Routing can restrict methods, exact event names, excluded events, or event-name patterns.
+Every configured provider receives eligible calls. Routing can restrict methods, exact event names, excluded events, or event-name patterns. Set `pii: false` on an entry to keep emails and names from that provider while the others still receive them.
+
+## Better Auth
+
+[`@trakoo/better-auth`](packages/better-auth) is a Better Auth plugin that sends typed events for sign-ups, sign-ins, sessions, organizations, API keys, subscriptions, and more. Merge its `authEvents` into your registry and add `trakooAuth({ analytics })` to your Better Auth plugins.
 
 ## Custom providers
 
@@ -304,6 +308,7 @@ See [Creating Custom Providers](https://trakoo.co/docs/providers/custom) for the
 | `@trakoo/openpanel/client`, `@trakoo/openpanel/server` | OpenPanel providers |
 | `@trakoo/bento/server` | Bento server provider |
 | `@trakoo/emitkit/server` | EmitKit server provider |
+| `@trakoo/better-auth` | Better Auth plugin and its `authEvents` registry |
 
 Do not import factories from the root or use a combined provider entry point. Provider packages have no root entry; import from their `/client` or `/server` subpath.
 

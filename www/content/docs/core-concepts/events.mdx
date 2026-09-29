@@ -38,6 +38,26 @@ export const appEvents = defineEvents({
 
 The object keys are local labels. The `name` values are stable wire names accepted by `track()` and sent to providers. `defineEvents()` preserves literal types, verifies the definition shape, builds the runtime lookup, and throws immediately if two definitions use the same wire name.
 
+## Merging registries
+
+A registry is a plain object, so you can spread one into another. Packages such as [`@trakoo/better-auth`](/docs/integrations/better-auth) ship their events this way:
+
+```typescript title="lib/events.ts"
+import { defineEvents, typed } from 'trakoo';
+import { authEvents } from '@trakoo/better-auth';
+
+export const appEvents = defineEvents({
+  ...authEvents,
+  checkoutCompleted: {
+    name: 'checkout_completed',
+    category: 'conversion',
+    properties: typed<{ orderId: string }>()
+  }
+});
+```
+
+The merged registry keeps every event's types. Two definitions with the same wire name still throw, so remove your own definition of an event a package now sends. When two definitions share a key, the later one wins, as with any spread.
+
 ## Names and categories
 
 Use stable, descriptive names such as `checkout_completed`. Renaming a production event splits its history, so prefer adding a new event and deprecating the old one.

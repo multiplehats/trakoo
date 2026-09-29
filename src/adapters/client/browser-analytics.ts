@@ -19,6 +19,7 @@ import {
 } from "@/core/events/validation.js";
 import { isBrowser } from "@/utils/environment";
 import { compileEventPattern } from "@/utils/event-pattern.js";
+import { providerContext, providerTraits } from "@/utils/pii.js";
 
 export interface BrowserAnalyticsConfig<
 	TRegistry extends EventRegistry<EventDefinitions>,
@@ -41,6 +42,8 @@ interface NormalizedProviderConfig {
 	enabledEvents?: Set<string>;
 	excludedEvents?: Set<string>;
 	eventPatterns?: RegExp[];
+	/** Whether the provider may receive personal traits and the user's email. */
+	pii: boolean;
 }
 
 /**
@@ -140,6 +143,7 @@ export class BrowserAnalytics<
 				return {
 					provider: config as AnalyticsProvider,
 					enabledMethods: new Set(allMethods),
+					pii: true,
 				};
 			}
 
@@ -151,6 +155,7 @@ export class BrowserAnalytics<
 				events?: string[];
 				excludeEvents?: string[];
 				eventPatterns?: string[];
+				pii?: boolean;
 			};
 
 			// Validate mutually exclusive method options
@@ -222,6 +227,7 @@ export class BrowserAnalytics<
 				enabledEvents,
 				excludedEvents,
 				eventPatterns,
+				pii: providerConfig.pii !== false,
 			};
 		});
 	}
@@ -450,7 +456,10 @@ export class BrowserAnalytics<
 				if (this.shouldCallMethod(config, "identify")) {
 					config.provider.identify(
 						userIdSnapshot,
-						traitsSnapshot as Record<string, unknown> | undefined,
+						providerTraits(
+							config,
+							traitsSnapshot as Record<string, unknown> | undefined,
+						),
 					);
 				}
 			}
@@ -598,7 +607,7 @@ export class BrowserAnalytics<
 				try {
 					await config.provider.track(
 						event as BaseEvent,
-						contextWithUser as EventContext,
+						providerContext(config, contextWithUser as EventContext),
 						{
 							input: invocation.input,
 							inputProvided: invocation.inputProvided,
@@ -694,7 +703,7 @@ export class BrowserAnalytics<
 				if (this.shouldCallMethod(config, "pageView")) {
 					config.provider.pageView(
 						propertiesSnapshot,
-						contextSnapshot as EventContext,
+						providerContext(config, contextSnapshot as EventContext),
 					);
 				}
 			}
@@ -769,7 +778,7 @@ export class BrowserAnalytics<
 				) {
 					config.provider.pageLeave(
 						propertiesSnapshot,
-						contextSnapshot as EventContext,
+						providerContext(config, contextSnapshot as EventContext),
 					);
 				}
 			}

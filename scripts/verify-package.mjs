@@ -242,6 +242,55 @@ const providers: AnalyticsProvider[] = [] as ExportedProvider[];
 void [exportsProvider, providers];
 `;
 
+/**
+ * Integrations export something other than providers, so each one type-checks
+ * its own consumer: the setup its README shows, resolved from the packed
+ * packages.
+ */
+const integrationConsumerSources = {
+	"@trakoo/better-auth": (specifier) => String.raw`
+import { betterAuth } from "better-auth";
+import { defineEvents, typed } from "trakoo";
+import { createServerAnalytics } from "trakoo/server";
+import { authEvents, trakooAuth, type AuthEventKey } from "${specifier}";
+
+const events = defineEvents({
+	...authEvents,
+	checkoutCompleted: {
+		name: "checkout_completed",
+		category: "conversion",
+		properties: typed<{ orderId: string }>(),
+	},
+});
+const analytics = createServerAnalytics({ events, providers: [] });
+await analytics.track("user_signed_up", { method: "email", emailVerified: false });
+
+export const auth = betterAuth({
+	plugins: [
+		trakooAuth({
+			analytics,
+			exclude: ["userSignedOut"] satisfies AuthEventKey[],
+			emitkit: { notify: ["userSignedUp"] },
+		}),
+	],
+});
+
+const withoutAuthEvents = createServerAnalytics({
+	events: defineEvents({}),
+	providers: [],
+});
+// @ts-expect-error the registry must include authEvents
+trakooAuth({ analytics: withoutAuthEvents });
+`,
+};
+
+/** The import specifier and built file of an adapter entry. */
+function entryModule(adapter, entry) {
+	return entry === "."
+		? { specifier: adapter.name, file: "index" }
+		: { specifier: `${adapter.name}/${entry}`, file: entry };
+}
+
 const diagnosticPattern = /^(.+?)\(\d+,\d+\): error TS\d+:/;
 const ownedFilePattern = /(?:^|\/)node_modules\/(?:trakoo|@trakoo\/[^/]+)\//;
 
@@ -392,10 +441,10 @@ function verifyAdapterEntry({
 	consumerDirectory,
 	typesNodeRange,
 }) {
-	const specifier = `${adapter.name}/${entry}`;
+	const { specifier, file } = entryModule(adapter, entry);
 	const sdkNames = adapter.sdkPeers.map((peer) => peer.name);
 	const entrySdks = referencedPackages(
-		join(adapter.directory, "dist", `${entry}.js`),
+		join(adapter.directory, "dist", `${file}.js`),
 		join(adapter.directory, "dist"),
 		sdkNames,
 	);
@@ -434,16 +483,18 @@ function verifyAdapterEntry({
 			: undefined,
 	);
 
+	const consumerSource =
+		integrationConsumerSources[adapter.name] ?? adapterConsumerSource;
 	typecheckConsumer(
 		consumerDirectory,
-		`/// <reference types="node" />\n${adapterConsumerSource(specifier)}`,
+		`/// <reference types="node" />\n${consumerSource(specifier)}`,
 	);
 
 	// Importing a sibling entry must stay safe even though its SDK is absent.
 	runModule(
 		consumerDirectory,
 		adapter.entries
-			.map((name) => `await import("${adapter.name}/${name}");`)
+			.map((name) => `await import("${entryModule(adapter, name).specifier}");`)
 			.join("\n"),
 	);
 

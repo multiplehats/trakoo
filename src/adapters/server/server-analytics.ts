@@ -22,6 +22,7 @@ import {
 	type ValidationConfig,
 } from "@/core/events/validation.js";
 import { compileEventPattern } from "@/utils/event-pattern.js";
+import { providerContext, providerTraits } from "@/utils/pii.js";
 
 export interface ServerTrackOptions<TUserTraits extends object> {
 	readonly userId?: string;
@@ -69,6 +70,8 @@ interface NormalizedProviderConfig {
 	enabledEvents?: Set<string>;
 	excludedEvents?: Set<string>;
 	eventPatterns?: RegExp[];
+	/** Whether the provider may receive personal traits and the user's email. */
+	pii: boolean;
 }
 
 export class ServerAnalytics<
@@ -148,6 +151,7 @@ export class ServerAnalytics<
 				return {
 					provider: config as AnalyticsProvider,
 					enabledMethods: new Set(allMethods),
+					pii: true,
 				};
 			}
 
@@ -159,6 +163,7 @@ export class ServerAnalytics<
 				events?: string[];
 				excludeEvents?: string[];
 				eventPatterns?: string[];
+				pii?: boolean;
 			};
 
 			// Validate mutually exclusive method options
@@ -230,6 +235,7 @@ export class ServerAnalytics<
 				enabledEvents,
 				excludedEvents,
 				eventPatterns,
+				pii: providerConfig.pii !== false,
 			};
 		});
 	}
@@ -432,7 +438,7 @@ export class ServerAnalytics<
 			.map((config) =>
 				config.provider.identify(
 					userId,
-					traits as Record<string, unknown> | undefined,
+					providerTraits(config, traits as Record<string, unknown> | undefined),
 				),
 			);
 
@@ -697,7 +703,7 @@ export class ServerAnalytics<
 				try {
 					await config.provider.track(
 						event as BaseEvent,
-						context as EventContext,
+						providerContext(config, context as EventContext),
 					);
 				} catch (error) {
 					// Log error but don't throw - one provider failing shouldn't break others
@@ -789,7 +795,10 @@ export class ServerAnalytics<
 		const promises = this.providerConfigs
 			.filter((config) => this.shouldCallMethod(config, "pageView"))
 			.map((config) =>
-				config.provider.pageView(properties, context as EventContext),
+				config.provider.pageView(
+					properties,
+					providerContext(config, context as EventContext),
+				),
 			);
 
 		const results = await Promise.allSettled(promises);
@@ -882,7 +891,7 @@ export class ServerAnalytics<
 				) {
 					config.provider.pageLeave(
 						propertiesSnapshot,
-						context as EventContext,
+						providerContext(config, context as EventContext),
 					);
 				}
 			}

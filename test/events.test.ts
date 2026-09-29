@@ -152,6 +152,31 @@ describe("event registry", () => {
 		expect(getEventDefinition(events, "button_clicked")).toBe(events.buttonClicked);
 		expect(getEventDefinition(events, "missing_event")).toBeUndefined();
 	});
+
+	it("merges registries by spreading them into a new one", () => {
+		const packageEvents = defineEvents({
+			userSignedUp: {
+				name: "user_signed_up",
+				category: "user",
+				properties: typed<{ method: string }>(),
+			},
+		});
+		const merged = defineEvents({ ...packageEvents, ...events });
+
+		expectTypeOf<EventName<typeof merged>>().toEqualTypeOf<
+			"user_signed_up" | "button_clicked" | "session_started" | "form_submitted"
+		>();
+		expectTypeOf<EventInputMap<typeof merged>["user_signed_up"]>().toEqualTypeOf<{
+			method: string;
+		}>();
+		expect(getEventDefinition(merged, "user_signed_up")).toBe(
+			packageEvents.userSignedUp,
+		);
+		expect(getEventDefinition(merged, "button_clicked")).toBe(events.buttonClicked);
+		expect(() => defineEvents({ ...packageEvents, again: packageEvents.userSignedUp })).toThrow(
+			/duplicate event name: user_signed_up/i,
+		);
+	});
 });
 
 // @ts-expect-error typed<T>() rejects primitive property types

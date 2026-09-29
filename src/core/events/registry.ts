@@ -39,8 +39,10 @@ type ObjectPropertySchema<TProperties extends EventProperties> =
 				: TProperties
 		: TProperties;
 
+// A spread registry brings its symbol-keyed brand along in the type only
+// (the runtime brand is non-enumerable), so definitions skip symbol keys.
 type ObjectPropertyDefinitions<T extends EventDefinitions> = {
-	readonly [K in keyof T]: {
+	readonly [K in keyof T as K extends symbol ? never : K]: {
 		readonly properties: ObjectPropertySchema<T[K]["properties"]>;
 	};
 };
@@ -95,7 +97,7 @@ export function getEventClassification<T extends EventDefinitions>(
 type RegistryDefinitions<R extends EventRegistry<EventDefinitions>> =
 	R extends EventRegistry<infer T> ? T : never;
 type EventDefinitionOf<R extends EventRegistry<EventDefinitions>> =
-	RegistryDefinitions<R>[keyof RegistryDefinitions<R>];
+	RegistryDefinitions<R>[Exclude<keyof RegistryDefinitions<R>, symbol>];
 
 export type EventName<R extends EventRegistry<EventDefinitions>> =
 	EventDefinitionOf<R>["name"];

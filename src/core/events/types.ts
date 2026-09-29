@@ -230,6 +230,23 @@ export interface ProviderConfig {
 	 * ```
 	 */
 	eventPatterns?: string[];
+	/**
+	 * Whether this provider may receive personal data: `email`, `name`,
+	 * `firstName`, `lastName` and `phone` in identify traits, and the email and
+	 * those traits in an event's user context. Set `false` to keep them out of
+	 * an analytics tool while an email tool such as Bento still receives them.
+	 * The user id is always sent.
+	 * @default true
+	 *
+	 * @example
+	 * ```typescript
+	 * {
+	 *   provider: new OpenPanelServerProvider({...}),
+	 *   pii: false
+	 * }
+	 * ```
+	 */
+	pii?: boolean;
 }
 
 /**

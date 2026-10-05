@@ -10,24 +10,14 @@
 			"default": "./dist/index.js"
 		}
 	},
-	"files": [
-		"dist",
-		"README.md",
-		"LICENSE"
-	],
+	"files": ["dist", "README.md", "LICENSE"],
 	"sideEffects": false,
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run"
 	},
-	"keywords": [
-		"analytics",
-		"trakoo",
-		"better-auth",
-		"auth",
-		"typescript"
-	],
+	"keywords": ["analytics", "trakoo", "better-auth", "auth", "typescript"],
 	"author": "Chris Jayden <https://github.com/multiplehats>",
 	"license": "MIT",
 	"repository": {
@@ -55,7 +45,7 @@
 		"@better-auth/sso": "^1.7.6",
 		"@better-auth/stripe": "^1.7.6",
 		"@simplewebauthn/server": "^13.3.1",
-		"better-auth": "^1.7.6",
+		"better-auth": "^1.7.7",
 		"stripe": "^22",
 		"trakoo": "workspace:*"
 	}

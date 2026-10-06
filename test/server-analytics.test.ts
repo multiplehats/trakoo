@@ -77,6 +77,8 @@ function assertServerTypes(): void {
 	analytics.track("session_started", { userId: "user_123" });
 	analytics.track("session_started", { occurredAt: new Date() });
 	analytics.track("test_event", {}, { occurredAt: 1_700_000_000_000 });
+	analytics.track("session_started", { groups: { company: "acme" } });
+	analytics.group("company", "acme", { plan: "pro" }, { userId: "user_123" });
 	analytics.identify("user_123", { plan: "pro" });
 
 	// @ts-expect-error unknown event names are rejected
@@ -98,6 +100,12 @@ function assertServerTypes(): void {
 		{},
 		// @ts-expect-error occurredAt takes a Date or epoch milliseconds
 		{ occurredAt: "2026-10-06T12:00:00Z" },
+	);
+	analytics.track(
+		"test_event",
+		{},
+		// @ts-expect-error groups map a group type to one id
+		{ groups: { company: ["acme"] } },
 	);
 }
 
@@ -314,6 +322,95 @@ describe("Server Analytics", () => {
 		},
 	);
 
+	it("sends an event to its groups, and none when it names none", async () => {
+		await analytics.track("test_event", {}, { groups: { company: "acme" } });
+		await analytics.track("session_started", { groups: {} });
+		await analytics.track("test_event", {});
+
+		expect(mockProvider.calls.track.map(({ event }) => event.groups)).toEqual([
+			{ company: "acme" },
+			undefined,
+			undefined,
+		]);
+	});
+
+	describe("group", () => {
+		it("hands the group and the user to every provider that supports groups", async () => {
+			const withoutGroups = new MockAnalyticsProvider({ enabled: true });
+			// A provider written before groups existed has no `group` at all.
+			Object.defineProperty(withoutGroups, "group", { value: undefined });
+			const grouped = createServerAnalytics({
+				events,
+				providers: [mockProvider, withoutGroups],
+			});
+
+			await grouped.group(
+				"company",
+				"acme",
+				{ plan: "pro" },
+				{ userId: "user_123" },
+			);
+
+			expect(mockProvider.calls.group).toEqual([
+				{
+					group: { type: "company", id: "acme", traits: { plan: "pro" } },
+					userId: "user_123",
+				},
+			]);
+		});
+
+		it("keeps personal traits from a provider with pii: false", async () => {
+			const emailTool = new MockAnalyticsProvider({ enabled: true });
+			const grouped = createServerAnalytics({
+				events,
+				providers: [{ provider: mockProvider, pii: false }, emailTool],
+			});
+
+			await grouped.group("company", "acme", {
+				name: "Acme Ltd",
+				email: "billing@acme.test",
+				plan: "pro",
+			});
+
+			expect(mockProvider.calls.group[0]?.group.traits).toEqual({
+				plan: "pro",
+			});
+			expect(emailTool.calls.group[0]?.group.traits).toEqual({
+				name: "Acme Ltd",
+				email: "billing@acme.test",
+				plan: "pro",
+			});
+		});
+
+		it("is routed like any other method", async () => {
+			const trackOnly = new MockAnalyticsProvider({ enabled: true });
+			const grouped = createServerAnalytics({
+				events,
+				providers: [
+					{ provider: trackOnly, methods: ["track"] },
+					{ provider: mockProvider, exclude: ["track"] },
+				],
+			});
+
+			await grouped.group("company", "acme");
+
+			expect(trackOnly.calls.group).toHaveLength(0);
+			expect(mockProvider.calls.group).toEqual([
+				{ group: { type: "company", id: "acme" }, userId: undefined },
+			]);
+		});
+
+		it.each([
+			["an empty type", "", "acme"],
+			["an empty id", "company", ""],
+		])("refuses %s as invalid_options", async (_label, type, id) => {
+			await expect(analytics.group(type, id)).rejects.toMatchObject({
+				code: "invalid_options",
+			});
+			expect(mockProvider.calls.group).toHaveLength(0);
+		});
+	});
+
 	it("uses the exact definition category instead of deriving one", async () => {
 		await analytics.track("test_event", { data: "test" });
 
@@ -402,6 +499,7 @@ describe("Server Analytics", () => {
 		["an occurredAt of NaN", { occurredAt: Number.NaN }],
 		["an occurredAt beyond a Date's range", { occurredAt: 1.7e18 }],
 		["an invalid Date occurredAt", { occurredAt: new Date("not a date") }],
+		["groups that are not an object", { groups: ["acme"] }],
 	])(
 		"routes propertyless %s through invalid_properties",
 		async (_label, value) => {
@@ -426,6 +524,10 @@ describe("Server Analytics", () => {
 		["an infinite occurredAt", { occurredAt: Number.POSITIVE_INFINITY }],
 		["an occurredAt beyond a Date's range", { occurredAt: 1.7e18 }],
 		["an invalid Date occurredAt", { occurredAt: new Date("not a date") }],
+		["groups that are not an object", { groups: ["acme"] }],
+		["groups of null", { groups: null }],
+		["a group with an empty id", { groups: { company: "" } }],
+		["a group id that is not a string", { groups: { company: 42 } }],
 	])(
 		"throws invalid_options for property-bearing %s options",
 		async (_label, value) => {

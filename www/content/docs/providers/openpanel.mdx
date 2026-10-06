@@ -130,6 +130,10 @@ Resolve the caller's address with whatever your platform vouches for (`x-forward
 
 The event's time, `occurredAt` when you pass it, travels as OpenPanel's `__timestamp` property. OpenPanel stores the event at that time however far in the past it is, and treats a time more than a minute in the future as the moment it receives the event. An event more than 15 minutes old joins no session, so session-based reports leave it out while profile-based ones include it.
 
+### Groups
+
+On the server, `analytics.group(type, id, traits, { userId })` upserts an OpenPanel group and adds the user's profile to it, and `track()`'s `groups` option sends the event's group ids as OpenPanel's `groups`. Each request names its groups explicitly, so the provider never uses the SDK's `setGroup()`, which would attach a group to every later event of every request. OpenPanel requires a group name: the `name` trait is used when there is one, and the group's id otherwise, as it is under `pii: false`. Traits that are `null` or `undefined` are left out, because OpenPanel stores group properties as text.
+
 ## Identifying users
 
 Client identification persists until `analytics.reset()`. OpenPanel's standard `firstName`, `lastName`, `email`, and `avatar` traits are sent as profile fields. Other traits are stored as custom profile properties.
@@ -283,7 +287,7 @@ Failure reporting, and on the server the caller's IP and user agent, depend on t
 OpenPanel's SDK reads two event property names itself instead of storing them:
 
 - `profileId` is the profile the event belongs to. The provider sets it from the event's user ID when there is one.
-- `groups` is a list of OpenPanel group IDs. An array becomes the event's groups rather than a property, a string is split into one-character group IDs, `null` or an empty array is dropped, and a number, boolean or object makes the SDK throw, so the event is not sent.
+- `groups` is a list of OpenPanel group IDs. An array becomes the event's groups rather than a property, a string is split into one-character group IDs, `null` or an empty array is dropped, and a number, boolean or object makes the SDK throw, so the event is not sent. On the server, use `track()`'s `groups` option instead; when it is set, it replaces this property.
 
 Give event properties other names unless you mean OpenPanel's own fields.
 
@@ -296,6 +300,7 @@ Give event properties other names unless you mean OpenPanel's own fields.
 | `pageView()` | Sends OpenPanel's `screen_view` event |
 | `pageLeave()` | No-op; OpenPanel has no dedicated page-leave method |
 | `reset()` | Clears the browser or provider-local identity |
+| `group()` | Server only: upserts a group, then adds the user to it |
 
 ## Resources
 

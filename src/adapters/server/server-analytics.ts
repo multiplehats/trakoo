@@ -10,6 +10,7 @@ import type {
 	AnalyticsProvider,
 	BaseEvent,
 	EventContext,
+	GroupDescriptor,
 	ProviderConfigOrProvider,
 	ProviderMethod,
 	UserContext,
@@ -36,6 +37,18 @@ export interface ServerTrackOptions<TUserTraits extends object> {
 	 * place it at its own time rather than at delivery.
 	 */
 	readonly occurredAt?: Date | number;
+	/**
+	 * The groups the event belongs to, by group type, such as
+	 * `{ company: "acme" }`. Providers that support groups attach the event to
+	 * each one; others ignore it. Each type and id must be a non-empty string.
+	 */
+	readonly groups?: Readonly<Record<string, string>>;
+}
+
+/** Options for server `group()`. */
+export interface ServerGroupOptions {
+	/** Adds this user to the group as well. */
+	readonly userId?: string;
 }
 
 export interface ServerAnalyticsAdapterConfig<
@@ -56,6 +69,7 @@ const serverTrackOptionKeys = new Set([
 	"context",
 	"user",
 	"occurredAt",
+	"groups",
 ]);
 
 function isServerTrackOptions<TUserTraits extends object>(
@@ -66,7 +80,29 @@ function isServerTrackOptions<TUserTraits extends object>(
 		value !== null &&
 		!Array.isArray(value) &&
 		Object.keys(value).every((key) => serverTrackOptionKeys.has(key)) &&
-		isValidOccurredAt(Reflect.get(value, "occurredAt"))
+		isValidOccurredAt(Reflect.get(value, "occurredAt")) &&
+		isValidGroups(Reflect.get(value, "groups"))
+	);
+}
+
+/** Absent, or a plain object of non-empty group types to non-empty ids. */
+function isValidGroups(value: unknown): boolean {
+	if (value === undefined) return true;
+	if (typeof value !== "object" || value === null || Array.isArray(value)) {
+		return false;
+	}
+	return Object.entries(value).every(
+		([type, id]) => type.length > 0 && typeof id === "string" && id.length > 0,
+	);
+}
+
+/** Whether `group()` was given a usable type and id. */
+function isValidGroupKey(type: unknown, id: unknown): boolean {
+	return (
+		typeof type === "string" &&
+		type.length > 0 &&
+		typeof id === "string" &&
+		id.length > 0
 	);
 }
 
@@ -165,6 +201,7 @@ export class ServerAnalytics<
 			"pageView",
 			"pageLeave",
 			"reset",
+			"group",
 		];
 
 		return providers.map((config) => {
@@ -689,6 +726,10 @@ export class ServerAnalytics<
 			userId: options?.userId,
 			sessionId: options?.sessionId,
 		};
+		const groups = options?.groups;
+		if (groups !== undefined && Object.keys(groups).length > 0) {
+			event.groups = { ...groups };
+		}
 
 		const eventContext = options?.context;
 		const page =
@@ -745,6 +786,74 @@ export class ServerAnalytics<
 
 		// Wait for all providers to complete
 		await Promise.all(trackPromises);
+	}
+
+	/**
+	 * Creates or updates a group, such as a company or a workspace, and adds a
+	 * user to it when `options.userId` is given.
+	 *
+	 * Only providers that implement `group` receive the call (OpenPanel's
+	 * server provider does); routing applies as for any method, under the
+	 * name `"group"`. A provider routed with `pii: false` receives the traits
+	 * without `name`, `email` and the other personal keys. Send events to the
+	 * group with `track()`'s `groups` option.
+	 *
+	 * @param type The group's kind, such as `company`
+	 * @param id The group's id, unique among groups of its type
+	 * @param traits The group's properties
+	 * @param options.userId A user to add to the group
+	 *
+	 * @example
+	 * ```typescript
+	 * await analytics.group('company', 'acme', { plan: 'pro' }, { userId: 'user-123' });
+	 * await analytics.track('report_exported', { format: 'csv' }, {
+	 *   userId: 'user-123',
+	 *   groups: { company: 'acme' }
+	 * });
+	 * ```
+	 */
+	async group(
+		type: string,
+		id: string,
+		traits?: Record<string, unknown>,
+		options?: ServerGroupOptions,
+	): Promise<void> {
+		if (!this.enabled) return;
+		if (!isValidGroupKey(type, id)) {
+			await applyValidationFailurePolicy(
+				new AnalyticsValidationError("invalid_options", "group"),
+				this.validation,
+				this.debug,
+			);
+			return;
+		}
+		if (!this.initialized) await this.ensureInitialized();
+
+		const promises = this.providerConfigs
+			.filter(
+				(config) =>
+					this.shouldCallMethod(config, "group") &&
+					typeof config.provider.group === "function",
+			)
+			.map((config) => {
+				const providerGroupTraits = providerTraits(config, traits);
+				const group: GroupDescriptor = {
+					type,
+					id,
+					...(providerGroupTraits !== undefined && {
+						traits: providerGroupTraits,
+					}),
+				};
+				return config.provider.group?.(group, options?.userId);
+			});
+
+		const results = await Promise.allSettled(promises);
+
+		for (const result of results) {
+			if (result.status === "rejected") {
+				throw result.reason;
+			}
+		}
 	}
 
 	/**

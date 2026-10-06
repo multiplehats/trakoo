@@ -1,6 +1,6 @@
-import type { BaseEvent, EventContext } from "trakoo";
+import type { BaseEvent, EventContext, GroupDescriptor } from "trakoo";
 import { type OpenPanelRequestContext, REQUEST_CONTEXT } from "./transport.js";
-import type { IdentifyPayload } from "@openpanel/sdk";
+import type { GroupPayload, IdentifyPayload } from "@openpanel/sdk";
 
 const PROFILE_FIELDS = ["firstName", "lastName", "email", "avatar"] as const;
 
@@ -38,6 +38,27 @@ export function buildIdentifyPayload(
 	}
 
 	return payload;
+}
+
+/**
+ * An OpenPanel group: the `name` trait as its name, or its id when there is
+ * none, since OpenPanel requires one. Absent traits are left out, because
+ * OpenPanel stores every group property as text.
+ */
+export function buildGroupPayload(group: GroupDescriptor): GroupPayload {
+	const { name, ...traits } = group.traits ?? {};
+	const properties = Object.fromEntries(
+		Object.entries(traits).filter(
+			([, value]) => value !== undefined && value !== null,
+		),
+	);
+
+	return {
+		id: group.id,
+		type: group.type,
+		name: typeof name === "string" && name.length > 0 ? name : group.id,
+		...(Object.keys(properties).length > 0 && { properties }),
+	};
 }
 
 export function buildEventProperties(

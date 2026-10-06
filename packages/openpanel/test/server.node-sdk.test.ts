@@ -220,4 +220,107 @@ describe("OpenPanelServerProvider with the node SDK", () => {
 			"2026-09-30T08:15:42.123Z",
 		);
 	});
+
+	it("sends an event to its groups without keeping them on the shared client", async () => {
+		const fetchMock = stubFetch();
+		const provider = await createProvider();
+		const analytics = createServerAnalytics({
+			events: defineEvents({
+				siteCreated: {
+					name: "site_created",
+					category: "conversion",
+					properties: typed<{ siteId: string }>(),
+				},
+			}),
+			providers: [provider],
+			validation: { onFailure: "throw" },
+		});
+
+		await analytics.track(
+			"site_created",
+			{ siteId: "site-1" },
+			{ userId: "user-a", groups: { organization: "org-1" } },
+		);
+		await analytics.track(
+			"site_created",
+			{ siteId: "site-2" },
+			{ userId: "user-b" },
+		);
+
+		const [grouped, ungrouped] = requestsOf(fetchMock);
+		expect(grouped?.body.payload.groups).toEqual(["org-1"]);
+		expect(grouped?.body.payload.properties).not.toHaveProperty("groups");
+		expect(ungrouped?.body.payload.profileId).toBe("user-b");
+		expect(ungrouped?.body.payload).not.toHaveProperty("groups");
+	});
+
+	it("upserts a group, then adds the user to it by name", async () => {
+		const fetchMock = stubFetch();
+		const provider = await createProvider();
+		const analytics = createServerAnalytics({
+			events: defineEvents({
+				siteCreated: {
+					name: "site_created",
+					category: "conversion",
+					properties: typed<{ siteId: string }>(),
+				},
+			}),
+			providers: [provider],
+		});
+
+		await analytics.group(
+			"organization",
+			"org-1",
+			{ planId: "free", seats: undefined, trial: null },
+			{ userId: "user-a" },
+		);
+		await analytics.track(
+			"site_created",
+			{ siteId: "site-1" },
+			{ userId: "user-b" },
+		);
+
+		expect(requestsOf(fetchMock).map(({ body }) => body)).toEqual([
+			{
+				type: "group",
+				payload: {
+					id: "org-1",
+					type: "organization",
+					// No name trait: OpenPanel requires one, so the id stands in.
+					name: "org-1",
+					properties: { planId: "free" },
+				},
+			},
+			{
+				type: "assign_group",
+				payload: { groupIds: ["org-1"], profileId: "user-a" },
+			},
+			expect.objectContaining({
+				type: "track",
+				payload: expect.not.objectContaining({ groups: expect.anything() }),
+			}),
+		]);
+		const [, , track] = requestsOf(fetchMock);
+		expect(track?.body.payload.profileId).toBe("user-b");
+	});
+
+	it("names a group by its name trait unless routed without personal data", async () => {
+		const fetchMock = stubFetch();
+		const analytics = createServerAnalytics({
+			events: defineEvents({}),
+			providers: [{ provider: await createProvider(), pii: false }],
+		});
+		const named = createServerAnalytics({
+			events: defineEvents({}),
+			providers: [await createProvider()],
+		});
+
+		await analytics.group("company", "acme", { name: "Acme Ltd" });
+		await named.group("company", "acme", { name: "Acme Ltd" });
+
+		expect(requestsOf(fetchMock).map(({ body }) => body.payload.name)).toEqual([
+			"acme",
+			"Acme Ltd",
+		]);
+	});
 });

@@ -228,6 +228,23 @@ await analytics.track('order_completed', {
 
 An `occurredAt` that is neither a valid `Date` nor a number of milliseconds a `Date` can hold fails validation: `invalid_options` in argument three, as here, and `invalid_properties` in a propertyless event's argument two. OpenPanel, PostHog and Bento record the event at that time; Pirsch and EmitKit record it on receipt and keep the time only as a property. What a provider does with an old event is its own: see its page. Only server analytics takes `occurredAt`.
 
+### Groups
+
+Server analytics can attribute events to groups, such as the company or workspace a user acts for. `group()` creates or updates a group and, given a `userId`, adds that user to it. `track()`'s `groups` option attributes one event to its groups, by group type:
+
+```typescript
+await analytics.group('company', company.id, { plan: company.plan }, {
+  userId: user.id
+});
+
+await analytics.track('report_exported', { format: 'csv' }, {
+  userId: user.id,
+  groups: { company: company.id }
+});
+```
+
+Each group type and id must be a non-empty string; anything else fails validation with `invalid_options`. Only providers that implement groups receive them: OpenPanel's server provider does, and every other provider ignores `group()` and the `groups` option. A provider routed with `pii: false` receives a group's traits without `name`, `email` and the other personal keys. Route `group` like any other method with `methods` or `exclude`. Groups are server-only: a server provider is shared by every request, so nothing about a group is remembered between calls, and each event names its own.
+
 ### Shutdown in serverless
 
 Serverless platforms may freeze or terminate a function after it returns. When a request owns its analytics/provider pair, shut that pair down before the request ends. The exact effect is provider-specific: shutdown may flush queued work, clear state, close resources, or combine those behaviors.

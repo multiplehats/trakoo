@@ -212,6 +212,22 @@ export async function POST(req: Request) {
 }
 ```
 
+### Events that happened earlier
+
+A server event is stamped with the time of its `track()` call. When you record one after the fact, such as in a backfill, from a queue drained later, or as a projection of stored records, pass `occurredAt` so the event carries the time it happened:
+
+```typescript
+await analytics.track('order_completed', {
+  orderId: order.id,
+  amount: order.total
+}, {
+  userId: order.userId,
+  occurredAt: order.completedAt // a Date, or epoch milliseconds (not seconds)
+});
+```
+
+An `occurredAt` that is neither a valid `Date` nor a number of milliseconds a `Date` can hold fails validation: `invalid_options` in argument three, as here, and `invalid_properties` in a propertyless event's argument two. OpenPanel, PostHog and Bento record the event at that time; Pirsch and EmitKit record it on receipt and keep the time only as a property. What a provider does with an old event is its own: see its page. Only server analytics takes `occurredAt`.
+
 ### Shutdown in serverless
 
 Serverless platforms may freeze or terminate a function after it returns. When a request owns its analytics/provider pair, shut that pair down before the request ends. The exact effect is provider-specific: shutdown may flush queued work, clear state, close resources, or combine those behaviors.

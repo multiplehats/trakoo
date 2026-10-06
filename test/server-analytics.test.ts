@@ -75,6 +75,8 @@ function assertServerTypes(): void {
 	});
 	analytics.track("session_started");
 	analytics.track("session_started", { userId: "user_123" });
+	analytics.track("session_started", { occurredAt: new Date() });
+	analytics.track("test_event", {}, { occurredAt: 1_700_000_000_000 });
 	analytics.identify("user_123", { plan: "pro" });
 
 	// @ts-expect-error unknown event names are rejected
@@ -91,6 +93,12 @@ function assertServerTypes(): void {
 	analytics.track("session_started", { unexpected: true });
 	// @ts-expect-error inferred user traits reject unknown properties
 	analytics.identify("user_123", { company: "Acme" });
+	analytics.track(
+		"test_event",
+		{},
+		// @ts-expect-error occurredAt takes a Date or epoch milliseconds
+		{ occurredAt: "2026-10-06T12:00:00Z" },
+	);
 }
 
 void assertServerTypes;
@@ -272,6 +280,40 @@ describe("Server Analytics", () => {
 		});
 	});
 
+	it("stamps the time of the call when no occurredAt is given", async () => {
+		vi.useFakeTimers({ toFake: ["Date"] });
+		try {
+			vi.setSystemTime(1_800_000_000_000);
+			await analytics.track("test_event", {});
+		} finally {
+			vi.useRealTimers();
+		}
+
+		expect(mockProvider.calls.track[0].event.timestamp).toBe(1_800_000_000_000);
+	});
+
+	it.each([
+		["a Date", new Date("2023-11-14T22:13:20.000Z")],
+		["epoch milliseconds", 1_700_000_000_000],
+	])(
+		"delivers an event at its occurredAt given as %s",
+		async (_label, occurredAt) => {
+			await analytics.track("test_event", {}, { occurredAt });
+			await analytics.track("session_started", { occurredAt });
+
+			expect(mockProvider.calls.track.map(({ event }) => event)).toEqual([
+				expect.objectContaining({
+					action: "test_event",
+					timestamp: 1_700_000_000_000,
+				}),
+				expect.objectContaining({
+					action: "session_started",
+					timestamp: 1_700_000_000_000,
+				}),
+			]);
+		},
+	);
+
 	it("uses the exact definition category instead of deriving one", async () => {
 		await analytics.track("test_event", { data: "test" });
 
@@ -356,6 +398,10 @@ describe("Server Analytics", () => {
 		["an array", []],
 		["a primitive", "user_123"],
 		["unknown option keys", { unexpected: true }],
+		["an occurredAt that is not a time", { occurredAt: "yesterday" }],
+		["an occurredAt of NaN", { occurredAt: Number.NaN }],
+		["an occurredAt beyond a Date's range", { occurredAt: 1.7e18 }],
+		["an invalid Date occurredAt", { occurredAt: new Date("not a date") }],
 	])(
 		"routes propertyless %s through invalid_properties",
 		async (_label, value) => {
@@ -375,6 +421,11 @@ describe("Server Analytics", () => {
 		["an array", []],
 		["a primitive", "user_123"],
 		["unknown option keys", { unexpected: true }],
+		["an occurredAt that is not a time", { occurredAt: "yesterday" }],
+		["an occurredAt of NaN", { occurredAt: Number.NaN }],
+		["an infinite occurredAt", { occurredAt: Number.POSITIVE_INFINITY }],
+		["an occurredAt beyond a Date's range", { occurredAt: 1.7e18 }],
+		["an invalid Date occurredAt", { occurredAt: new Date("not a date") }],
 	])(
 		"throws invalid_options for property-bearing %s options",
 		async (_label, value) => {

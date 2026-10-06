@@ -29,6 +29,13 @@ export interface ServerTrackOptions<TUserTraits extends object> {
 	readonly sessionId?: string;
 	readonly context?: EventContext<TUserTraits>;
 	readonly user?: UserContext<TUserTraits>;
+	/**
+	 * When the event happened, as a `Date` or epoch milliseconds. Defaults to
+	 * the time of the `track()` call. Set it when recording an event after the
+	 * fact, such as a backfill or a projection of stored records, so providers
+	 * place it at its own time rather than at delivery.
+	 */
+	readonly occurredAt?: Date | number;
 }
 
 export interface ServerAnalyticsAdapterConfig<
@@ -48,6 +55,7 @@ const serverTrackOptionKeys = new Set([
 	"sessionId",
 	"context",
 	"user",
+	"occurredAt",
 ]);
 
 function isServerTrackOptions<TUserTraits extends object>(
@@ -57,7 +65,21 @@ function isServerTrackOptions<TUserTraits extends object>(
 		typeof value === "object" &&
 		value !== null &&
 		!Array.isArray(value) &&
-		Object.keys(value).every((key) => serverTrackOptionKeys.has(key))
+		Object.keys(value).every((key) => serverTrackOptionKeys.has(key)) &&
+		isValidOccurredAt(Reflect.get(value, "occurredAt"))
+	);
+}
+
+/**
+ * An absent time, or one that names a real instant. A number must also fit a
+ * `Date` (±8.64e15 ms): providers format the timestamp through one, and a
+ * nanosecond epoch would otherwise pass here and fail at delivery.
+ */
+function isValidOccurredAt(value: unknown): boolean {
+	if (value === undefined) return true;
+	if (value instanceof Date) return Number.isFinite(value.getTime());
+	return (
+		typeof value === "number" && Number.isFinite(new Date(value).getTime())
 	);
 }
 
@@ -472,6 +494,7 @@ export class ServerAnalytics<
 	 * @param options.sessionId Session ID to associate with this event
 	 * @param options.user User context including email and traits (automatically included in event context)
 	 * @param options.context Additional context for this event (page, device, etc.)
+	 * @param options.occurredAt When the event happened (`Date` or epoch milliseconds); defaults to now
 	 * @returns Promise that resolves when tracking is complete for all providers
 	 *
 	 * @example
@@ -652,11 +675,17 @@ export class ServerAnalytics<
 		resolved: ResolvedEvent<TRegistry, TName>,
 		options: ServerTrackOptions<TUserTraits> | undefined,
 	): Promise<void> {
+		const occurredAt = options?.occurredAt;
 		const event: BaseEvent<EventOutputMap<TRegistry>[TName]> = {
 			action: resolved.name,
 			category: resolved.category,
 			properties: resolved.properties,
-			timestamp: Date.now(),
+			timestamp:
+				occurredAt === undefined
+					? Date.now()
+					: occurredAt instanceof Date
+						? occurredAt.getTime()
+						: occurredAt,
 			userId: options?.userId,
 			sessionId: options?.sessionId,
 		};

@@ -1,3 +1,5 @@
+import { defineEvents, typed } from "trakoo";
+import { createServerAnalytics } from "trakoo/server";
 import { OpenPanelServerProvider } from "../src/server.js";
 import type { OpenPanelServerConfig } from "../src/server.js";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -191,5 +193,31 @@ describe("OpenPanelServerProvider with the node SDK", () => {
 		expect(tracks).toHaveLength(1);
 		expect(tracks[0]?.payload.name).toBe("anonymous_event");
 		expect(tracks[0]?.payload.profileId).toBeUndefined();
+	});
+
+	it("sends an event recorded after the fact at the time it happened", async () => {
+		const fetchMock = stubFetch();
+		const analytics = createServerAnalytics({
+			events: defineEvents({
+				siteCreated: {
+					name: "site_created",
+					category: "conversion",
+					properties: typed<{ siteId: string }>(),
+				},
+			}),
+			providers: [await createProvider()],
+			validation: { onFailure: "throw" },
+		});
+
+		await analytics.track(
+			"site_created",
+			{ siteId: "site-1" },
+			{ userId: "user-a", occurredAt: new Date("2026-09-30T08:15:42.123Z") },
+		);
+
+		const [request] = requestsOf(fetchMock);
+		expect(request?.body.payload.properties.__timestamp).toBe(
+			"2026-09-30T08:15:42.123Z",
+		);
 	});
 });

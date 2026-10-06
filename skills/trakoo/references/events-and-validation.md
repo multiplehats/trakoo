@@ -102,6 +102,8 @@ await serverAnalytics.track(
 
 `userId` belongs directly in server track options. Identity fields such as `email` stay top-level in `user`, while application traits belong under `user.traits`. Do not pass a raw custom-traits object as `user`.
 
+Server track options also take `occurredAt`, a `Date` or epoch milliseconds, for an event recorded after it happened (a backfill, a projection of stored records). It defaults to the time of the call. Any other option key, or an `occurredAt` that is not a real time, fails validation: `invalid_options` in argument three, and `invalid_properties` in a propertyless event's argument two, where options that do not validate are read as properties.
+
 Never pass an `undefined` properties placeholder. A client second argument, a server `undefined` placeholder, or properties supplied through untyped JavaScript is `invalid_properties` under the validation-failure policy.
 
 ## Factory inference and user traits

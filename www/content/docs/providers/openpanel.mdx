@@ -126,6 +126,10 @@ A value that cannot be sent as an HTTP header, such as one containing a line bre
 
 Resolve the caller's address with whatever your platform vouches for (`x-forwarded-for` behind a trusted proxy, `x-real-ip`, or a framework helper). Forwarding a spoofable header you do not control attributes events to whatever the caller claims.
 
+### Events recorded after the fact
+
+The event's time, `occurredAt` when you pass it, travels as OpenPanel's `__timestamp` property. OpenPanel stores the event at that time however far in the past it is, and treats a time more than a minute in the future as the moment it receives the event. An event more than 15 minutes old joins no session, so session-based reports leave it out while profile-based ones include it.
+
 ## Identifying users
 
 Client identification persists until `analytics.reset()`. OpenPanel's standard `firstName`, `lastName`, `email`, and `avatar` traits are sent as profile fields. Other traits are stored as custom profile properties.

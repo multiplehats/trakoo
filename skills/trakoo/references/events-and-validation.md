@@ -104,6 +104,8 @@ await serverAnalytics.track(
 
 Server track options also take `occurredAt`, a `Date` or epoch milliseconds, for an event recorded after it happened (a backfill, a projection of stored records). It defaults to the time of the call. Any other option key, or an `occurredAt` that is not a real time, fails validation: `invalid_options` in argument three, and `invalid_properties` in a propertyless event's argument two, where options that do not validate are read as properties.
 
+Server track options also take `groups`, the groups the event belongs to by group type (`{ company: "acme" }`), and `serverAnalytics.group(type, id, traits?, { userId })` creates or updates a group and adds a user to it. Only providers that implement `group` receive either (OpenPanel's server provider does). Group types and ids must be non-empty strings, or the call fails validation with `invalid_options`.
+
 Never pass an `undefined` properties placeholder. A client second argument, a server `undefined` placeholder, or properties supplied through untyped JavaScript is `invalid_properties` under the validation-failure policy.
 
 ## Factory inference and user traits

@@ -21,6 +21,25 @@ export interface BaseEvent<
 	userId?: string;
 	sessionId?: string;
 	properties?: TProperties;
+	/**
+	 * The groups the event belongs to, by group type: `{ company: "acme" }`.
+	 * Set by server `track()`'s `groups` option.
+	 */
+	groups?: Readonly<Record<string, string>>;
+}
+
+/**
+ * One group, such as a company or a workspace, as server `group()` hands it
+ * to a provider.
+ */
+export interface GroupDescriptor {
+	/** The group's kind, such as `company`. */
+	readonly type: string;
+	/** Unique among groups of its type. */
+	readonly id: string;
+	/** The group's properties. A provider routed with `pii: false` receives
+	 * them without `name`, `email` and the other personal keys. */
+	readonly traits?: Record<string, unknown>;
 }
 
 export interface UserContext<TTraits extends object = Record<string, unknown>> {
@@ -107,6 +126,11 @@ export interface AnalyticsProvider {
 	): Promise<void> | void;
 	reset(): Promise<void> | void;
 	flush?(useBeacon?: boolean): Promise<void> | void;
+	/**
+	 * Creates or updates a group, and adds `userId` to it when given. Optional:
+	 * a provider without it receives no group calls.
+	 */
+	group?(group: GroupDescriptor, userId?: string): Promise<void> | void;
 }
 
 /**
@@ -118,7 +142,8 @@ export type ProviderMethod =
 	| "track"
 	| "pageView"
 	| "pageLeave"
-	| "reset";
+	| "reset"
+	| "group";
 
 /**
  * Configuration for selective provider method routing and event filtering.

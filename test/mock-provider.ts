@@ -1,5 +1,9 @@
 import { BaseAnalyticsProvider } from "@/providers/base.provider";
-import type { BaseEvent, EventContext } from "@/core/events/types";
+import type {
+	BaseEvent,
+	EventContext,
+	GroupDescriptor,
+} from "@/core/events/types";
 
 export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 	name = "MockProvider";
@@ -20,6 +24,7 @@ export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 		}>;
 		reset: number;
 		flush: Array<{ useBeacon?: boolean }>;
+		group: Array<{ group: GroupDescriptor; userId?: string }>;
 	} = {
 		initialize: 0,
 		identify: [],
@@ -28,6 +33,7 @@ export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 		pageLeave: [],
 		reset: 0,
 		flush: [],
+		group: [],
 	};
 
 	initialize(): void {
@@ -69,6 +75,12 @@ export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 		this.log("Reset");
 	}
 
+	group(group: GroupDescriptor, userId?: string): void {
+		if (!this.isEnabled() || !this.initialized) return;
+		this.calls.group.push({ group, userId });
+		this.log("Grouped");
+	}
+
 	flush(useBeacon?: boolean): void {
 		if (!this.isEnabled() || !this.initialized) return;
 		this.calls.flush.push({ useBeacon });
@@ -85,6 +97,7 @@ export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 			pageLeave: [],
 			reset: 0,
 			flush: [],
+			group: [],
 		};
 	}
 

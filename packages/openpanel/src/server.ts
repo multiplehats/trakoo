@@ -2,9 +2,11 @@ import {
 	BaseAnalyticsProvider,
 	type BaseEvent,
 	type EventContext,
+	type GroupDescriptor,
 } from "trakoo";
 import {
 	buildEventProperties,
+	buildGroupPayload,
 	buildIdentifyPayload,
 	buildTrackedEventProperties,
 	withRequestContext,
@@ -164,11 +166,42 @@ export class OpenPanelServerProvider extends BaseAnalyticsProvider {
 			this.isEnabled() && this.initialized ? this.client : undefined;
 		if (!client) return;
 
-		await client.track(
-			event.action,
-			withRequestContext(buildTrackedEventProperties(event, context), context),
-		);
+		const groups = event.groups ? Object.values(event.groups) : [];
+		await client.track(event.action, {
+			...withRequestContext(
+				buildTrackedEventProperties(event, context),
+				context,
+			),
+			// Per event, never `setGroup()`: the client is shared by every
+			// request, and its own group list joins every later event.
+			...(groups.length > 0 && { groups }),
+		});
 		this.log("Tracked event");
+	}
+
+	/**
+	 * Upserts the group, then adds `userId` to it. Both requests name the
+	 * group and the profile explicitly, so the shared client keeps no group or
+	 * profile between requests. OpenPanel requires a name; without a `name`
+	 * trait the group is named by its id.
+	 */
+	async group(group: GroupDescriptor, userId?: string): Promise<void> {
+		const client =
+			this.isEnabled() && this.initialized ? this.client : undefined;
+		if (!client) return;
+
+		try {
+			await client.upsertGroup(buildGroupPayload(group));
+			if (userId) {
+				await client.send({
+					type: "assign_group",
+					payload: { groupIds: [group.id], profileId: userId },
+				});
+			}
+		} finally {
+			client.clear();
+		}
+		this.log("Upserted group");
 	}
 
 	async pageView(

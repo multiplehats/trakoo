@@ -3,6 +3,7 @@ export {
 	createServerAnalytics,
 	ServerAnalytics,
 	type ServerAnalyticsConfig,
+	type ServerGroupOptions,
 	type ServerTrackOptions,
 } from "@/server.js";
 
@@ -38,6 +39,7 @@ export type {
 	BaseEvent,
 	EventCategory,
 	EventContext,
+	GroupDescriptor,
 	ProviderConfig,
 	ProviderConfigOrProvider,
 } from "@/core/events/types.js";

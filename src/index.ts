@@ -4,6 +4,7 @@ export type {
 	BaseEvent,
 	EventCategory,
 	EventContext,
+	GroupDescriptor,
 	PredefinedEventCategory,
 	ProviderConfig,
 	ProviderConfigOrProvider,

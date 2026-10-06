@@ -400,6 +400,7 @@ describe("Server Analytics", () => {
 		["unknown option keys", { unexpected: true }],
 		["an occurredAt that is not a time", { occurredAt: "yesterday" }],
 		["an occurredAt of NaN", { occurredAt: Number.NaN }],
+		["an occurredAt beyond a Date's range", { occurredAt: 1.7e18 }],
 		["an invalid Date occurredAt", { occurredAt: new Date("not a date") }],
 	])(
 		"routes propertyless %s through invalid_properties",
@@ -423,6 +424,7 @@ describe("Server Analytics", () => {
 		["an occurredAt that is not a time", { occurredAt: "yesterday" }],
 		["an occurredAt of NaN", { occurredAt: Number.NaN }],
 		["an infinite occurredAt", { occurredAt: Number.POSITIVE_INFINITY }],
+		["an occurredAt beyond a Date's range", { occurredAt: 1.7e18 }],
 		["an invalid Date occurredAt", { occurredAt: new Date("not a date") }],
 	])(
 		"throws invalid_options for property-bearing %s options",

@@ -70,11 +70,17 @@ function isServerTrackOptions<TUserTraits extends object>(
 	);
 }
 
-/** An absent time, or one that names a real instant. */
+/**
+ * An absent time, or one that names a real instant. A number must also fit a
+ * `Date` (±8.64e15 ms): providers format the timestamp through one, and a
+ * nanosecond epoch would otherwise pass here and fail at delivery.
+ */
 function isValidOccurredAt(value: unknown): boolean {
 	if (value === undefined) return true;
 	if (value instanceof Date) return Number.isFinite(value.getTime());
-	return typeof value === "number" && Number.isFinite(value);
+	return (
+		typeof value === "number" && Number.isFinite(new Date(value).getTime())
+	);
 }
 
 /**

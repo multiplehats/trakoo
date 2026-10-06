@@ -133,7 +133,7 @@ Other Standard Schema-compatible libraries work the same way; trakoo does not wr
 
 ## Validation failure policy
 
-Unknown wire names, missing or unexpected properties arguments, schema issues, validator exceptions, and non-object validator outputs are validation failures. On the server, a malformed `options` argument — a third `track()` argument containing a key outside `userId`, `sessionId`, `context`, `user`, and `occurredAt`, or an `occurredAt` that is neither a valid `Date` nor a finite number — is also a validation failure, reported with the `invalid_options` code.
+Unknown wire names, missing or unexpected properties arguments, schema issues, validator exceptions, and non-object validator outputs are validation failures. On the server, a malformed `options` argument — a third `track()` argument containing a key outside `userId`, `sessionId`, `context`, `user`, and `occurredAt`, or an `occurredAt` that is neither a valid `Date` nor a number of milliseconds a `Date` can hold — is also a validation failure, reported with the `invalid_options` code.
 
 The default policy is **drop**: the call resolves without sending the event to any provider. Opt into strict mode when the caller must handle the failure:
 

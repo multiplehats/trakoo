@@ -1,5 +1,13 @@
 # @trakoo/docs
 
+## 0.0.18
+
+### Patch Changes
+
+- Updated dependencies [[`229b858`](https://github.com/multiplehats/trakoo/commit/229b8586fea03335cb0cfb230f25e257ba951cef)]:
+  - trakoo@2.4.0
+  - @trakoo/openpanel@1.2.0
+
 ## 0.0.17
 
 ### Patch Changes

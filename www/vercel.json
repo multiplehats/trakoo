@@ -1,6 +1,6 @@
 {
 	"$schema": "https://openapi.vercel.sh/vercel.json",
-	"buildCommand": "pnpm --filter \"@trakoo/docs^...\" build && pnpm build",
+	"buildCommand": "pnpm --dir .. build:core && pnpm --dir .. --filter @trakoo/openpanel build && pnpm build",
 	"outputDirectory": "dist",
 	"redirects": [
 		{

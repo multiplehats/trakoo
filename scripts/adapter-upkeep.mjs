@@ -54,7 +54,8 @@ export function supportedVersions(range, publishedVersions) {
  * What moving one SDK peer to `latest` changes, or `null` when the adapter is
  * already tested against it. A peer range is only ever widened, with the new
  * release as the floor of the added part, so every claimed version stays one
- * the matrix has run.
+ * the matrix has run. Companions release in lockstep with the peer, so they
+ * move to the same release.
  */
 export function planSdkUpdate(peer, latest) {
 	const testedFloor = semver.minVersion(peer.testedRange ?? peer.range);
@@ -70,6 +71,10 @@ export function planSdkUpdate(peer, latest) {
 			to: widened ? `${peer.range} || ^${latest}` : peer.range,
 		},
 		widened,
+		companions: (peer.companions ?? []).map((name) => ({
+			name,
+			to: `^${latest}`,
+		})),
 	};
 }
 
@@ -78,6 +83,9 @@ export function applyUpdatesToManifest(manifest, updates) {
 	for (const update of updates) {
 		next.devDependencies[update.name] = update.testedRange.to;
 		next.peerDependencies[update.name] = update.range.to;
+		for (const companion of update.companions ?? []) {
+			next.devDependencies[companion.name] = companion.to;
+		}
 	}
 	return next;
 }
@@ -121,10 +129,13 @@ export function upkeepSummary(packageName, updates) {
 		widened.length > 0
 			? `feat(${packageName}): support ${widened.map((update) => `${update.name}@${update.latest}`).join(", ")}`
 			: `chore(${packageName}): test against ${updates.map((update) => `${update.name}@${update.latest}`).join(", ")}`;
-	const rows = updates.map(
-		(update) =>
-			`| \`${update.name}\` | \`${update.testedRange.from}\` → \`${update.testedRange.to}\` | ${update.widened ? `\`${update.range.from}\` → \`${update.range.to}\`` : "unchanged"} |`,
-	);
+	const rows = updates.flatMap((update) => [
+		`| \`${update.name}\` | \`${update.testedRange.from}\` → \`${update.testedRange.to}\` | ${update.widened ? `\`${update.range.from}\` → \`${update.range.to}\`` : "unchanged"} |`,
+		...(update.companions ?? []).map(
+			(companion) =>
+				`| \`${companion.name}\` | \`${companion.to}\` (in lockstep with \`${update.name}\`) | not a peer |`,
+		),
+	]);
 	const body = [
 		`Moves \`${packageName}\` onto the latest SDK releases.`,
 		"",

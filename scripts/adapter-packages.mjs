@@ -6,7 +6,9 @@ export const readJson = (filePath) =>
 
 /**
  * Reads every adapter package under `packages/`. An adapter's SDK peers are
- * all of its peer dependencies except `trakoo` itself.
+ * all of its peer dependencies except `trakoo` itself. A peer's companions are
+ * the dev dependencies published under its name as a scope, such as
+ * `@better-auth/sso` for `better-auth`: they release in lockstep with it.
  */
 export function readAdapterPackages(root) {
 	const packagesDirectory = join(root, "packages");
@@ -43,5 +45,8 @@ export function sdkPeers(manifest) {
 			range,
 			optional: manifest.peerDependenciesMeta?.[packageName]?.optional === true,
 			testedRange: manifest.devDependencies?.[packageName],
+			companions: Object.keys(manifest.devDependencies ?? {}).filter(
+				(devDependency) => devDependency.startsWith(`@${packageName}/`),
+			),
 		}));
 }

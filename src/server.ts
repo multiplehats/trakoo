@@ -53,5 +53,6 @@ export function createServerAnalytics<
 export { ServerAnalytics };
 export type {
 	ServerGroupOptions,
+	ServerIdentifyOptions,
 	ServerTrackOptions,
 } from "@/adapters/server/server-analytics.js";

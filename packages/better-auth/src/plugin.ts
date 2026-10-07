@@ -203,7 +203,11 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 			properties: Record<string, unknown>,
 			options: Record<string, unknown>,
 		) => Promise<void>;
-		identify: (userId: string, traits?: AuthTraits) => Promise<void> | void;
+		identify: (
+			userId: string,
+			traits?: AuthTraits,
+			options?: Record<string, unknown>,
+		) => Promise<void> | void;
 	};
 	const states = new WeakMap<object, RequestState>();
 	let active: ReadonlySet<AuthEventKey> = new Set();
@@ -316,7 +320,14 @@ export function trakooAuth<A extends AnyServerAnalytics>(
 			// A failed or slow identify must not cost any provider the event.
 			try {
 				await withTimeout(
-					Promise.resolve(analytics.identify(emission.userId, traits)),
+					Promise.resolve(
+						// The request places the profile at the user, not this server.
+						request
+							? analytics.identify(emission.userId, traits, {
+									context: { server: { ...request } },
+								})
+							: analytics.identify(emission.userId, traits),
+					),
 					IDENTIFY_TIMEOUT_MS,
 				);
 			} catch (error) {

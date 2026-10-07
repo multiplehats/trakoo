@@ -107,9 +107,15 @@ export interface TrackInvocation {
 export interface AnalyticsProvider {
 	name: string;
 	initialize(): Promise<void> | void;
+	/**
+	 * `context` is the request the identify came from, when the caller has
+	 * one: a provider that places profiles by the caller's IP or user agent
+	 * reads them from `context.server`.
+	 */
 	identify(
 		userId: string,
 		traits?: Record<string, unknown>,
+		context?: EventContext,
 	): Promise<void> | void;
 	track(
 		event: BaseEvent,

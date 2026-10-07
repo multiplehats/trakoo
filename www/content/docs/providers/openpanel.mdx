@@ -120,6 +120,19 @@ await serverAnalytics.track('api_request', { route: '/v1/generations' }, {
 });
 ```
 
+The same goes for `identify()`, and matters more there: OpenPanel sets a profile's country, city, OS and browser from the request that identifies it, so a server identify without context places every user where your server runs. Pass the same `context.server` as the third argument:
+
+```typescript
+await serverAnalytics.identify('user_123', { email: 'jane@example.com' }, {
+  context: {
+    server: {
+      ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim(),
+      userAgent: request.headers.get('user-agent') ?? undefined
+    }
+  }
+});
+```
+
 Each event is attributed to its own caller, so one long-lived provider can serve concurrent requests. `context.device.ip` and `context.device.userAgent` are used for whichever of the two `context.server` does not supply. The IP travels as a header only — it is never stored as an event property, and a `device.ip` you pass is removed from the properties.
 
 A value that cannot be sent as an HTTP header, such as one containing a line break or a character above U+00FF, is skipped and the next source is tried. The event is still delivered, without that attribute.
@@ -148,16 +161,18 @@ analytics.identify('user_123', {
 });
 ```
 
-On the server, `identify()` updates the profile but does not persist that identity for later events. Continue to pass the profile ID on each tracked server event.
+On the server, `identify()` updates the profile but does not persist that identity for later events. Continue to pass the profile ID on each tracked server event, and pass the user's request as `context.server` so the profile is [placed at the user](#geo-and-device-attribution), not at your server.
 
 ```typescript title="lib/server-analytics.ts"
 await serverAnalytics.identify('user_123', {
   email: 'jane@example.com',
   plan: 'enterprise'
+}, {
+  context: { server: { ip: clientIp, userAgent } }
 });
 ```
 
-OpenPanel only writes a profile when there is something besides the ID, so `identify()` without traits sends nothing. In the browser it still attributes later events to that profile; on the server it has no effect.
+OpenPanel only writes a profile when there is something besides the ID, so `identify()` without traits or request context sends nothing. In the browser it still attributes later events to that profile; on the server it has no effect. With request context, a server `identify()` is sent even without traits, to place the profile.
 
 ## Configuration
 

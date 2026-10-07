@@ -573,7 +573,19 @@ export async function ingestProxyEvents<
 							break;
 						}
 
-						await analytics.identify(trustedUserId, identity?.user?.traits);
+						// The browser's IP and user agent place the profile, not this server.
+						const server = {
+							...enrichment.server,
+							...(ip ? { ip } : {}),
+							...(userAgent ? { userAgent } : {}),
+						};
+						await analytics.identify(
+							trustedUserId,
+							identity?.user?.traits,
+							Object.keys(server).length > 0
+								? { context: { server } }
+								: undefined,
+						);
 						break;
 					}
 

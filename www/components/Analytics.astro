@@ -1,0 +1,29 @@
+---
+/**
+ * Visits to the docs, reported through trakoo itself to OpenPanel. Mounted in
+ * the `Footer` layout slot, which renders on every page, and renders nothing
+ * visible. Production builds only, and only when the browser-public client id
+ * is set (`PUBLIC_OPENPANEL_CLIENT_ID`), so local and preview traffic stays out.
+ */
+---
+
+<script>
+	const clientId = import.meta.env.PUBLIC_OPENPANEL_CLIENT_ID;
+
+	if (import.meta.env.PROD && clientId && !navigator.webdriver) {
+		const [{ defineEvents }, { createClientAnalytics }, { OpenPanelClientProvider }] =
+			await Promise.all([
+				import("trakoo"),
+				import("trakoo/client"),
+				import("@trakoo/openpanel/client"),
+			]);
+
+		const analytics = createClientAnalytics({
+			events: defineEvents({}),
+			providers: [new OpenPanelClientProvider({ clientId })],
+		});
+		await analytics.initialize();
+		// Blume serves full page loads, so one page view per load is every visit.
+		analytics.pageView();
+	}
+</script>

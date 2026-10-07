@@ -694,6 +694,21 @@ describe("Proxy Server Ingestion", () => {
 			]);
 		});
 
+		it("identifies with the browser's IP and user agent, not the server's", async () => {
+			await ingestProxyEvents(
+				requestFor(payload([{ type: "identify", userId: "user-1" }]), {
+					"x-forwarded-for": "203.0.113.4, 10.0.0.1",
+					"user-agent": "Mozilla/5.0 (Macintosh)",
+				}),
+				serverAnalytics,
+				{ resolveIdentity: () => ({ userId: "trusted-user" }) },
+			);
+
+			expect(mockProvider.calls.identify[0]?.context).toEqual({
+				server: { ip: "203.0.113.4", userAgent: "Mozilla/5.0 (Macintosh)" },
+			});
+		});
+
 		it("uses resolver identity for page views and keeps unresolved page views anonymous", async () => {
 			await ingestProxyEvents(
 				requestFor(

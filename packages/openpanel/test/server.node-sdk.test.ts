@@ -176,6 +176,66 @@ describe("OpenPanelServerProvider with the node SDK", () => {
 		]);
 	});
 
+	it("places an identified profile at the caller, not the server", async () => {
+		const fetchMock = stubFetch();
+		const provider = await createProvider();
+
+		await provider.identify(
+			"user-a",
+			{ email: "a@example.com", plan: "pro" },
+			{ server: { ip: "203.0.113.4", userAgent: "Mozilla/5.0 (Macintosh)" } },
+		);
+
+		const [request] = requestsOf(fetchMock);
+		expect(requestsOf(fetchMock)).toHaveLength(1);
+		expect(request?.headers["openpanel-client-ip"]).toBe("203.0.113.4");
+		expect(request?.headers["user-agent"]).toBe("Mozilla/5.0 (Macintosh)");
+		expect(request?.body).toEqual({
+			type: "identify",
+			payload: {
+				profileId: "user-a",
+				email: "a@example.com",
+				properties: { plan: "pro" },
+			},
+		});
+	});
+
+	it("sends an identify without traits when it can place the profile", async () => {
+		const fetchMock = stubFetch();
+		const provider = await createProvider();
+
+		await provider.identify("user-a", undefined, {
+			device: { ip: "203.0.113.4" },
+		});
+
+		const [request] = requestsOf(fetchMock);
+		expect(request?.headers["openpanel-client-ip"]).toBe("203.0.113.4");
+		expect(request?.body).toEqual({
+			type: "identify",
+			payload: { profileId: "user-a", properties: {} },
+		});
+	});
+
+	it("passes the identify context from server analytics to the request", async () => {
+		const fetchMock = stubFetch();
+		const analytics = createServerAnalytics({
+			events: defineEvents({}),
+			providers: [await createProvider()],
+		});
+
+		await analytics.identify(
+			"user-a",
+			{ plan: "pro" },
+			{ context: { server: { ip: "203.0.113.4" } } },
+		);
+		await analytics.identify("user-b", { plan: "free" });
+
+		const [placed, unplaced] = requestsOf(fetchMock);
+		expect(placed?.headers["openpanel-client-ip"]).toBe("203.0.113.4");
+		expect(unplaced?.body.payload.profileId).toBe("user-b");
+		expect(unplaced?.headers["openpanel-client-ip"]).toBeUndefined();
+	});
+
 	it("never holds anonymous events for the next identified user", async () => {
 		const fetchMock = stubFetch();
 		// An untyped caller can hand the provider SDK queueing options. With

@@ -12,7 +12,11 @@ export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 	// Track all method calls for testing
 	public calls: {
 		initialize: number;
-		identify: Array<{ userId: string; traits?: Record<string, unknown> }>;
+		identify: Array<{
+			userId: string;
+			traits?: Record<string, unknown>;
+			context?: EventContext;
+		}>;
 		track: Array<{ event: BaseEvent; context?: EventContext }>;
 		pageView: Array<{
 			properties?: Record<string, unknown>;
@@ -42,9 +46,13 @@ export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 		this.log("Initialized");
 	}
 
-	identify(userId: string, traits?: Record<string, unknown>): void {
+	identify(
+		userId: string,
+		traits?: Record<string, unknown>,
+		context?: EventContext,
+	): void {
 		if (!this.isEnabled() || !this.initialized) return;
-		this.calls.identify.push({ userId, traits });
+		this.calls.identify.push({ userId, traits, context });
 		this.log("Identified user");
 	}
 

@@ -9,6 +9,7 @@ import {
 	buildGroupPayload,
 	buildIdentifyPayload,
 	buildTrackedEventProperties,
+	withIdentifyRequestContext,
 	withRequestContext,
 } from "./shared.js";
 import {
@@ -143,9 +144,15 @@ export class OpenPanelServerProvider extends BaseAnalyticsProvider {
 		}
 	}
 
+	/**
+	 * OpenPanel places the profile where the identify request came from, so
+	 * pass the user's request as `context.server` (`ip`, `userAgent`).
+	 * Without it the profile gets the server's country and no browser.
+	 */
 	async identify(
 		userId: string,
 		traits?: Record<string, unknown>,
+		context?: EventContext,
 	): Promise<void> {
 		const client =
 			this.isEnabled() && this.initialized ? this.client : undefined;
@@ -153,7 +160,12 @@ export class OpenPanelServerProvider extends BaseAnalyticsProvider {
 
 		let pending: ReturnType<OpenPanel["identify"]>;
 		try {
-			pending = client.identify(buildIdentifyPayload(userId, traits));
+			pending = client.identify(
+				withIdentifyRequestContext(
+					buildIdentifyPayload(userId, traits),
+					context,
+				),
+			);
 		} finally {
 			client.clear();
 		}

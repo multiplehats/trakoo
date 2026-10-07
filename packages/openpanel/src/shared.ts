@@ -152,6 +152,27 @@ export function withRequestContext(
 		: stripped;
 }
 
+/**
+ * Parks the request attributes on an identify payload. OpenPanel sets a
+ * profile's country, city, OS and browser from the request that identifies
+ * it, so without them a server identify places every profile at the server.
+ *
+ * With a context, a profile id alone is enough for the SDK to send the
+ * identify, since placing the profile is then worth a request.
+ */
+export function withIdentifyRequestContext(
+	payload: IdentifyPayload,
+	context: EventContext | undefined,
+): IdentifyPayload {
+	const requestContext = buildRequestContext(context);
+	if (!requestContext) return payload;
+
+	return {
+		...payload,
+		properties: { ...payload.properties, [REQUEST_CONTEXT]: requestContext },
+	};
+}
+
 function withoutContextDeviceIp(
 	properties: Record<string, unknown>,
 ): Record<string, unknown> {

@@ -10,8 +10,11 @@
     "preview": "blume preview"
   },
   "dependencies": {
+    "@openpanel/web": "^1.4.1",
     "@parsew/sdk": "^0.10.0",
-    "blume": "^1.2.1"
+    "@trakoo/openpanel": "workspace:*",
+    "blume": "^1.2.1",
+    "trakoo": "workspace:*"
   },
   "engines": {
     "node": ">=22"

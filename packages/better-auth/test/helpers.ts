@@ -37,10 +37,18 @@ export interface TrackedCall {
 export class RecordingProvider implements AnalyticsProvider {
 	name = "Recording";
 	tracked: TrackedCall[] = [];
-	identified: Array<{ userId: string; traits?: Record<string, unknown> }> = [];
+	identified: Array<{
+		userId: string;
+		traits?: Record<string, unknown>;
+		context?: EventContext;
+	}> = [];
 	initialize() {}
-	identify(userId: string, traits?: Record<string, unknown>) {
-		this.identified.push({ userId, traits });
+	identify(
+		userId: string,
+		traits?: Record<string, unknown>,
+		context?: EventContext,
+	) {
+		this.identified.push({ userId, traits, context });
 	}
 	track(event: BaseEvent, context?: EventContext) {
 		this.tracked.push({

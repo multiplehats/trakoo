@@ -4,6 +4,7 @@ export {
 	ServerAnalytics,
 	type ServerAnalyticsConfig,
 	type ServerGroupOptions,
+	type ServerIdentifyOptions,
 	type ServerTrackOptions,
 } from "@/server.js";
 

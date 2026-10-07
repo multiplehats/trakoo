@@ -193,6 +193,8 @@ await analytics.track("api_request", { route: "/v1/generations" }, {
 });
 ```
 
+Server `identify()` needs the same context: OpenPanel sets a profile's country, city, OS and browser from the request that identifies it, so pass the user's request as the third argument, `analytics.identify(userId, traits, { context: { server: { ip, userAgent } } })`. Without it every server-identified profile is placed where the server runs (the US, for most serverless platforms). `@trakoo/better-auth` and the proxy server do this themselves.
+
 Attribution is per event, so one long-lived provider serves concurrent requests correctly. `context.device` is the fallback when `context.server` is absent. The IP is sent as a header only and never stored as an event property. Resolve the address from a header the deployment's trusted proxies actually set; forwarding an unvalidated one attributes events to whatever the caller claims.
 
 OpenPanel's SDKs drop events rejected with HTTP 401 without throwing, retrying or logging, so a wrong key, a rotated secret or a browser origin the project does not allow stops analytics silently. `onDeliveryFailure` reports those rejections; without a handler trakoo logs them. It carries the envelope type, status and ingestion URL, never event properties. Delivery never throws, so a rejected event never becomes an application error.

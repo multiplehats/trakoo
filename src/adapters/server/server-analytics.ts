@@ -45,6 +45,17 @@ export interface ServerTrackOptions<TUserTraits extends object> {
 	readonly groups?: Readonly<Record<string, string>>;
 }
 
+/** Options for server `identify()`. */
+export interface ServerIdentifyOptions<TUserTraits extends object> {
+	/**
+	 * The request the identify came from. Providers that place a profile by
+	 * where its user is, such as OpenPanel, read `context.server.ip` and
+	 * `context.server.userAgent`; without them the profile is placed at the
+	 * server. Merged with `defaultContext` the same way `track()` merges it.
+	 */
+	readonly context?: EventContext<TUserTraits>;
+}
+
 /** Options for server `group()`. */
 export interface ServerGroupOptions {
 	/** Adds this user to the group as well. */
@@ -451,6 +462,9 @@ export class ServerAnalytics<
 	 *
 	 * @param userId Unique identifier for the user (e.g., database ID, email)
 	 * @param traits Optional user properties and characteristics
+	 * @param options.context The request the identify came from; pass its IP
+	 *   and user agent as `server` so the profile is placed at the user
+	 *   rather than at your server
 	 *
 	 * @example
 	 * ```typescript
@@ -481,6 +495,8 @@ export class ServerAnalytics<
 	 *     email: user.email,
 	 *     role: user.role,
 	 *     organization: user.organization
+	 *   }, {
+	 *     context: { server: { ip: req.ip, userAgent: req.get('user-agent') } }
 	 *   });
 	 *
 	 *   req.user = user;
@@ -488,9 +504,17 @@ export class ServerAnalytics<
 	 * }
 	 * ```
 	 */
-	async identify(userId: string, traits?: TUserTraits): Promise<void> {
+	async identify(
+		userId: string,
+		traits?: TUserTraits,
+		options?: ServerIdentifyOptions<TUserTraits>,
+	): Promise<void> {
 		if (!this.enabled) return;
 		if (!this.initialized) await this.ensureInitialized();
+
+		const context = this.mergeDefaultContext(options?.context);
+		// Without a context, providers are called exactly as before.
+		const hasContext = Object.keys(context).length > 0;
 
 		const promises = this.providerConfigs
 			.filter((config) => this.shouldCallMethod(config, "identify"))
@@ -498,6 +522,9 @@ export class ServerAnalytics<
 				config.provider.identify(
 					userId,
 					providerTraits(config, traits as Record<string, unknown> | undefined),
+					...(hasContext
+						? [providerContext(config, context as EventContext)]
+						: []),
 				),
 			);
 
@@ -705,6 +732,38 @@ export class ServerAnalytics<
 	}
 
 	/**
+	 * The page, device, utm and server context of a call: each part the call
+	 * names (even as `undefined`) replaces the default, and the rest come from
+	 * `defaultContext`. The user is left to the caller.
+	 */
+	private mergeDefaultContext(
+		callContext: EventContext<TUserTraits> | undefined,
+	): EventContext<TUserTraits> {
+		const page =
+			callContext && Object.hasOwn(callContext, "page")
+				? callContext.page
+				: this.defaultContext?.page;
+		const device =
+			callContext && Object.hasOwn(callContext, "device")
+				? callContext.device
+				: this.defaultContext?.device;
+		const utm =
+			callContext && Object.hasOwn(callContext, "utm")
+				? callContext.utm
+				: this.defaultContext?.utm;
+		const server =
+			callContext && Object.hasOwn(callContext, "server")
+				? callContext.server
+				: this.defaultContext?.server;
+		return {
+			...(page ? { page } : {}),
+			...(device ? { device } : {}),
+			...(utm ? { utm } : {}),
+			...(server ? { server } : {}),
+		};
+	}
+
+	/**
 	 * Shared dispatch tail for track(): builds the BaseEvent, merges context,
 	 * and fans out to providers.
 	 */
@@ -731,29 +790,7 @@ export class ServerAnalytics<
 			event.groups = { ...groups };
 		}
 
-		const eventContext = options?.context;
-		const page =
-			eventContext && Object.hasOwn(eventContext, "page")
-				? eventContext.page
-				: this.defaultContext?.page;
-		const device =
-			eventContext && Object.hasOwn(eventContext, "device")
-				? eventContext.device
-				: this.defaultContext?.device;
-		const utm =
-			eventContext && Object.hasOwn(eventContext, "utm")
-				? eventContext.utm
-				: this.defaultContext?.utm;
-		const server =
-			eventContext && Object.hasOwn(eventContext, "server")
-				? eventContext.server
-				: this.defaultContext?.server;
-		const context: EventContext<TUserTraits> = {
-			...(page ? { page } : {}),
-			...(device ? { device } : {}),
-			...(utm ? { utm } : {}),
-			...(server ? { server } : {}),
-		};
+		const context = this.mergeDefaultContext(options?.context);
 		const user =
 			options && Object.hasOwn(options, "user")
 				? options.user

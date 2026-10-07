@@ -73,6 +73,19 @@ await serverAnalytics.shutdown();
 
 Each call stands alone, so a server instance can safely handle many users. There's no persisted user state to reset.
 
+A server `identify()` takes the request it came from as an optional third argument. Providers that place a profile by where its user is, such as [OpenPanel](/docs/providers/openpanel#geo-and-device-attribution), read the IP and user agent from it; without them the profile lands where your server runs.
+
+```typescript
+await serverAnalytics.identify(user.id, { email: user.email }, {
+  context: {
+    server: {
+      ip: request.headers.get('x-forwarded-for')?.split(',')[0]?.trim(),
+      userAgent: request.headers.get('user-agent') ?? undefined
+    }
+  }
+});
+```
+
 ## Type your traits
 
 Pass a `typed<T>()` trait marker to type-check `identify()` alongside your events.

@@ -334,6 +334,67 @@ describe("Server Analytics", () => {
 		]);
 	});
 
+	describe("identify context", () => {
+		const request = {
+			ip: "203.0.113.4",
+			userAgent: "Mozilla/5.0 (Macintosh)",
+		};
+
+		it("hands the request the identify came from to every provider", async () => {
+			await analytics.identify(
+				"user_123",
+				{ plan: "pro" },
+				{ context: { server: request } },
+			);
+
+			expect(mockProvider.calls.identify).toEqual([
+				{
+					userId: "user_123",
+					traits: { plan: "pro" },
+					context: { server: request },
+				},
+			]);
+		});
+
+		it("calls providers with two arguments when there is no context", async () => {
+			const identify = vi.spyOn(mockProvider, "identify");
+
+			await analytics.identify("user_123", { plan: "pro" });
+
+			expect(identify.mock.calls[0]).toHaveLength(2);
+		});
+
+		it("merges the default context the way track does", async () => {
+			const withDefaultContext = createServerAnalytics({
+				events,
+				userTraits: typed<UserTraits>(),
+				providers: [mockProvider],
+				defaultContext: {
+					server: { region: "eu-west-1" },
+					device: { type: "server" },
+					user: { userId: "default-user", email: "default@example.com" },
+				},
+			});
+
+			await withDefaultContext.identify("user_123", undefined, {
+				context: { server: request },
+			});
+			await withDefaultContext.identify("user_456");
+
+			const [placed, unplaced] = mockProvider.calls.identify;
+			// The call's server replaces the default one; the device is kept,
+			// and no user context rides along with an identify.
+			expect(placed?.context).toEqual({
+				server: request,
+				device: { type: "server" },
+			});
+			expect(unplaced?.context).toEqual({
+				server: { region: "eu-west-1" },
+				device: { type: "server" },
+			});
+		});
+	});
+
 	describe("group", () => {
 		it("hands the group and the user to every provider that supports groups", async () => {
 			const withoutGroups = new MockAnalyticsProvider({ enabled: true });

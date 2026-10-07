@@ -76,6 +76,10 @@ describe("core Better Auth", () => {
 					createdAt: expect.any(String),
 					emailVerified: false,
 				},
+				// The request places the profile at the user, not at the server.
+				context: {
+					server: { ip: "203.0.113.7", userAgent: "Mozilla/5.0 (trakoo test)" },
+				},
 			},
 		]);
 	});
@@ -127,6 +131,9 @@ describe("core Better Auth", () => {
 			harness.provider.find("user_signed_in").context?.user,
 		).toBeUndefined();
 		expect(harness.provider.identified).toHaveLength(1);
+		expect(harness.provider.identified[0]?.context).toEqual({
+			server: { ip: "203.0.113.7", userAgent: "Mozilla/5.0 (trakoo test)" },
+		});
 	});
 
 	it("reports nothing for a failed sign-in or a rejected sign-up", async () => {

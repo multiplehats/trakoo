@@ -20,6 +20,7 @@ export abstract class BaseAnalyticsProvider implements AnalyticsProvider {
 	abstract identify(
 		userId: string,
 		traits?: Record<string, unknown>,
+		context?: EventContext,
 	): Promise<void> | void;
 
 	abstract track(

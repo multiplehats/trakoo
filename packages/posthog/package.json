@@ -15,23 +15,14 @@
 			"default": "./dist/server.js"
 		}
 	},
-	"files": [
-		"dist",
-		"README.md",
-		"LICENSE"
-	],
+	"files": ["dist", "README.md", "LICENSE"],
 	"sideEffects": false,
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run"
 	},
-	"keywords": [
-		"analytics",
-		"trakoo",
-		"posthog",
-		"typescript"
-	],
+	"keywords": ["analytics", "trakoo", "posthog", "typescript"],
 	"author": "Chris Jayden <https://github.com/multiplehats>",
 	"license": "MIT",
 	"repository": {
@@ -64,7 +55,7 @@
 	},
 	"devDependencies": {
 		"trakoo": "workspace:*",
-		"posthog-js": "^1.434.12",
-		"posthog-node": "^5.53.0"
+		"posthog-js": "^1.436.0",
+		"posthog-node": "^5.55.0"
 	}
 }

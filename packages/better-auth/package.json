@@ -40,10 +40,10 @@
 		"trakoo": "workspace:^"
 	},
 	"devDependencies": {
-		"@better-auth/api-key": "^1.7.6",
-		"@better-auth/passkey": "^1.7.6",
-		"@better-auth/sso": "^1.7.6",
-		"@better-auth/stripe": "^1.7.6",
+		"@better-auth/api-key": "^1.7.7",
+		"@better-auth/passkey": "^1.7.7",
+		"@better-auth/sso": "^1.7.7",
+		"@better-auth/stripe": "^1.7.7",
 		"@simplewebauthn/server": "^13.3.1",
 		"better-auth": "^1.7.7",
 		"stripe": "^22",

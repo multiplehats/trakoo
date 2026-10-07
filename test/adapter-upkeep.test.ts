@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { sdkPeers } from "../scripts/adapter-packages.mjs";
 import {
 	applyUpdatesToManifest,
 	planSdkUpdate,
@@ -58,6 +59,29 @@ describe("supported SDK versions", () => {
 	});
 });
 
+describe("SDK peers", () => {
+	it("finds the dev dependencies scoped under a peer's name", () => {
+		expect(
+			sdkPeers({
+				peerDependencies: { "better-auth": "^1.7.0", trakoo: "workspace:^" },
+				devDependencies: {
+					"@better-auth/passkey": "^1.7.6",
+					"@simplewebauthn/server": "^13.3.1",
+					"better-auth": "^1.7.6",
+				},
+			}),
+		).toEqual([
+			{
+				name: "better-auth",
+				range: "^1.7.0",
+				optional: false,
+				testedRange: "^1.7.6",
+				companions: ["@better-auth/passkey"],
+			},
+		]);
+	});
+});
+
 describe("SDK update planning", () => {
 	const peer = {
 		name: "posthog-node",
@@ -85,6 +109,7 @@ describe("SDK update planning", () => {
 			testedRange: { from: "^3.0.0-next.0", to: "^3.0.0" },
 			range: { from: "^3.0.0-next.0", to: "^3.0.0-next.0" },
 			widened: false,
+			companions: [],
 		});
 	});
 
@@ -95,6 +120,28 @@ describe("SDK update planning", () => {
 			testedRange: { from: "^5.46.1", to: "^5.53.0" },
 			range: { from: "^5.9.0", to: "^5.9.0" },
 			widened: false,
+			companions: [],
+		});
+	});
+
+	it("moves lockstep companions to the peer's new release", () => {
+		expect(
+			planSdkUpdate(
+				{
+					name: "better-auth",
+					range: "^1.7.0",
+					optional: false,
+					testedRange: "^1.7.6",
+					companions: ["@better-auth/sso", "@better-auth/stripe"],
+				},
+				"1.7.7",
+			),
+		).toMatchObject({
+			testedRange: { to: "^1.7.7" },
+			companions: [
+				{ name: "@better-auth/sso", to: "^1.7.7" },
+				{ name: "@better-auth/stripe", to: "^1.7.7" },
+			],
 		});
 	});
 
@@ -154,6 +201,40 @@ describe("upkeep output", () => {
 			devDependencies: { "posthog-node": "^6.2.1" },
 		});
 		expect(manifest.peerDependencies["posthog-node"]).toBe("^5.9.0");
+	});
+
+	it("moves companions in the dev dependencies only", () => {
+		const update = planSdkUpdate(
+			{
+				name: "better-auth",
+				range: "^1.7.0",
+				optional: false,
+				testedRange: "^1.7.6",
+				companions: ["@better-auth/sso"],
+			},
+			"1.7.7",
+		);
+		if (!update) throw new Error("expected a planned update");
+		expect(
+			applyUpdatesToManifest(
+				{
+					peerDependencies: { "better-auth": "^1.7.0" },
+					devDependencies: {
+						"@better-auth/sso": "^1.7.6",
+						"better-auth": "^1.7.6",
+						stripe: "^22",
+					},
+				},
+				[update],
+			),
+		).toEqual({
+			peerDependencies: { "better-auth": "^1.7.0" },
+			devDependencies: {
+				"@better-auth/sso": "^1.7.7",
+				"better-auth": "^1.7.7",
+				stripe: "^22",
+			},
+		});
 	});
 
 	it("records a minor changeset only for widened support", () => {

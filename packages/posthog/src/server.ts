@@ -2,6 +2,7 @@ import {
 	BaseAnalyticsProvider,
 	type BaseEvent,
 	type EventContext,
+	type RevenueDescriptor,
 } from "trakoo";
 import type { EventMessage, PostHog, PostHogOptions } from "posthog-node";
 
@@ -168,6 +169,35 @@ export class PostHogServerProvider extends BaseAnalyticsProvider {
 		);
 
 		this.log("Tracked event");
+	}
+
+	/**
+	 * Captures a `revenue` event with the amount as its `revenue` property, in
+	 * minor units, and `currency` beside it. PostHog has no revenue call of its
+	 * own: its revenue analytics reads such an event once it is configured to.
+	 * Groups go on the event as PostHog's `groups`.
+	 */
+	revenue(revenue: RevenueDescriptor, context?: EventContext): void {
+		if (!this.isEnabled() || !this.initialized || !this.client) return;
+
+		const message = this.buildEventMessage({
+			event: "revenue",
+			distinctId: revenue.userId || context?.user?.userId,
+			properties: {
+				...revenue.properties,
+				revenue: revenue.amount,
+				...(revenue.currency !== undefined && { currency: revenue.currency }),
+				...(revenue.id !== undefined && { revenue_id: revenue.id }),
+			},
+			context,
+			timestamp: revenue.timestamp,
+		});
+		this.client.capture({
+			...message,
+			...(revenue.groups && { groups: { ...revenue.groups } }),
+		});
+
+		this.log("Captured revenue");
 	}
 
 	pageView(properties?: Record<string, unknown>, context?: EventContext): void {

@@ -79,6 +79,22 @@ function assertServerTypes(): void {
 	analytics.track("test_event", {}, { occurredAt: 1_700_000_000_000 });
 	analytics.track("session_started", { groups: { company: "acme" } });
 	analytics.group("company", "acme", { plan: "pro" }, { userId: "user_123" });
+	analytics.revenue(4900);
+	analytics.revenue(
+		4900,
+		{ planId: "pro" },
+		{
+			currency: "EUR",
+			id: "in_123",
+			userId: "user_123",
+			groups: { company: "acme" },
+			occurredAt: new Date(),
+		},
+	);
+	// @ts-expect-error revenue is an amount, not a string
+	analytics.revenue("49.00");
+	// @ts-expect-error revenue options are a closed set
+	analytics.revenue(4900, {}, { sessionId: "session_1" });
 	analytics.identify("user_123", { plan: "pro" });
 
 	// @ts-expect-error unknown event names are rejected
@@ -395,6 +411,125 @@ describe("Server Analytics", () => {
 		});
 	});
 
+	describe("revenue", () => {
+		it("hands the revenue to every provider that supports it", async () => {
+			const withoutRevenue = new MockAnalyticsProvider({ enabled: true });
+			// A provider written before revenue existed has no `revenue` at all.
+			Object.defineProperty(withoutRevenue, "revenue", { value: undefined });
+			const paid = createServerAnalytics({
+				events,
+				providers: [mockProvider, withoutRevenue],
+				validation: { onFailure: "throw" },
+			});
+
+			await paid.revenue(
+				4900,
+				{ planId: "pro", kind: "renewal" },
+				{
+					currency: "EUR",
+					id: "in_123",
+					userId: "user_123",
+					groups: { company: "acme" },
+					occurredAt: new Date("2026-10-08T09:30:00.000Z"),
+				},
+			);
+
+			expect(mockProvider.calls.revenue.map(({ revenue }) => revenue)).toEqual([
+				{
+					amount: 4900,
+					currency: "EUR",
+					id: "in_123",
+					userId: "user_123",
+					groups: { company: "acme" },
+					properties: { planId: "pro", kind: "renewal" },
+					timestamp: Date.parse("2026-10-08T09:30:00.000Z"),
+				},
+			]);
+			expect(withoutRevenue.calls.track).toHaveLength(0);
+		});
+
+		it("records a free amount and leaves out what the call does not name", async () => {
+			const before = Date.now();
+			await analytics.revenue(0, undefined, { groups: {} });
+
+			const [call] = mockProvider.calls.revenue;
+			expect(call?.revenue).toEqual({
+				amount: 0,
+				timestamp: expect.any(Number),
+			});
+			expect(call?.revenue.timestamp).toBeGreaterThanOrEqual(before);
+		});
+
+		it("is routed like any other method, and not filtered as an event", async () => {
+			const trackOnly = new MockAnalyticsProvider({ enabled: true });
+			const paid = createServerAnalytics({
+				events,
+				providers: [
+					{ provider: trackOnly, methods: ["track"] },
+					{ provider: mockProvider, events: ["test_event"] },
+				],
+			});
+
+			await paid.revenue(100);
+
+			expect(trackOnly.calls.revenue).toHaveLength(0);
+			expect(mockProvider.calls.revenue).toHaveLength(1);
+		});
+
+		it("keeps the user's context from a provider with pii: false", async () => {
+			const paid = createServerAnalytics({
+				events,
+				providers: [{ provider: mockProvider, pii: false }],
+			});
+
+			await paid.revenue(100, undefined, {
+				context: { user: { email: "payer@acme.test" } },
+			});
+
+			expect(mockProvider.calls.revenue[0]?.context?.user).toBeUndefined();
+		});
+
+		it("rethrows a provider's failure after every provider has been called", async () => {
+			const failing = new MockAnalyticsProvider({ enabled: true });
+			failing.revenue = () => {
+				throw new Error("refused");
+			};
+			const paid = createServerAnalytics({
+				events,
+				providers: [failing, mockProvider],
+			});
+
+			await expect(paid.revenue(100)).rejects.toThrow("refused");
+			expect(mockProvider.calls.revenue).toHaveLength(1);
+		});
+
+		it.each([
+			["a fractional amount", 49.99, undefined, undefined],
+			["a negative amount", -4900, undefined, undefined],
+			["an amount beyond a safe integer", 2 ** 53, undefined, undefined],
+			["NaN", Number.NaN, undefined, undefined],
+			["properties that are not an object", 100, ["pro"], undefined],
+			["a lower-case currency", 100, undefined, { currency: "eur" }],
+			["an unknown option", 100, undefined, { sessionId: "s" }],
+			["an empty id", 100, undefined, { id: "" }],
+			["a group with an empty id", 100, undefined, { groups: { company: "" } }],
+			["an invalid occurredAt", 100, undefined, { occurredAt: Number.NaN }],
+		])(
+			"refuses %s as invalid_options",
+			async (_label, amount, properties, options) => {
+				await expect(
+					// Untyped callers can pass anything; validation is the guard.
+					(analytics.revenue as (...args: unknown[]) => Promise<void>)(
+						amount,
+						properties,
+						options,
+					),
+				).rejects.toMatchObject({ code: "invalid_options" });
+				expect(mockProvider.calls.revenue).toHaveLength(0);
+			},
+		);
+	});
+
 	describe("group", () => {
 		it("hands the group and the user to every provider that supports groups", async () => {
 			const withoutGroups = new MockAnalyticsProvider({ enabled: true });
@@ -441,6 +576,20 @@ describe("Server Analytics", () => {
 				email: "billing@acme.test",
 				plan: "pro",
 			});
+		});
+
+		it("rethrows a provider's failure after every provider has been called", async () => {
+			const failing = new MockAnalyticsProvider({ enabled: true });
+			failing.group = () => {
+				throw new Error("refused");
+			};
+			const grouped = createServerAnalytics({
+				events,
+				providers: [failing, mockProvider],
+			});
+
+			await expect(grouped.group("company", "acme")).rejects.toThrow("refused");
+			expect(mockProvider.calls.group).toHaveLength(1);
 		});
 
 		it("is routed like any other method", async () => {

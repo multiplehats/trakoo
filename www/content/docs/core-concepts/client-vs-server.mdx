@@ -245,6 +245,22 @@ await analytics.track('report_exported', { format: 'csv' }, {
 
 Each group type and id must be a non-empty string; anything else fails validation with `invalid_options`. Only providers that implement groups receive them: OpenPanel's server provider does, and every other provider ignores `group()` and the `groups` option. A provider routed with `pii: false` receives a group's traits without `name`, `email` and the other personal keys. Route `group` like any other method with `methods` or `exclude`. Groups are server-only: a server provider is shared by every request, so nothing about a group is remembered between calls, and each event names its own.
 
+### Revenue
+
+Server analytics records revenue with `revenue()`. Pass the amount in the currency's minor unit (cents for EUR and USD), and attribute it to the user and the groups who paid:
+
+```typescript
+await analytics.revenue(4900, { planId: 'pro', kind: 'renewal' }, {
+  currency: 'EUR',
+  id: invoice.id,
+  userId: user.id,
+  groups: { company: company.id },
+  occurredAt: invoice.paidAt
+});
+```
+
+The amount must be a non-negative safe integer and `currency` an upper-case ISO 4217 code; anything else, or an option `revenue()` does not know, fails validation with `invalid_options`. A refund is not negative revenue: track it as an event of its own. `id` names the payment, such as its invoice, for providers that deduplicate by it. Only providers that implement revenue receive it, each in its own form: OpenPanel's server provider sends OpenPanel's revenue event, PostHog's captures a `revenue` event for its revenue analytics, and Bento's tracks a `$purchase` toward the subscriber's lifetime value (it requires an email, a currency and an `id`). Route it with `methods` or `exclude` under the name `revenue`; the `events` and `excludeEvents` filters do not apply to it. Revenue is server-only, so a browser never decides what was paid.
+
 ### Shutdown in serverless
 
 Serverless platforms may freeze or terminate a function after it returns. When a request owns its analytics/provider pair, shut that pair down before the request ends. The exact effect is provider-specific: shutdown may flush queued work, clear state, close resources, or combine those behaviors.

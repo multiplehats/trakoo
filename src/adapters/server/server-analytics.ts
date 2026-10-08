@@ -13,6 +13,7 @@ import type {
 	GroupDescriptor,
 	ProviderConfigOrProvider,
 	ProviderMethod,
+	RevenueDescriptor,
 	UserContext,
 } from "@/core/events/types.js";
 import {
@@ -62,6 +63,31 @@ export interface ServerGroupOptions {
 	readonly userId?: string;
 }
 
+/** Options for server `revenue()`. */
+export interface ServerRevenueOptions<TUserTraits extends object> {
+	/** ISO 4217 code, upper case, such as `EUR`. */
+	readonly currency?: string;
+	/**
+	 * Identifies this payment, such as an invoice id, for providers that
+	 * deduplicate revenue by it (Bento requires one). A non-empty string.
+	 */
+	readonly id?: string;
+	/** The user the revenue is attributed to. */
+	readonly userId?: string;
+	/**
+	 * The groups the revenue belongs to, by group type, such as
+	 * `{ company: "acme" }`. Each type and id must be a non-empty string.
+	 */
+	readonly groups?: Readonly<Record<string, string>>;
+	/**
+	 * When the revenue was received, as a `Date` or epoch milliseconds.
+	 * Defaults to the time of the call.
+	 */
+	readonly occurredAt?: Date | number;
+	/** The request it came from, merged with `defaultContext` as for `track()`. */
+	readonly context?: EventContext<TUserTraits>;
+}
+
 export interface ServerAnalyticsAdapterConfig<
 	TRegistry extends EventRegistry<EventDefinitions>,
 	TUserTraits extends object = Record<string, unknown>,
@@ -104,6 +130,66 @@ function isValidGroups(value: unknown): boolean {
 	}
 	return Object.entries(value).every(
 		([type, id]) => type.length > 0 && typeof id === "string" && id.length > 0,
+	);
+}
+
+const serverRevenueOptionKeys = new Set([
+	"currency",
+	"id",
+	"userId",
+	"groups",
+	"occurredAt",
+	"context",
+]);
+
+/** Absent, or an upper-case three-letter code. */
+function isValidCurrency(value: unknown): boolean {
+	return (
+		value === undefined ||
+		(typeof value === "string" && /^[A-Z]{3}$/.test(value))
+	);
+}
+
+/** Absent, or a non-empty string. */
+function isValidRevenueId(value: unknown): boolean {
+	return value === undefined || (typeof value === "string" && value.length > 0);
+}
+
+/**
+ * Whether `revenue()` was given a usable amount, properties and options. The
+ * amount is a non-negative safe integer in the currency's minor unit, which
+ * is what OpenPanel, among others, accepts.
+ */
+function isValidRevenueCall(
+	amount: unknown,
+	properties: unknown,
+	options: unknown,
+): boolean {
+	if (
+		typeof amount !== "number" ||
+		!Number.isSafeInteger(amount) ||
+		amount < 0
+	) {
+		return false;
+	}
+	if (
+		properties !== undefined &&
+		(typeof properties !== "object" ||
+			properties === null ||
+			Array.isArray(properties))
+	) {
+		return false;
+	}
+	if (options === undefined) return true;
+	return (
+		typeof options === "object" &&
+		options !== null &&
+		!Array.isArray(options) &&
+		Object.keys(options).every((key) => serverRevenueOptionKeys.has(key)) &&
+		isValidCurrency(Reflect.get(options, "currency")) &&
+		isValidRevenueId(Reflect.get(options, "id")) &&
+		isValidOccurredAt(Reflect.get(options, "occurredAt")) &&
+		isValidGroups(Reflect.get(options, "groups"))
 	);
 }
 
@@ -213,6 +299,7 @@ export class ServerAnalytics<
 			"pageLeave",
 			"reset",
 			"group",
+			"revenue",
 		];
 
 		return providers.map((config) => {
@@ -872,7 +959,7 @@ export class ServerAnalytics<
 					this.shouldCallMethod(config, "group") &&
 					typeof config.provider.group === "function",
 			)
-			.map((config) => {
+			.map(async (config) => {
 				const providerGroupTraits = providerTraits(config, traits);
 				const group: GroupDescriptor = {
 					type,
@@ -883,6 +970,94 @@ export class ServerAnalytics<
 				};
 				return config.provider.group?.(group, options?.userId);
 			});
+
+		const results = await Promise.allSettled(promises);
+
+		for (const result of results) {
+			if (result.status === "rejected") {
+				throw result.reason;
+			}
+		}
+	}
+
+	/**
+	 * Records revenue: money a user or a group paid.
+	 *
+	 * Only providers that implement `revenue` receive the call (the OpenPanel,
+	 * PostHog and Bento server providers do), each in its own form; routing applies as for any method, under the
+	 * name `"revenue"`, and event filters (`events`, `excludeEvents`) do not.
+	 *
+	 * @param amount In the currency's minor unit (cents for EUR and USD), as a
+	 * non-negative safe integer. Anything else fails validation with
+	 * `invalid_options`. A refund is not negative revenue: track it as an
+	 * event of its own.
+	 * @param properties Describes the revenue, such as its plan
+	 * @param options.currency ISO 4217 code, upper case
+	 * @param options.id Identifies the payment, such as an invoice id
+	 * @param options.userId The user the revenue is attributed to
+	 * @param options.groups The groups it belongs to, by group type
+	 * @param options.occurredAt When it was received; defaults to now
+	 *
+	 * @example
+	 * ```typescript
+	 * await analytics.revenue(4900, { planId: 'pro', kind: 'renewal' }, {
+	 *   currency: 'EUR',
+	 *   id: invoice.id,
+	 *   userId: 'user-123',
+	 *   groups: { company: 'acme' },
+	 *   occurredAt: invoice.paidAt
+	 * });
+	 * ```
+	 */
+	async revenue(
+		amount: number,
+		properties?: Record<string, unknown>,
+		options?: ServerRevenueOptions<TUserTraits>,
+	): Promise<void> {
+		if (!this.enabled) return;
+		if (!isValidRevenueCall(amount, properties, options)) {
+			await applyValidationFailurePolicy(
+				new AnalyticsValidationError("invalid_options", "revenue"),
+				this.validation,
+				this.debug,
+			);
+			return;
+		}
+		if (!this.initialized) await this.ensureInitialized();
+
+		const occurredAt = options?.occurredAt;
+		const groups = options?.groups;
+		const revenue: RevenueDescriptor = {
+			amount,
+			timestamp:
+				occurredAt === undefined
+					? Date.now()
+					: occurredAt instanceof Date
+						? occurredAt.getTime()
+						: occurredAt,
+			...(options?.currency !== undefined && { currency: options.currency }),
+			...(options?.id !== undefined && { id: options.id }),
+			...(options?.userId !== undefined && { userId: options.userId }),
+			...(groups !== undefined &&
+				Object.keys(groups).length > 0 && { groups: { ...groups } }),
+			...(properties !== undefined && { properties: { ...properties } }),
+		};
+		const context = this.mergeDefaultContext(options?.context);
+
+		const promises = this.providerConfigs
+			.filter(
+				(config) =>
+					this.shouldCallMethod(config, "revenue") &&
+					typeof config.provider.revenue === "function",
+			)
+			// Async, so a provider that throws before returning a promise
+			// still lets every other provider be called.
+			.map(async (config) =>
+				config.provider.revenue?.(
+					revenue,
+					providerContext(config, context as EventContext),
+				),
+			);
 
 		const results = await Promise.allSettled(promises);
 

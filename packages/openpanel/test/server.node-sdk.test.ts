@@ -383,4 +383,71 @@ describe("OpenPanelServerProvider with the node SDK", () => {
 			"Acme Ltd",
 		]);
 	});
+	it("records revenue for its user and groups, at the time it was received", async () => {
+		const fetchMock = stubFetch();
+		const analytics = createServerAnalytics({
+			events: defineEvents({
+				siteCreated: {
+					name: "site_created",
+					category: "conversion",
+					properties: typed<{ siteId: string }>(),
+				},
+			}),
+			providers: [await createProvider()],
+			validation: { onFailure: "throw" },
+		});
+
+		await analytics.revenue(
+			4900,
+			{ planId: "pro", kind: "renewal" },
+			{
+				currency: "EUR",
+				userId: "user-a",
+				groups: { organization: "org-1" },
+				occurredAt: new Date("2026-10-08T09:30:00.000Z"),
+			},
+		);
+		await analytics.track(
+			"site_created",
+			{ siteId: "site-1" },
+			{ userId: "user-b" },
+		);
+
+		const [revenue, next] = requestsOf(fetchMock);
+		expect(revenue?.headers["openpanel-client-secret"]).toBe("client-secret");
+		expect(revenue?.body).toEqual({
+			type: "track",
+			payload: {
+				name: "revenue",
+				profileId: "user-a",
+				groups: ["org-1"],
+				properties: {
+					planId: "pro",
+					kind: "renewal",
+					currency: "EUR",
+					__timestamp: "2026-10-08T09:30:00.000Z",
+					// What OpenPanel sums as revenue: an integer, in minor units.
+					__revenue: 4900,
+				},
+			},
+		});
+		// Neither the profile nor the group stays on the shared client.
+		expect(next?.body.payload.profileId).toBe("user-b");
+		expect(next?.body.payload).not.toHaveProperty("groups");
+	});
+
+	it("lets the amount win over a property named like OpenPanel's own", async () => {
+		const fetchMock = stubFetch();
+		const provider = await createProvider();
+
+		await provider.revenue({
+			amount: 100,
+			properties: { __revenue: 999_999 },
+			timestamp: Date.parse("2026-10-08T09:30:00.000Z"),
+		});
+
+		const [request] = requestsOf(fetchMock);
+		expect(request?.body.payload.properties.__revenue).toBe(100);
+		expect(request?.body.payload.profileId).toBeUndefined();
+	});
 });

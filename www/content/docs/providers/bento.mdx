@@ -117,6 +117,10 @@ Because of the `$` prefix, a trakoo event named `subscribe`, `unsubscribe`, `tag
 
 If an event has a `value` property, Bento requires it to be an object with `amount` and `currency`. Bento rejects any other `value`, and the event is dropped.
 
+### Revenue
+
+`analytics.revenue(amount, properties, { currency, id, userId })` sends Bento's `$purchase`, which adds the amount to the subscriber's lifetime value. Bento needs the subscriber's email (the call's `context.user.email`, or a `userId` that is an email), a `currency`, and an `id` such as the invoice id, which Bento deduplicates the purchase by. Without all three the revenue is skipped with a warning. The amount is in minor units, as Bento expects. A `$purchase` runs any Bento automation that listens for it; other properties and groups are not sent.
+
 ### Errors and shutdown
 
 When a Bento request fails, or Bento does not queue the event, the provider logs the failure to the console without the event payload and does not throw. `identify()`, `track()`, and `pageView()` still resolve. Set `logErrors: true` to make the Bento SDK also log the HTTP response of each failed request.

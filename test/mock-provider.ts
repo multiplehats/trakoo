@@ -3,6 +3,7 @@ import type {
 	BaseEvent,
 	EventContext,
 	GroupDescriptor,
+	RevenueDescriptor,
 } from "@/core/events/types";
 
 export class MockAnalyticsProvider extends BaseAnalyticsProvider {
@@ -29,6 +30,7 @@ export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 		reset: number;
 		flush: Array<{ useBeacon?: boolean }>;
 		group: Array<{ group: GroupDescriptor; userId?: string }>;
+		revenue: Array<{ revenue: RevenueDescriptor; context?: EventContext }>;
 	} = {
 		initialize: 0,
 		identify: [],
@@ -38,6 +40,7 @@ export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 		reset: 0,
 		flush: [],
 		group: [],
+		revenue: [],
 	};
 
 	initialize(): void {
@@ -89,6 +92,12 @@ export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 		this.log("Grouped");
 	}
 
+	revenue(revenue: RevenueDescriptor, context?: EventContext): void {
+		if (!this.isEnabled() || !this.initialized) return;
+		this.calls.revenue.push({ revenue, context });
+		this.log("Recorded revenue");
+	}
+
 	flush(useBeacon?: boolean): void {
 		if (!this.isEnabled() || !this.initialized) return;
 		this.calls.flush.push({ useBeacon });
@@ -106,6 +115,7 @@ export class MockAnalyticsProvider extends BaseAnalyticsProvider {
 			reset: 0,
 			flush: [],
 			group: [],
+			revenue: [],
 		};
 	}
 

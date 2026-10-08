@@ -2,6 +2,7 @@ import {
 	BaseAnalyticsProvider,
 	type BaseEvent,
 	type EventContext,
+	type RevenueDescriptor,
 } from "trakoo";
 import type { Analytics } from "@bentonow/bento-node-sdk";
 
@@ -196,6 +197,56 @@ export class BentoServerProvider extends BaseAnalyticsProvider {
 			this.log("Tracked event");
 		} catch (error) {
 			this.logFailure("track event", this.getErrorClass(error));
+		}
+	}
+
+	/**
+	 * Sends Bento's `$purchase`, which adds to the subscriber's lifetime value.
+	 * Bento needs the subscriber's email (from this call's user context, or a
+	 * `userId` that is one), a currency, and an `id` it deduplicates the
+	 * purchase by; without all three the revenue is skipped with a warning.
+	 *
+	 * @remarks Bento runs `$purchase` automations on it.
+	 */
+	async revenue(
+		revenue: RevenueDescriptor,
+		context?: EventContext,
+	): Promise<void> {
+		if (!this.isEnabled() || !this.initialized || !this.client) return;
+
+		const email =
+			context?.user?.email ||
+			(context?.user?.userId as string | undefined) ||
+			revenue.userId;
+		const { currency, id } = revenue;
+		if (!email?.includes("@") || currency === undefined || id === undefined) {
+			const missing = [
+				...(!email?.includes("@") ? ["an email address"] : []),
+				...(currency === undefined ? ["a currency"] : []),
+				...(id === undefined ? ["an id"] : []),
+			];
+			console.warn(
+				`[Bento-Server] Skipping revenue - a Bento purchase requires ${missing.join(" and ")}.`,
+			);
+			return;
+		}
+
+		try {
+			const queued = await this.client.V1.trackPurchase({
+				email,
+				date: new Date(revenue.timestamp),
+				purchaseDetails: {
+					unique: { key: id },
+					value: { currency, amount: revenue.amount },
+				},
+			});
+			if (!queued) {
+				this.logFailure("track purchase", "not queued by Bento");
+				return;
+			}
+			this.log("Tracked purchase");
+		} catch (error) {
+			this.logFailure("track purchase", this.getErrorClass(error));
 		}
 	}
 

@@ -106,6 +106,8 @@ Server track options also take `occurredAt`, a `Date` or epoch milliseconds, for
 
 Server track options also take `groups`, the groups the event belongs to by group type (`{ company: "acme" }`), and `serverAnalytics.group(type, id, traits?, { userId })` creates or updates a group and adds a user to it. Only providers that implement `group` receive either (OpenPanel's server provider does). Group types and ids must be non-empty strings, or the call fails validation with `invalid_options`.
 
+`serverAnalytics.revenue(amount, properties?, { currency, id, userId, groups, occurredAt, context })` records money received. `amount` is a non-negative safe integer in the currency's minor unit (cents); `currency` is an upper-case ISO 4217 code. Anything else, or an unknown option key, fails validation with `invalid_options`. A refund is not negative revenue: track it as an event. `id` names the payment (an invoice id) for providers that deduplicate by it. Only providers that implement `revenue` receive it (the OpenPanel, PostHog and Bento server providers do; Bento requires an email, a currency and an `id`); it is routed as `"revenue"` and is not subject to event filters.
+
 Never pass an `undefined` properties placeholder. A client second argument, a server `undefined` placeholder, or properties supplied through untyped JavaScript is `invalid_properties` under the validation-failure policy.
 
 ## Factory inference and user traits

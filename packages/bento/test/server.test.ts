@@ -2,7 +2,7 @@ import { BentoServerProvider } from "../src/server.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { sdk } = vi.hoisted(() => ({
-	sdk: { updateFields: vi.fn(), track: vi.fn() },
+	sdk: { updateFields: vi.fn(), track: vi.fn(), trackPurchase: vi.fn() },
 }));
 
 vi.mock("@bentonow/bento-node-sdk", () => ({
@@ -18,6 +18,7 @@ describe("BentoServerProvider", () => {
 		for (const mock of Object.values(sdk)) mock.mockReset();
 		sdk.updateFields.mockResolvedValue(true);
 		sdk.track.mockResolvedValue(true);
+		sdk.trackPurchase.mockResolvedValue(true);
 		warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
 	});
 
@@ -92,5 +93,59 @@ describe("BentoServerProvider", () => {
 			properties: {},
 		});
 		expect(sdk.track).toHaveBeenCalledTimes(2);
+	});
+	describe("revenue", () => {
+		const createProvider = async () => {
+			const provider = new BentoServerProvider({
+				siteUuid: "site-uuid",
+				authentication: {
+					publishableKey: "publishable-key",
+					secretKey: "secret-key",
+				},
+			});
+			await provider.initialize();
+			return provider;
+		};
+
+		it("tracks a purchase for the subscriber, deduplicated by its id", async () => {
+			const provider = await createProvider();
+
+			await provider.revenue(
+				{
+					amount: 4900,
+					currency: "EUR",
+					id: "in_123",
+					userId: "user-a",
+					properties: { planId: "pro" },
+					timestamp: Date.parse("2026-10-08T09:30:00.000Z"),
+				},
+				{ user: { email: "payer@example.com" } },
+			);
+
+			expect(sdk.trackPurchase).toHaveBeenCalledWith({
+				email: "payer@example.com",
+				date: new Date("2026-10-08T09:30:00.000Z"),
+				purchaseDetails: {
+					unique: { key: "in_123" },
+					value: { currency: "EUR", amount: 4900 },
+				},
+			});
+		});
+
+		it.each([
+			["an email address", { currency: "EUR", id: "in_1" }, undefined],
+			["a currency", { id: "in_1" }, { user: { email: "payer@example.com" } }],
+			["an id", { currency: "EUR" }, { user: { email: "payer@example.com" } }],
+		])("skips revenue without %s", async (missing, fields, context) => {
+			const provider = await createProvider();
+
+			await provider.revenue(
+				{ amount: 100, userId: "user-a", timestamp: 0, ...fields },
+				context,
+			);
+
+			expect(sdk.trackPurchase).not.toHaveBeenCalled();
+			expect(warnSpy.mock.calls[0]?.[0]).toContain(missing);
+		});
 	});
 });

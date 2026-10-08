@@ -1,6 +1,6 @@
 {
 	"name": "@trakoo/posthog",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "PostHog provider for trakoo",
 	"type": "module",
 	"exports": {

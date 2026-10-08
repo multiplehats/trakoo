@@ -1,6 +1,6 @@
 {
 	"name": "@trakoo/bento",
-	"version": "1.0.0",
+	"version": "1.1.0",
 	"description": "Bento provider for trakoo",
 	"type": "module",
 	"exports": {

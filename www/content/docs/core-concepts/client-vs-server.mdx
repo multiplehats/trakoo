@@ -254,12 +254,15 @@ await analytics.revenue(4900, { planId: 'pro', kind: 'renewal' }, {
   currency: 'EUR',
   id: invoice.id,
   userId: user.id,
+  user: { email: user.email },
   groups: { company: company.id },
   occurredAt: invoice.paidAt
 });
 ```
 
-The amount must be a non-negative safe integer and `currency` an upper-case ISO 4217 code; anything else, or an option `revenue()` does not know, fails validation with `invalid_options`. A refund is not negative revenue: track it as an event of its own. `id` names the payment, such as its invoice, for providers that deduplicate by it. Only providers that implement revenue receive it, each in its own form: OpenPanel's server provider sends OpenPanel's revenue event, PostHog's captures a `revenue` event for its revenue analytics, and Bento's tracks a `$purchase` toward the subscriber's lifetime value (it requires an email, a currency and an `id`). Route it with `methods` or `exclude` under the name `revenue`; the `events` and `excludeEvents` filters do not apply to it. Revenue is server-only, so a browser never decides what was paid.
+The amount must be a non-negative safe integer, `currency` three upper-case letters (an ISO 4217 code; whether it exists is not checked), and `id` and `userId` non-empty strings; anything else, or an option `revenue()` does not know, fails validation with `invalid_options`. Properties must be a plain object without `currency`, which is an option so that every provider reads a checked one; otherwise the call fails with `invalid_properties`. Under the default validation policy an invalid call is dropped without a word, so the likeliest mistake, `49.99` where `4999` was meant, disappears: set `validation.onError` or `debug` while you wire it up. A refund is not negative revenue: track it as an event of its own. `user` (or `context.user`, or `defaultContext.user`) carries the payer's email for providers that need it, as in `track()`.
+
+A provider that fails is logged and the others still deliver, as in `track()`, so `revenue()` resolves. That matters in a payment webhook: a rejection would fail the webhook, the payment provider would retry it, and providers that do not deduplicate would count the revenue twice. `id` names the payment, such as its invoice, for providers that deduplicate by it. Only providers that implement revenue receive it, each in its own form: OpenPanel's server provider sends OpenPanel's revenue event, PostHog's captures a `revenue` event for its revenue analytics, and Bento's tracks a `$purchase` toward the subscriber's lifetime value (it requires an email, a currency and an `id`). Route it with `methods` or `exclude` under the name `revenue`; the `events` and `excludeEvents` filters do not apply to it. Revenue is server-only, so a browser never decides what was paid.
 
 ### Shutdown in serverless
 

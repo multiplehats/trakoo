@@ -149,7 +149,9 @@ On the server, `analytics.group(type, id, traits, { userId })` upserts an OpenPa
 
 ### Revenue
 
-On the server, `analytics.revenue(amount, properties, { currency, userId, groups, occurredAt })` sends OpenPanel's `revenue` event, whose `__revenue` property OpenPanel sums as revenue in its reports. OpenPanel accepts revenue only from a client with its secret (unless the project allows unsafe revenue tracking) and only as an integer of at least zero, which is why the amount is in minor units. OpenPanel keeps no currency: `currency` travels as a plain property, so keep each project to one currency. The user and the groups are named per event, as for `track()`.
+On the server, `analytics.revenue(amount, properties, { currency, userId, groups, occurredAt })` sends OpenPanel's `revenue` event, whose `__revenue` property OpenPanel sums as revenue in its reports. OpenPanel accepts revenue only from a client with its secret (unless the project allows unsafe revenue tracking) and only as an integer of at least zero, which is why the amount is in minor units. OpenPanel keeps no currency: `currency` travels as a plain property, so keep each project to one currency. The user and the groups are named per event, as for `track()`. The `id` is not sent, since OpenPanel does not deduplicate by it. OpenPanel records an amount of `0` as a `revenue` event with no revenue.
+
+The SDK reads a `deviceId` property on revenue as the event's device, not as a property. Pass the visitor's OpenPanel device id there (from the browser's `getDeviceId()`, carried to your server) to link server revenue to the visit that led to it; never use the name for anything else.
 
 ## Identifying users
 
@@ -303,7 +305,7 @@ Failure reporting, and on the server the caller's IP and user agent, depend on t
 
 ## Reserved property names
 
-OpenPanel's SDK reads two event property names itself instead of storing them:
+OpenPanel's SDK reads two event property names itself instead of storing them (three on revenue, where `deviceId` is the event's device, as above):
 
 - `profileId` is the profile the event belongs to. The provider sets it from the event's user ID when there is one.
 - `groups` is a list of OpenPanel group IDs. An array becomes the event's groups rather than a property, a string is split into one-character group IDs, `null` or an empty array is dropped, and a number, boolean or object makes the SDK throw, so the event is not sent. On the server, use `track()`'s `groups` option instead; when it is set, it replaces this property.

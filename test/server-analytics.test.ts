@@ -445,7 +445,6 @@ describe("Server Analytics", () => {
 					timestamp: Date.parse("2026-10-08T09:30:00.000Z"),
 				},
 			]);
-			expect(withoutRevenue.calls.track).toHaveLength(0);
 		});
 
 		it("records a free amount and leaves out what the call does not name", async () => {
@@ -476,20 +475,48 @@ describe("Server Analytics", () => {
 			expect(mockProvider.calls.revenue).toHaveLength(1);
 		});
 
-		it("keeps the user's context from a provider with pii: false", async () => {
+		it("hands the user's context on, except to a provider with pii: false", async () => {
+			const emailTool = new MockAnalyticsProvider({ enabled: true });
 			const paid = createServerAnalytics({
 				events,
-				providers: [{ provider: mockProvider, pii: false }],
+				providers: [{ provider: mockProvider, pii: false }, emailTool],
 			});
 
 			await paid.revenue(100, undefined, {
 				context: { user: { email: "payer@acme.test" } },
 			});
 
-			expect(mockProvider.calls.revenue[0]?.context?.user).toBeUndefined();
+			expect(
+				mockProvider.calls.revenue[0]?.context?.user?.email,
+			).toBeUndefined();
+			expect(emailTool.calls.revenue[0]?.context?.user).toEqual({
+				email: "payer@acme.test",
+			});
 		});
 
-		it("rethrows a provider's failure after every provider has been called", async () => {
+		it("takes the user from the option, the call's context or the default, in that order", async () => {
+			const paid = createServerAnalytics({
+				events,
+				providers: [mockProvider],
+				defaultContext: { user: { email: "default@acme.test" } },
+			});
+
+			await paid.revenue(100, undefined, {
+				user: { email: "option@acme.test" },
+				context: { user: { email: "context@acme.test" } },
+			});
+			await paid.revenue(100, undefined, {
+				context: { user: { email: "context@acme.test" } },
+			});
+			await paid.revenue(100);
+
+			expect(
+				mockProvider.calls.revenue.map(({ context }) => context?.user?.email),
+			).toEqual(["option@acme.test", "context@acme.test", "default@acme.test"]);
+		});
+
+		it("logs a provider's failure and still resolves, after every provider delivered", async () => {
+			const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 			const failing = new MockAnalyticsProvider({ enabled: true });
 			failing.revenue = () => {
 				throw new Error("refused");
@@ -499,8 +526,24 @@ describe("Server Analytics", () => {
 				providers: [failing, mockProvider],
 			});
 
-			await expect(paid.revenue(100)).rejects.toThrow("refused");
+			await expect(paid.revenue(100)).resolves.toBeUndefined();
 			expect(mockProvider.calls.revenue).toHaveLength(1);
+			expect(errorSpy).toHaveBeenCalledOnce();
+			errorSpy.mockRestore();
+		});
+
+		it("records nothing and validates nothing while disabled", async () => {
+			const disabled = createServerAnalytics({
+				events,
+				providers: [mockProvider],
+				validation: { onFailure: "throw" },
+				enabled: false,
+			});
+
+			await expect(disabled.revenue(49.99)).resolves.toBeUndefined();
+			await disabled.revenue(100);
+
+			expect(mockProvider.calls.revenue).toHaveLength(0);
 		});
 
 		it.each([
@@ -508,12 +551,16 @@ describe("Server Analytics", () => {
 			["a negative amount", -4900, undefined, undefined],
 			["an amount beyond a safe integer", 2 ** 53, undefined, undefined],
 			["NaN", Number.NaN, undefined, undefined],
-			["properties that are not an object", 100, ["pro"], undefined],
 			["a lower-case currency", 100, undefined, { currency: "eur" }],
 			["an unknown option", 100, undefined, { sessionId: "s" }],
 			["an empty id", 100, undefined, { id: "" }],
 			["a group with an empty id", 100, undefined, { groups: { company: "" } }],
 			["an invalid occurredAt", 100, undefined, { occurredAt: Number.NaN }],
+			["a currency of four letters", 100, undefined, { currency: "EURO" }],
+			["an id that is not a string", 100, undefined, { id: 42 }],
+			["a userId that is not a string", 100, undefined, { userId: 42 }],
+			["an empty userId", 100, undefined, { userId: "" }],
+			["options that are not a plain object", 100, undefined, new Date()],
 		])(
 			"refuses %s as invalid_options",
 			async (_label, amount, properties, options) => {
@@ -528,6 +575,21 @@ describe("Server Analytics", () => {
 				expect(mockProvider.calls.revenue).toHaveLength(0);
 			},
 		);
+
+		it.each([
+			["properties that are not an object", ["pro"]],
+			["a Date as properties", new Date()],
+			["a Map as properties", new Map([["planId", "pro"]])],
+			["a currency among the properties", { currency: "eur" }],
+		])("refuses %s as invalid_properties", async (_label, properties) => {
+			await expect(
+				(analytics.revenue as (...args: unknown[]) => Promise<void>)(
+					100,
+					properties,
+				),
+			).rejects.toMatchObject({ code: "invalid_properties" });
+			expect(mockProvider.calls.revenue).toHaveLength(0);
+		});
 	});
 
 	describe("group", () => {

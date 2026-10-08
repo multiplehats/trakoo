@@ -197,7 +197,7 @@ trakoo's event time becomes the PostHog event timestamp.
 
 ### Revenue
 
-PostHog has no revenue call of its own. On the server, `analytics.revenue(amount, properties, { currency, id, userId, groups })` captures a `revenue` event with the amount in its `revenue` property, in minor units, `currency` beside it, `id` as `revenue_id`, and the groups as PostHog's `groups`. To report it in PostHog's revenue analytics, add the `revenue` event in its revenue settings with `revenue` as the revenue property and `currency` as the currency property, and set the amount to be read in minor units.
+PostHog has no revenue call of its own. On the server, `analytics.revenue(amount, properties, { currency, id, userId, groups })` captures a `revenue` event with the amount in its `revenue` property, in minor units, `currency` beside it, `id` as `revenue_id`, and the groups as PostHog's `groups`. To report it in PostHog's revenue analytics, add the `revenue` event in its revenue settings with `revenue` as the revenue property and `currency` as the currency property, and set the amount to be read in minor units. Pass a `userId` for revenue a group paid: without one the event is anonymous, and PostHog does not link anonymous events to their groups, so group analytics leaves it out.
 
 ## Configuration
 

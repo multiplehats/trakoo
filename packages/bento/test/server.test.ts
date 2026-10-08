@@ -1,3 +1,5 @@
+import { createServerAnalytics } from "trakoo/server";
+import { defineEvents } from "trakoo";
 import { BentoServerProvider } from "../src/server.js";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -146,6 +148,68 @@ describe("BentoServerProvider", () => {
 
 			expect(sdk.trackPurchase).not.toHaveBeenCalled();
 			expect(warnSpy.mock.calls[0]?.[0]).toContain(missing);
+		});
+	});
+	describe("revenue through server analytics", () => {
+		const createAnalytics = () =>
+			createServerAnalytics({
+				events: defineEvents({}),
+				providers: [
+					new BentoServerProvider({
+						siteUuid: "site-uuid",
+						authentication: {
+							publishableKey: "publishable-key",
+							secretKey: "secret-key",
+						},
+					}),
+				],
+			});
+
+		it("reads the payer's email from the call's user", async () => {
+			await createAnalytics().revenue(4900, undefined, {
+				currency: "EUR",
+				id: "in_123",
+				userId: "user-a",
+				user: { email: "payer@example.com" },
+			});
+
+			expect(sdk.trackPurchase).toHaveBeenCalledWith(
+				expect.objectContaining({ email: "payer@example.com" }),
+			);
+		});
+
+		it("reads the email from a userId that is one", async () => {
+			await createAnalytics().revenue(4900, undefined, {
+				currency: "EUR",
+				id: "in_123",
+				userId: "payer@example.com",
+			});
+
+			expect(sdk.trackPurchase).toHaveBeenCalledWith(
+				expect.objectContaining({ email: "payer@example.com" }),
+			);
+		});
+
+		it.each([
+			["is not queued", () => sdk.trackPurchase.mockResolvedValue(false)],
+			[
+				"throws",
+				() => sdk.trackPurchase.mockRejectedValue(new Error("network")),
+			],
+		])("logs and resolves when Bento %s", async (_label, arrange) => {
+			arrange();
+			const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+			await expect(
+				createAnalytics().revenue(4900, undefined, {
+					currency: "EUR",
+					id: "in_123",
+					user: { email: "payer@example.com" },
+				}),
+			).resolves.toBeUndefined();
+
+			expect(sdk.trackPurchase).toHaveBeenCalledOnce();
+			errorSpy.mockRestore();
 		});
 	});
 });

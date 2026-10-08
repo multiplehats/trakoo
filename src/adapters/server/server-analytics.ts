@@ -72,8 +72,14 @@ export interface ServerRevenueOptions<TUserTraits extends object> {
 	 * deduplicate revenue by it (Bento requires one). A non-empty string.
 	 */
 	readonly id?: string;
-	/** The user the revenue is attributed to. */
+	/** The user the revenue is attributed to. A non-empty string. */
 	readonly userId?: string;
+	/**
+	 * The user's email and traits, for providers that need them (Bento
+	 * reads the email). Replaces `context.user` and `defaultContext.user`,
+	 * as in `track()`.
+	 */
+	readonly user?: UserContext<TUserTraits>;
 	/**
 	 * The groups the revenue belongs to, by group type, such as
 	 * `{ company: "acme" }`. Each type and id must be a non-empty string.
@@ -137,12 +143,16 @@ const serverRevenueOptionKeys = new Set([
 	"currency",
 	"id",
 	"userId",
+	"user",
 	"groups",
 	"occurredAt",
 	"context",
 ]);
 
-/** Absent, or an upper-case three-letter code. */
+/**
+ * Absent, or three upper-case letters. The shape of an ISO 4217 code; whether
+ * the code exists is left to the caller.
+ */
 function isValidCurrency(value: unknown): boolean {
 	return (
 		value === undefined ||
@@ -151,46 +161,51 @@ function isValidCurrency(value: unknown): boolean {
 }
 
 /** Absent, or a non-empty string. */
-function isValidRevenueId(value: unknown): boolean {
+function isAbsentOrNonEmptyString(value: unknown): boolean {
 	return value === undefined || (typeof value === "string" && value.length > 0);
 }
 
+/** A plain object: not an array, a `Date`, a `Map` or a class instance. */
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	if (typeof value !== "object" || value === null) return false;
+	const prototype = Object.getPrototypeOf(value);
+	return prototype === Object.prototype || prototype === null;
+}
+
 /**
- * Whether `revenue()` was given a usable amount, properties and options. The
+ * Why a `revenue()` call cannot be recorded, or `undefined` when it can. The
  * amount is a non-negative safe integer in the currency's minor unit, which
- * is what OpenPanel, among others, accepts.
+ * is what OpenPanel, among others, accepts. `currency` is an option, never a
+ * property, so a provider never reads an unchecked one.
  */
-function isValidRevenueCall(
+function revenueCallFailure(
 	amount: unknown,
 	properties: unknown,
 	options: unknown,
-): boolean {
+): "invalid_options" | "invalid_properties" | undefined {
 	if (
 		typeof amount !== "number" ||
 		!Number.isSafeInteger(amount) ||
 		amount < 0
 	) {
-		return false;
+		return "invalid_options";
 	}
 	if (
 		properties !== undefined &&
-		(typeof properties !== "object" ||
-			properties === null ||
-			Array.isArray(properties))
+		(!isPlainObject(properties) || Object.hasOwn(properties, "currency"))
 	) {
-		return false;
+		return "invalid_properties";
 	}
-	if (options === undefined) return true;
-	return (
-		typeof options === "object" &&
-		options !== null &&
-		!Array.isArray(options) &&
+	if (options === undefined) return undefined;
+	const valid =
+		isPlainObject(options) &&
 		Object.keys(options).every((key) => serverRevenueOptionKeys.has(key)) &&
-		isValidCurrency(Reflect.get(options, "currency")) &&
-		isValidRevenueId(Reflect.get(options, "id")) &&
-		isValidOccurredAt(Reflect.get(options, "occurredAt")) &&
-		isValidGroups(Reflect.get(options, "groups"))
-	);
+		isValidCurrency(options.currency) &&
+		isAbsentOrNonEmptyString(options.id) &&
+		isAbsentOrNonEmptyString(options.userId) &&
+		isValidOccurredAt(options.occurredAt) &&
+		isValidGroups(options.groups);
+	return valid ? undefined : "invalid_options";
 }
 
 /** Whether `group()` was given a usable type and id. */
@@ -984,19 +999,30 @@ export class ServerAnalytics<
 	 * Records revenue: money a user or a group paid.
 	 *
 	 * Only providers that implement `revenue` receive the call (the OpenPanel,
-	 * PostHog and Bento server providers do), each in its own form; routing applies as for any method, under the
-	 * name `"revenue"`, and event filters (`events`, `excludeEvents`) do not.
+	 * PostHog and Bento server providers do), each in its own form. Routing
+	 * applies as for any method, under the name `"revenue"`; event filters
+	 * (`events`, `excludeEvents`) do not.
+	 *
+	 * As in `track()`, a provider that fails is logged and the others still
+	 * deliver, so the call resolves: a payment webhook that awaited it and
+	 * failed would be retried, and providers that do not deduplicate would
+	 * count the revenue twice. Only validation, under `onFailure: "throw"`,
+	 * and initialization reject.
 	 *
 	 * @param amount In the currency's minor unit (cents for EUR and USD), as a
-	 * non-negative safe integer. Anything else fails validation with
-	 * `invalid_options`. A refund is not negative revenue: track it as an
-	 * event of its own.
-	 * @param properties Describes the revenue, such as its plan
-	 * @param options.currency ISO 4217 code, upper case
+	 * non-negative safe integer; anything else is `invalid_options`. A refund
+	 * is not negative revenue: track it as an event of its own. Under the
+	 * default validation policy an invalid call, such as `49.99`, is dropped
+	 * silently; set `validation.onError` or `debug` to see it.
+	 * @param properties Describes the revenue, such as its plan. A plain
+	 * object without `currency`; anything else is `invalid_properties`.
+	 * @param options.currency Three upper-case letters, an ISO 4217 code
 	 * @param options.id Identifies the payment, such as an invoice id
 	 * @param options.userId The user the revenue is attributed to
+	 * @param options.user The user's email and traits, as in `track()`
 	 * @param options.groups The groups it belongs to, by group type
 	 * @param options.occurredAt When it was received; defaults to now
+	 * @param options.context The request it came from, as in `track()`
 	 *
 	 * @example
 	 * ```typescript
@@ -1004,6 +1030,7 @@ export class ServerAnalytics<
 	 *   currency: 'EUR',
 	 *   id: invoice.id,
 	 *   userId: 'user-123',
+	 *   user: { email: 'billing@acme.test' },
 	 *   groups: { company: 'acme' },
 	 *   occurredAt: invoice.paidAt
 	 * });
@@ -1015,9 +1042,10 @@ export class ServerAnalytics<
 		options?: ServerRevenueOptions<TUserTraits>,
 	): Promise<void> {
 		if (!this.enabled) return;
-		if (!isValidRevenueCall(amount, properties, options)) {
+		const failure = revenueCallFailure(amount, properties, options);
+		if (failure) {
 			await applyValidationFailurePolicy(
-				new AnalyticsValidationError("invalid_options", "revenue"),
+				new AnalyticsValidationError(failure, "revenue"),
 				this.validation,
 				this.debug,
 			);
@@ -1043,29 +1071,35 @@ export class ServerAnalytics<
 			...(properties !== undefined && { properties: { ...properties } }),
 		};
 		const context = this.mergeDefaultContext(options?.context);
+		const user =
+			options && Object.hasOwn(options, "user")
+				? options.user
+				: (options?.context?.user ?? this.defaultContext?.user);
+		if (user !== undefined) {
+			context.user = user;
+		}
 
-		const promises = this.providerConfigs
+		const deliveries = this.providerConfigs
 			.filter(
 				(config) =>
 					this.shouldCallMethod(config, "revenue") &&
 					typeof config.provider.revenue === "function",
 			)
-			// Async, so a provider that throws before returning a promise
-			// still lets every other provider be called.
-			.map(async (config) =>
-				config.provider.revenue?.(
-					revenue,
-					providerContext(config, context as EventContext),
-				),
-			);
+			.map(async (config) => {
+				try {
+					await config.provider.revenue?.(
+						revenue,
+						providerContext(config, context as EventContext),
+					);
+				} catch (error) {
+					console.error(
+						`[Analytics] Provider ${config.provider.name} failed to record revenue:`,
+						error,
+					);
+				}
+			});
 
-		const results = await Promise.allSettled(promises);
-
-		for (const result of results) {
-			if (result.status === "rejected") {
-				throw result.reason;
-			}
-		}
+		await Promise.all(deliveries);
 	}
 
 	/**

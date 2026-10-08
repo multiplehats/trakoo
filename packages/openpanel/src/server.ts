@@ -221,7 +221,9 @@ export class OpenPanelServerProvider extends BaseAnalyticsProvider {
 	 * Sends OpenPanel's `revenue` event, whose `__revenue` OpenPanel sums as
 	 * revenue. OpenPanel accepts it only from a client with its secret, as an
 	 * integer of at least zero, and keeps no currency: `currency` travels as a
-	 * plain property, so keep one project to one currency.
+	 * plain property, so keep one project to one currency. The SDK reads a
+	 * `deviceId` property as the event's device. `id` is not sent: OpenPanel
+	 * does not deduplicate by it.
 	 */
 	async revenue(
 		revenue: RevenueDescriptor,

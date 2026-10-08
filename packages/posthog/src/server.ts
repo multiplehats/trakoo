@@ -175,7 +175,8 @@ export class PostHogServerProvider extends BaseAnalyticsProvider {
 	 * Captures a `revenue` event with the amount as its `revenue` property, in
 	 * minor units, and `currency` beside it. PostHog has no revenue call of its
 	 * own: its revenue analytics reads such an event once it is configured to.
-	 * Groups go on the event as PostHog's `groups`.
+	 * Groups go on the event as PostHog's `groups`; without a `userId` the
+	 * event is anonymous, and PostHog leaves it out of group analytics.
 	 */
 	revenue(revenue: RevenueDescriptor, context?: EventContext): void {
 		if (!this.isEnabled() || !this.initialized || !this.client) return;

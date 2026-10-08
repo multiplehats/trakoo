@@ -288,4 +288,24 @@ describe("PostHogServerProvider", () => {
 			},
 		});
 	});
+
+	it("captures revenue without a user as an anonymous event, outside group analytics", async () => {
+		const provider = new PostHogServerProvider({ apiKey: "project-key" });
+		await provider.initialize();
+
+		provider.revenue({
+			amount: 4900,
+			currency: "EUR",
+			groups: { organization: "org-1" },
+			timestamp: Date.parse("2026-10-08T09:30:00.000Z"),
+		});
+
+		const [message] = sdk.capture.mock.calls[0] ?? [];
+		// PostHog does not link an anonymous event to its groups: the docs say
+		// to pass a userId for group revenue.
+		expect(message?.distinctId).toMatch(UUID);
+		expect(message?.properties).toMatchObject({
+			$process_person_profile: false,
+		});
+	});
 });

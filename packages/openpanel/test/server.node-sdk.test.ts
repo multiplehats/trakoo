@@ -450,4 +450,38 @@ describe("OpenPanelServerProvider with the node SDK", () => {
 		expect(request?.body.payload.properties.__revenue).toBe(100);
 		expect(request?.body.payload.profileId).toBeUndefined();
 	});
+
+	it("turns a deviceId property into the event's device, linking it to the visitor", async () => {
+		const fetchMock = stubFetch();
+		const provider = await createProvider();
+
+		await provider.revenue({
+			amount: 100,
+			userId: "user-a",
+			properties: { deviceId: "browser-device-1" },
+			timestamp: Date.parse("2026-10-08T09:30:00.000Z"),
+		});
+
+		const [request] = requestsOf(fetchMock);
+		expect(request?.body.payload.properties.__deviceId).toBe(
+			"browser-device-1",
+		);
+		expect(request?.body.payload.properties).not.toHaveProperty("deviceId");
+	});
+
+	it("reports a rejected revenue through onDeliveryFailure", async () => {
+		const fetchMock = vi.fn(async () => ({
+			status: 401,
+			text: () => Promise.resolve(""),
+		}));
+		vi.stubGlobal("fetch", fetchMock);
+		const onDeliveryFailure = vi.fn();
+		const provider = await createProvider({ onDeliveryFailure });
+
+		await provider.revenue({ amount: 100, timestamp: Date.now() });
+
+		expect(onDeliveryFailure).toHaveBeenCalledExactlyOnceWith(
+			expect.objectContaining({ reason: "unauthorized", status: 401 }),
+		);
+	});
 });

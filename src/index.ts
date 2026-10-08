@@ -5,6 +5,7 @@ export type {
 	EventCategory,
 	EventContext,
 	GroupDescriptor,
+	RevenueDescriptor,
 	PredefinedEventCategory,
 	ProviderConfig,
 	ProviderConfigOrProvider,

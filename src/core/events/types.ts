@@ -42,6 +42,32 @@ export interface GroupDescriptor {
 	readonly traits?: Record<string, unknown>;
 }
 
+/**
+ * Money received, as server `revenue()` hands it to a provider.
+ */
+export interface RevenueDescriptor {
+	/**
+	 * In the currency's minor unit (cents for EUR and USD), as a non-negative
+	 * safe integer. A refund is not negative revenue: track it as an event.
+	 */
+	readonly amount: number;
+	/** ISO 4217 code, upper case, such as `EUR`. */
+	readonly currency?: string;
+	/**
+	 * Identifies this payment, such as an invoice id, for providers that
+	 * deduplicate revenue by it (Bento requires one).
+	 */
+	readonly id?: string;
+	/** The user the revenue is attributed to. */
+	readonly userId?: string;
+	/** The groups the revenue belongs to, by group type: `{ company: "acme" }`. */
+	readonly groups?: Readonly<Record<string, string>>;
+	/** Describes the revenue, such as its plan or whether it renews. */
+	readonly properties?: Record<string, unknown>;
+	/** When it was received, in epoch milliseconds. */
+	readonly timestamp: number;
+}
+
 export interface UserContext<TTraits extends object = Record<string, unknown>> {
 	userId?: string;
 	email?: string;
@@ -137,6 +163,14 @@ export interface AnalyticsProvider {
 	 * a provider without it receives no group calls.
 	 */
 	group?(group: GroupDescriptor, userId?: string): Promise<void> | void;
+	/**
+	 * Records revenue. Optional: a provider without it receives no revenue
+	 * calls.
+	 */
+	revenue?(
+		revenue: RevenueDescriptor,
+		context?: EventContext,
+	): Promise<void> | void;
 }
 
 /**
@@ -149,7 +183,8 @@ export type ProviderMethod =
 	| "pageView"
 	| "pageLeave"
 	| "reset"
-	| "group";
+	| "group"
+	| "revenue";
 
 /**
  * Configuration for selective provider method routing and event filtering.

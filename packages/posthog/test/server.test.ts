@@ -258,4 +258,54 @@ describe("PostHogServerProvider", () => {
 		await expect(provider.initialize()).resolves.toBeUndefined();
 		expect(constructorSpy).toHaveBeenCalledTimes(2);
 	});
+	it("captures revenue as a revenue event for its user and groups", async () => {
+		const provider = new PostHogServerProvider({ apiKey: "project-key" });
+		await provider.initialize();
+
+		provider.revenue({
+			amount: 4900,
+			currency: "EUR",
+			id: "in_123",
+			userId: "user-a",
+			groups: { organization: "org-1" },
+			properties: { planId: "pro", revenue: 1 },
+			timestamp: Date.parse("2026-10-08T09:30:00.000Z"),
+		});
+
+		expect(sdk.capture).toHaveBeenCalledOnce();
+		const [message] = sdk.capture.mock.calls[0] ?? [];
+		expect(message).toMatchObject({
+			distinctId: "user-a",
+			event: "revenue",
+			timestamp: new Date("2026-10-08T09:30:00.000Z"),
+			groups: { organization: "org-1" },
+			properties: {
+				planId: "pro",
+				// The amount wins over a property of the same name.
+				revenue: 4900,
+				currency: "EUR",
+				revenue_id: "in_123",
+			},
+		});
+	});
+
+	it("captures revenue without a user as an anonymous event, outside group analytics", async () => {
+		const provider = new PostHogServerProvider({ apiKey: "project-key" });
+		await provider.initialize();
+
+		provider.revenue({
+			amount: 4900,
+			currency: "EUR",
+			groups: { organization: "org-1" },
+			timestamp: Date.parse("2026-10-08T09:30:00.000Z"),
+		});
+
+		const [message] = sdk.capture.mock.calls[0] ?? [];
+		// PostHog does not link an anonymous event to its groups: the docs say
+		// to pass a userId for group revenue.
+		expect(message?.distinctId).toMatch(UUID);
+		expect(message?.properties).toMatchObject({
+			$process_person_profile: false,
+		});
+	});
 });

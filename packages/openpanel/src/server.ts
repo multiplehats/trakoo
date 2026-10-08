@@ -3,6 +3,7 @@ import {
 	type BaseEvent,
 	type EventContext,
 	type GroupDescriptor,
+	type RevenueDescriptor,
 } from "trakoo";
 import {
 	buildEventProperties,
@@ -214,6 +215,46 @@ export class OpenPanelServerProvider extends BaseAnalyticsProvider {
 			client.clear();
 		}
 		this.log("Upserted group");
+	}
+
+	/**
+	 * Sends OpenPanel's `revenue` event, whose `__revenue` OpenPanel sums as
+	 * revenue. OpenPanel accepts it only from a client with its secret, as an
+	 * integer of at least zero, and keeps no currency: `currency` travels as a
+	 * plain property, so keep one project to one currency. The SDK reads a
+	 * `deviceId` property as the event's device. `id` is not sent: OpenPanel
+	 * does not deduplicate by it.
+	 */
+	async revenue(
+		revenue: RevenueDescriptor,
+		context?: EventContext,
+	): Promise<void> {
+		const client =
+			this.isEnabled() && this.initialized ? this.client : undefined;
+		if (!client) return;
+
+		const groups = revenue.groups ? Object.values(revenue.groups) : [];
+		await client.revenue(revenue.amount, {
+			...withRequestContext(
+				buildEventProperties(
+					{
+						...revenue.properties,
+						...(revenue.currency !== undefined && {
+							currency: revenue.currency,
+						}),
+					},
+					context,
+					{
+						timestamp: revenue.timestamp,
+						userId: revenue.userId ?? context?.user?.userId,
+					},
+				),
+				context,
+			),
+			// Per event, as for track(): never the shared client's groups.
+			...(groups.length > 0 && { groups }),
+		});
+		this.log("Recorded revenue");
 	}
 
 	async pageView(

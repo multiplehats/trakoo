@@ -112,11 +112,11 @@ importers:
   packages/openpanel:
     devDependencies:
       '@openpanel/sdk':
-        specifier: ^1.3.1
-        version: 1.3.1
+        specifier: ^1.3.2
+        version: 1.3.2
       '@openpanel/web':
-        specifier: ^1.4.1
-        version: 1.4.1
+        specifier: ^1.4.2
+        version: 1.4.2
       trakoo:
         specifier: workspace:*
         version: link:../..
@@ -1355,8 +1355,14 @@ packages:
   '@openpanel/sdk@1.3.1':
     resolution: {integrity: sha512-mQ5xaBUGXnyRg3qYxwnbVaUYyW7w8u+munrWk/ClnqxEeR2j+FYPiA6noHbHMCFC2aZutYD5OoRzEvw3FBNFxw==}
 
+  '@openpanel/sdk@1.3.2':
+    resolution: {integrity: sha512-A8w6NkadrOUeMxKKvCbpyoGGjgsLZcn6pyrMT7tWI5vgWLKpZ9o/ieaF/WdfaFQTFvN9tqCW70JmuNCJKRBTbA==}
+
   '@openpanel/web@1.4.1':
     resolution: {integrity: sha512-DgUWeocZw+b57YiJjefZPg+6sceR7TdOF8x7Ut75lu3CwcwqGi5jZNPXjikNemGL37aNWXCB4buhcoNan2j7RA==}
+
+  '@openpanel/web@1.4.2':
+    resolution: {integrity: sha512-3qyavYjObwW3ZbwQhwTzbfHTIH6LQqeYAsOJOvLnPm5Hcd3CxClhxFJcxOus/6D0e515wutDNvEH7q3q0sswEQ==}
 
   '@opentelemetry/api@1.9.0':
     resolution: {integrity: sha512-3giAOQvZiH5F9bMlMiv8+GSPMeqg0dbaeo58/0SlA9sxSqZhnUtxzX9/2FzyhS9sWQf5S0GJE0AKBrFqjpeYcg==}
@@ -7191,9 +7197,17 @@ snapshots:
 
   '@openpanel/sdk@1.3.1': {}
 
+  '@openpanel/sdk@1.3.2': {}
+
   '@openpanel/web@1.4.1':
     dependencies:
       '@openpanel/sdk': 1.3.1
+      '@rrweb/types': 2.0.0-alpha.20
+      rrweb: 2.0.0-alpha.20
+
+  '@openpanel/web@1.4.2':
+    dependencies:
+      '@openpanel/sdk': 1.3.2
       '@rrweb/types': 2.0.0-alpha.20
       rrweb: 2.0.0-alpha.20
 

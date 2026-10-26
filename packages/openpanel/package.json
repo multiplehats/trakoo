@@ -15,23 +15,14 @@
 			"default": "./dist/server.js"
 		}
 	},
-	"files": [
-		"dist",
-		"README.md",
-		"LICENSE"
-	],
+	"files": ["dist", "README.md", "LICENSE"],
 	"sideEffects": false,
 	"scripts": {
 		"build": "tsc -p tsconfig.build.json",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run"
 	},
-	"keywords": [
-		"analytics",
-		"trakoo",
-		"openpanel",
-		"typescript"
-	],
+	"keywords": ["analytics", "trakoo", "openpanel", "typescript"],
 	"author": "Chris Jayden <https://github.com/multiplehats>",
 	"license": "MIT",
 	"repository": {
@@ -64,7 +55,7 @@
 	},
 	"devDependencies": {
 		"trakoo": "workspace:*",
-		"@openpanel/sdk": "^1.3.1",
-		"@openpanel/web": "^1.4.1"
+		"@openpanel/sdk": "^1.3.2",
+		"@openpanel/web": "^1.4.2"
 	}
 }
